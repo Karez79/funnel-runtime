@@ -24,6 +24,8 @@ const EnvSchema = z
     GENERATOR_KEY: z.string().min(1).optional(),
     // Requests per minute per client IP on public write routes (CLAUDE.md 6.0).
     RATE_LIMIT_SESSIONS: z.coerce.number().int().positive().default(30),
+    // A funnel flushes its outbox every 2 s (CLAUDE.md 7.4): ~30 batches a minute per tab.
+    RATE_LIMIT_EVENTS: z.coerce.number().int().positive().default(120),
     // Header the platform's edge sets to the client IP (Railway: X-Real-IP). Used only
     // for rate limits; X-Forwarded-For is never trusted because its left part is
     // whatever the client sent. Empty string turns it off (direct connections).
@@ -50,7 +52,7 @@ const EnvSchema = z
       adminUser: secret('ADMIN_USER'),
       adminPassword: secret('ADMIN_PASSWORD'),
       generatorKey: secret('GENERATOR_KEY'),
-      rateLimits: { sessions: raw.RATE_LIMIT_SESSIONS },
+      rateLimits: { sessions: raw.RATE_LIMIT_SESSIONS, events: raw.RATE_LIMIT_EVENTS },
       clientIpHeader:
         (
           raw.CLIENT_IP_HEADER ?? (raw.NODE_ENV === 'production' ? 'x-real-ip' : '')

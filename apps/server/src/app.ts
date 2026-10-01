@@ -17,6 +17,9 @@ import { createVersionsService, type VersionsService } from './modules/versions/
 import { createSessionsRepo } from './modules/sessions/repo.ts';
 import { sessionsRoutes } from './modules/sessions/routes.ts';
 import { createSessionsService } from './modules/sessions/service.ts';
+import { createEventsRepo } from './modules/events/repo.ts';
+import { eventsRoutes } from './modules/events/routes.ts';
+import { createEventsService } from './modules/events/service.ts';
 import { basicAuth } from './plugins/auth.ts';
 import { errorsPlugin } from './plugins/errors.ts';
 import type { App } from './plugins/route.ts';
@@ -80,6 +83,9 @@ export async function buildApp(
     createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
+  eventsRoutes(app, createEventsService(createEventsRepo(db), versions, clock), {
+    rateLimit: { max: env.rateLimits.events, timeWindow: MINUTE_MS },
+  });
 
   const stopRetention = createRetentionService(createRetentionRepo(db), clock, app.log).start();
   app.addHook('onClose', (_instance, done) => {
