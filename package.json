@@ -17,7 +17,9 @@
     "lint": "pnpm lint:es && pnpm lint:format && pnpm lint:css && pnpm lint:deps && pnpm lint:dead && pnpm lint:dup",
     "test": "vitest run --coverage",
     "build": "pnpm -r --if-present build",
-    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "start": "pnpm --filter @funnel/server start",
+    "db:generate": "pnpm --filter @funnel/server db:generate"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
