@@ -1,0 +1,62 @@
+/* Design tokens, copied one to one from docs/design/reference.html (CLAUDE.md 10).
+   The only file with raw colors, radii, shadows and fonts; everything else uses var(--…).
+   Colors are OKLCH; soft variants are derived with color-mix(). Light theme only. */
+:root {
+  color-scheme: light;
+
+  --bg: oklch(0.925 0.014 258);
+  --panel: oklch(0.958 0.009 258); /* frosted section panels */
+  --soft: oklch(0.945 0.01 258); /* circle buttons, tracks */
+  --card: oklch(1 0 0);
+  --ink: oklch(0.25 0.014 265);
+  --ink-2: oklch(0.53 0.02 260);
+  --ink-3: oklch(0.71 0.02 260);
+  --line: oklch(0.925 0.009 255);
+  --a: oklch(0.7 0.1 260); /* variant A */
+  --b: oklch(0.67 0.15 25); /* variant B */
+  --ok: oklch(0.6 0.11 160);
+  --warn: oklch(0.68 0.13 75);
+  --a-soft: color-mix(in oklch, var(--a) 18%, white);
+  --b-soft: color-mix(in oklch, var(--b) 15%, white);
+  --ok-soft: color-mix(in oklch, var(--ok) 15%, white);
+  --warn-soft: color-mix(in oklch, var(--warn) 18%, white);
+  --a-ink: color-mix(in oklch, var(--a) 70%, black);
+  --b-ink: color-mix(in oklch, var(--b) 75%, black);
+
+  /* Text on dark (ink) surfaces. */
+  --on-ink: oklch(1 0 0);
+  --focus-ring: color-mix(in oklch, var(--a) 70%, transparent);
+
+  --font:
+    'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', 'Avenir Next', 'Segoe UI', system-ui,
+    sans-serif;
+  --r-card: 18px;
+  --r-panel: 28px;
+  --r-pill: 999px;
+  --shadow: 0 1px 2px oklch(0.3 0.03 260 / 0.03), 0 18px 48px -12px oklch(0.3 0.03 260 / 0.12);
+  --shadow-sm: 0 1px 2px oklch(0.3 0.03 260 / 0.035), 0 8px 24px -10px oklch(0.3 0.03 260 / 0.1);
+  --shadow-pop: 0 2px 6px oklch(0.3 0.03 260 / 0.08), 0 24px 60px oklch(0.3 0.03 260 / 0.18);
+
+  /* spring-ish easing built with linear() */
+  --spring: linear(
+    0,
+    0.009,
+    0.035 2.1%,
+    0.141 4.4%,
+    0.723 12.9%,
+    0.938 16.7%,
+    1.017 20.4%,
+    1.04 24.3%,
+    1.032 28%,
+    1.006 35.6%,
+    0.997 44.5%,
+    1
+  );
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@property --p {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}

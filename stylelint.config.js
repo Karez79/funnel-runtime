@@ -25,6 +25,9 @@ export default {
     // Tokens are copied verbatim from the design reference (oklch(0.925 0.014 258)).
     'lightness-notation': null,
     'hue-degree-notation': null,
+    'alpha-value-notation': null,
+    // Tokens are grouped by blank lines with a comment per group.
+    'custom-property-empty-line-before': null,
     'color-no-hex': true,
     'color-named': 'never',
     'function-disallowed-list': RAW_COLOR_FUNCTIONS,
