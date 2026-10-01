@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { AnalyticsSummarySchema, contract, type SessionResponse } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
-import { events, ingestLog, rejectedEvents } from '../../db/schema.ts';
-import { adminAuth, createTestApp, testClock, type TestApp } from '../../test/harness.ts';
+import { eq } from 'drizzle-orm';
+import { events, ingestLog, rejectedEvents, sessions } from '../../db/schema.ts';
+import {
+  adminAuth,
+  createTestApp,
+  generatorHeaders,
+  testClock,
+  type TestApp,
+} from '../../test/harness.ts';
 
 const FUNNEL = 'workstyle-planner';
 
@@ -106,12 +113,16 @@ describe('analytics API', () => {
     const s = await okSummary(a);
     expect(s.kpis.all).toMatchObject({ started: 3, reachedResult: 1, clickedCta: 1 });
     const intro = s.steps.find((step) => step.stepId === 'intro');
-    expect(intro?.metrics.all.reached).toBe(2);
+    // The third session sent no step event: it reached the first step and left (11.2).
+    expect(intro?.metrics.all.reached).toBe(3);
+    expect(intro?.metrics.all.completed).toBe(1);
     expect(s.dataQuality).toMatchObject({ outOfOrder: 1, contextMismatch: 1 });
     expect(s.sources.map((x) => x.source)).toEqual(['linkedin', 'newsletter', null]);
 
     const campaign = await okSummary(a, '?campaign=spring_launch');
     expect(campaign.kpis.all.started).toBe(1);
+    // Events of sessions outside the filter do not leak into step metrics.
+    expect(campaign.steps.find((step) => step.stepId === 'intro')?.metrics.all.reached).toBe(1);
     const source = await okSummary(a, '?source=newsletter');
     expect(source.kpis.all.started).toBe(1);
 
@@ -127,12 +138,40 @@ describe('analytics API', () => {
     });
   });
 
-  it('hides QA override sessions unless includeQa=true', async () => {
+  it('shows synthetic sessions and hides QA override sessions unless includeQa=true', async () => {
     const a = await start();
     await newSession(a);
-    await newSession(a, { variantOverride: 'B' });
-    expect((await okSummary(a)).kpis.all.started).toBe(1);
-    expect((await okSummary(a, '?includeQa=true')).kpis.all.started).toBe(2);
+    const synthetic = await a.app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: { funnelId: FUNNEL, trafficType: 'synthetic' },
+      headers: generatorHeaders,
+    });
+    expect(synthetic.statusCode).toBe(201);
+    await newSession(a, { variantOverride: 'B', utm: { campaign: 'qa_only' } });
+    expect((await okSummary(a)).kpis.all.started).toBe(2);
+    expect((await okSummary(a, '?includeQa=true')).kpis.all.started).toBe(3);
+    // A campaign only QA sessions carry would select an empty dashboard: not offered.
+    const filters = await a.app.inject({
+      method: 'GET',
+      url: '/api/analytics/filters',
+      headers: { authorization: adminAuth },
+    });
+    expect(contract.analyticsFilters.response.parse(filters.json()).campaigns).toEqual([]);
+  });
+
+  it('takes the result breakdown from the stored session result', async () => {
+    const a = await start();
+    const s = await newSession(a);
+    a.handle.db
+      .update(sessions)
+      .set({ resultId: 'office_core' })
+      .where(eq(sessions.id, s.id))
+      .run();
+    insertEvent(a, s, 'result_viewed', 'result', { props: { result_id: 'balanced' } });
+    const summary = await okSummary(a);
+    const counts = Object.fromEntries(summary.results.map((r) => [r.resultId, r.sessions.all]));
+    expect(counts).toMatchObject({ office_core: 1, balanced: 0 });
   });
 
   it('filters the period with any offset', async () => {

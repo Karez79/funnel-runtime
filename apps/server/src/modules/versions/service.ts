@@ -294,6 +294,22 @@ export function createVersionsService(repo: VersionsRepo, clock: Clock) {
     publish,
     admin,
 
+    /**
+     * Published versions of the database's funnel with the active flag, oldest first.
+     * Drafts never have sessions (6.2), so analytics compares only these.
+     */
+    published(): { funnelId: string; version: number; active: boolean }[] {
+      const rows = repo.list().filter((row) => row.state === 'published');
+      const first = rows[0];
+      if (!first) return [];
+      const activeNow = findActive(first.funnelId)?.version;
+      return rows.map((row) => ({
+        funnelId: row.funnelId,
+        version: row.version,
+        active: row.version === activeNow,
+      }));
+    },
+
     /** The active version; 404 when the funnel has never been published. */
     active(funnelId: string): ActiveVersion {
       const found = findActive(funnelId);

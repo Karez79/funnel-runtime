@@ -56,14 +56,9 @@ export function createAnalyticsService(
     return funnel;
   }
 
-  /** Published versions only: drafts never have sessions (6.2). */
-  function published() {
-    return versions.admin.list().versions.filter((v) => v.state === 'published');
-  }
-
   return {
     filters() {
-      const list = published();
+      const list = versions.published();
       const funnelId = list[0]?.funnelId;
       return {
         versions: list.map((v) => ({ version: v.version, active: v.active })),
@@ -73,7 +68,7 @@ export function createAnalyticsService(
     },
 
     summary(filters: AnalyticsFilters): AnalyticsSummary {
-      const list = published();
+      const list = versions.published();
       const funnelId = list[0]?.funnelId ?? '';
       const analyticsVersions: AnalyticsVersion[] = list.map((v) => ({
         version: v.version,

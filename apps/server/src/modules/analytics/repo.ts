@@ -45,6 +45,7 @@ export function createAnalyticsRepo(db: Db) {
           trafficType: sessions.trafficType,
           utmSource: sessions.utmSource,
           utmCampaign: sessions.utmCampaign,
+          resultId: sessions.resultId,
           createdAt: sessions.createdAt,
         })
         .from(sessions)
@@ -89,13 +90,18 @@ export function createAnalyticsRepo(db: Db) {
         .all();
     },
 
-    /** Distinct non-empty values of a UTM column, for the filter lists. */
+    /**
+     * Distinct non-empty values of a UTM column, for the filter lists. QA sessions are
+     * left out: a value only they carry would select an empty dashboard by default.
+     */
     utmValues(funnelId: string, column: 'utmCampaign' | 'utmSource'): string[] {
       const field = sessions[column];
       return db
         .selectDistinct({ value: sql<string>`${field}` })
         .from(sessions)
-        .where(and(eq(sessions.funnelId, funnelId), isNotNull(field)))
+        .where(
+          and(eq(sessions.funnelId, funnelId), ne(sessions.trafficType, 'qa'), isNotNull(field)),
+        )
         .orderBy(asc(field))
         .all()
         .map((row) => row.value);
