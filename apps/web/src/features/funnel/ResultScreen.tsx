@@ -4,7 +4,7 @@
 // `action: expand_recommendation` opens a 30-day plan built from the recommendations
 // (`grid-template-rows: 0fr → 1fr`, no height measured in JS).
 import type { Result, Step } from '@funnel/shared';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { Button } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import styles from './ResultScreen.module.css';
@@ -39,6 +39,7 @@ function ReadyResult({
   track: Track;
 }) {
   const [open, setOpen] = useState(false);
+  const planId = useId();
   const expands = result.cta.action === EXPAND;
 
   const onShown = useEffectEvent(() => {
@@ -66,15 +67,16 @@ function ReadyResult({
       </ul>
       <Button
         aria-expanded={expands ? open : undefined}
-        aria-controls={expands ? 'plan' : undefined}
+        aria-controls={expands ? planId : undefined}
         onClick={() => {
           track('cta_clicked', 'result', { result_id: resultId, action: result.cta.action });
           if (!expands) return;
+          // Sent only if the session's catalog lists it (track checks); the values are
+          // the CTA's own, nothing beyond what the config defines.
           if (!open) {
             track('recommendation_expanded', 'result', {
               result_id: resultId,
               action: result.cta.action,
-              source: 'cta',
             });
           }
           setOpen(!open);
@@ -83,8 +85,9 @@ function ReadyResult({
         {result.cta.label}
       </Button>
       {expands && (
-        <div className={styles.plan} id="plan" data-open={open}>
-          <div>
+        <div className={styles.plan} id={planId} data-open={open}>
+          {/* Closed, the plan is out of the accessibility tree and the tab order. */}
+          <div inert={!open}>
             <ol className={styles.planList} aria-label="30-day plan">
               {planWeeks(result.recommendations).map((items, week) => (
                 <li key={week}>

@@ -1,6 +1,7 @@
 // "What a week could look like" (CLAUDE.md 8.3): a Mon–Fri × AM/PM grid colored by the
 // result. This is a visual reading of the result, not content, so the mapping lives in
 // code; a result id it does not know simply gets no grid.
+import { useId } from 'react';
 import styles from './ResultScreen.module.css';
 
 const SLOTS = ['office', 'focus', 'async', 'free'] as const;
@@ -69,12 +70,13 @@ const WEEKS: Readonly<Record<string, readonly Slot[]>> = {
 };
 
 export function ResultWeek({ resultId, title }: { resultId: string; title: string }) {
+  const titleId = useId();
   const week = WEEKS[resultId];
   if (!week) return null;
   const used = SLOTS.filter((slot) => week.includes(slot));
   return (
-    <section className={styles.week} aria-labelledby="week-title">
-      <h2 className={styles.weekTitle} id="week-title">
+    <section className={styles.week} aria-labelledby={titleId}>
+      <h2 className={styles.weekTitle} id={titleId}>
         {title}
       </h2>
       <table className={styles.grid}>
