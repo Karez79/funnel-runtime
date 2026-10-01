@@ -73,6 +73,7 @@ export {
   LIVE_STREAM,
   LiveEntrySchema,
   SessionStateSchema,
+  SessionUnprocessableDetailsSchema,
   StateConflictDetailsSchema,
 } from './api/contract.ts';
 export type { LiveEntry, SessionResponse, SessionState, VersionSummary } from './api/contract.ts';

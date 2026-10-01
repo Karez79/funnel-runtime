@@ -11,6 +11,7 @@ import { ConfigChangeSchema } from '../config/diff.ts';
 import { LintReportSchema } from '../config/lint.ts';
 import { ResultSchema, VARIANTS } from '../config/schema.ts';
 import { AnswerValueSchema } from '../engine/conditions.ts';
+import { VALIDATION_CODES } from '../engine/validation.ts';
 import { ResolvedFunnelSchema } from '../engine/resolve.ts';
 import { BatchEnvelopeSchema, BatchResponseSchema, REJECT_REASONS } from '../events/schema.ts';
 
@@ -87,6 +88,15 @@ export const StateConflictDetailsSchema = z.object({
   state: SessionStateSchema,
   stateRev: z.number().int().nonnegative(),
 });
+
+/**
+ * `error.details` of a 422 on saveState and completeSession: which step or answer key
+ * is wrong and the validation code. Never the answer value (privacy, 7.2).
+ */
+export const SessionUnprocessableDetailsSchema = z.union([
+  z.object({ stepId: z.string(), code: z.enum(VALIDATION_CODES).optional() }),
+  z.object({ answer: z.string() }),
+]);
 
 // ---------- versions (6.1) ----------
 
@@ -184,7 +194,10 @@ export const contract = {
     params: SessionParams,
     body: z.object({ state: SessionStateSchema, baseRev: z.number().int().nonnegative() }),
     response: z.object({ stateRev: z.number().int().positive() }),
-    errorDetails: { conflict: StateConflictDetailsSchema },
+    errorDetails: {
+      conflict: StateConflictDetailsSchema,
+      unprocessable: SessionUnprocessableDetailsSchema,
+    },
   },
   completeSession: {
     method: 'POST',
@@ -192,6 +205,7 @@ export const contract = {
     auth: 'public',
     params: SessionParams,
     response: z.object({ resultId: z.string(), result: ResultSchema }),
+    errorDetails: { unprocessable: SessionUnprocessableDetailsSchema },
   },
 
   eventsBatch: {

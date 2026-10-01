@@ -1,11 +1,7 @@
 // Basic Auth for admin routes (CLAUDE.md 6). Credentials are compared in constant time.
-import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { sameSecret as same } from '../secrets.ts';
 import { errorBody } from './errors.ts';
-
-// Hash first so both buffers have equal length and the comparison leaks nothing.
-const digest = (value: string): Buffer => createHash('sha256').update(value).digest();
-const same = (a: string, b: string): boolean => timingSafeEqual(digest(a), digest(b));
 
 export function basicAuth(user: string, password: string) {
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
