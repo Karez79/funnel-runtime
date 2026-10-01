@@ -9,15 +9,18 @@ import type { Answers, EvaluateOptions } from './conditions.ts';
 import type { ResolvedFunnel } from './resolve.ts';
 import { own } from '../own.ts';
 
-export type ValidationCode =
-  | 'required'
-  | 'min'
-  | 'max'
-  | 'minSelections'
-  | 'maxSelections'
-  | 'integer'
-  | 'invalidOption'
-  | 'invalidType';
+/** Also the `code` in 422 details of the session API (api/contract.ts). */
+export const VALIDATION_CODES = [
+  'required',
+  'min',
+  'max',
+  'minSelections',
+  'maxSelections',
+  'integer',
+  'invalidOption',
+  'invalidType',
+] as const;
+export type ValidationCode = (typeof VALIDATION_CODES)[number];
 
 export type ValidationResult =
   | { readonly ok: true }

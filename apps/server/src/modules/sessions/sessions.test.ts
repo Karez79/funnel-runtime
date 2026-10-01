@@ -187,6 +187,16 @@ describe('POST /api/sessions', () => {
     ]);
   });
 
+  it('stores empty UTM values as missing', async () => {
+    const a = await app();
+    const { session } = await created(a, { utm: { source: '', campaign: '  ', medium: 'email' } });
+    expect(row(a, session.id)).toMatchObject({
+      utmSource: null,
+      utmCampaign: null,
+      utmMedium: 'email',
+    });
+  });
+
   it('stores UTM once, all five fields', async () => {
     const a = await app();
     const utm = { source: 's', medium: 'm', campaign: 'c', content: 'x', term: 't' };
