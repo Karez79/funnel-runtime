@@ -31,6 +31,8 @@ export interface AnalyticsSession {
   readonly trafficType: (typeof TRAFFIC_TYPES)[number];
   readonly utmSource: string | null;
   readonly utmCampaign: string | null;
+  /** Computed and stored by the server on complete (6.3); never taken from an event. */
+  readonly resultId: string | null;
   /** ISO timestamp. */
   readonly createdAt: string;
 }
@@ -90,7 +92,6 @@ interface Profile {
   reachedResult: boolean;
   clickedCta: boolean;
   backed: boolean;
-  resultId: string | null;
   lastSeen: number;
   readonly outOfOrder: Set<string>;
   readonly contextMismatch: Set<string>;
@@ -114,7 +115,6 @@ function newProfile(session: AnalyticsSession, sequence: readonly string[]): Pro
     reachedResult: false,
     clickedCta: false,
     backed: false,
-    resultId: null,
     lastSeen: Date.parse(session.createdAt),
     outOfOrder: new Set(),
     contextMismatch: new Set(),
@@ -133,7 +133,6 @@ function fold(profile: Profile, event: AnalyticsEvent): void {
   }
   if (RESULT_EVENTS.has(event.name)) {
     profile.reachedResult = true;
-    profile.resultId ??= stringProp(event, 'result_id');
   }
   if (event.name === 'cta_clicked') profile.clickedCta = true;
   if (event.name === 'back_clicked') {
@@ -171,10 +170,10 @@ function isFinal(profile: Profile, now: number): boolean {
   return profile.session.trafficType !== 'live' || now - profile.lastSeen > IN_PROGRESS_WINDOW_MS;
 }
 
-/** Where a finished session without a result left; a session with no step at the first. */
+/** Where a finished session without a result left. */
 function droppedAt(profile: Profile, now: number): string | null {
   if (profile.reachedResult || !isFinal(profile, now)) return null;
-  return profile.sequence[Math.max(0, furthestIndex(profile))] ?? null;
+  return profile.sequence[furthestIndex(profile)] ?? null;
 }
 
 function kpis(profiles: readonly Profile[], now: number): Kpis {
@@ -304,7 +303,13 @@ function branches(
       return step !== undefined && isInteractive(step) && keys.includes(answerKey(step));
     });
     if (parentStepId === undefined) continue;
-    const parents = profiles.filter((p) => reachedStep(p, parentStepId));
+    // Only sessions whose variant has both steps can split between them.
+    const parents = profiles.filter(
+      (p) =>
+        p.sequence.includes(stepId) &&
+        p.sequence.includes(parentStepId) &&
+        reachedStep(p, parentStepId),
+    );
     const seen = parents.filter((p) => reachedStep(p, stepId)).length;
     result.push({
       stepId,
@@ -375,6 +380,12 @@ export function aggregate(input: AggregateInput): Summary {
   }
   // Started = has the server's `session_started`; anything else is not a session start.
   const started = [...profiles.values()].filter((p) => p.started);
+  // A session is created when the funnel renders its first step, so a started session
+  // with no step event at all reached that step (implied reach) and left there.
+  for (const p of started) {
+    const first = p.sequence[0];
+    if (first !== undefined && p.reached.size === 0 && !p.reachedResult) p.reached.add(first);
+  }
   const inSource = (p: Profile) =>
     filters.source === undefined || p.session.utmSource === filters.source;
   const inVariant = (p: Profile) => variants.includes(p.session.variant);
@@ -410,7 +421,7 @@ export function aggregate(input: AggregateInput): Summary {
     sessions: byVariant(
       variants,
       scope,
-      (subset) => subset.filter((p) => p.reachedResult && p.resultId === resultId).length,
+      (subset) => subset.filter((p) => p.reachedResult && p.session.resultId === resultId).length,
     ),
   }));
 

@@ -41,6 +41,7 @@ function session(
     trafficType: 'live',
     utmSource: null,
     utmCampaign: null,
+    resultId: null,
     createdAt: `${day}T10:00:00.000Z`,
     ...extra,
   };
@@ -124,7 +125,7 @@ function fixture() {
 
   // s1 (A, hybrid): the whole path with office_days, a repeated view of team_size, CTA.
   add(
-    session('s1', 'A', OLD_DAY, linkedin),
+    session('s1', 'A', OLD_DAY, { ...linkedin, resultId: 'hybrid_structured' }),
     journal('s1', OLD_DAY)
       .start()
       .view('intro')
@@ -135,7 +136,7 @@ function fixture() {
   );
   // s2 (A, remote): goes back from work_mode to team_size and passes again; no CTA.
   add(
-    session('s2', 'A', OLD_DAY, linkedin),
+    session('s2', 'A', OLD_DAY, { ...linkedin, resultId: 'async_native' }),
     journal('s2', OLD_DAY)
       .start()
       .view('intro')
@@ -158,12 +159,12 @@ function fixture() {
   s4.view('priorities').cta('async_native', { outOfOrder: true }).result('async_native', {
     outOfOrder: true,
   });
-  add(session('s4', 'A', OLD_DAY), [...s4.list].reverse());
+  add(session('s4', 'A', OLD_DAY, { resultId: 'async_native' }), [...s4.list].reverse());
   // s5 (A): started and never rendered a step.
   add(session('s5', 'A', TODAY), journal('s5', TODAY).start().list);
   // s6 (B, remote): the whole path, one event with a context mismatch.
   add(
-    session('s6', 'B', TODAY, newsletter),
+    session('s6', 'B', TODAY, { ...newsletter, resultId: 'balanced' }),
     journal('s6', TODAY)
       .start()
       .view('intro')
@@ -192,7 +193,7 @@ function fixture() {
   );
   // s10 (B, QA override): converts; hidden unless includeQa.
   add(
-    session('s10', 'B', TODAY, { trafficType: 'qa' }),
+    session('s10', 'B', TODAY, { trafficType: 'qa', resultId: 'balanced' }),
     journal('s10', TODAY)
       .start()
       .view('intro')
@@ -268,7 +269,7 @@ describe('test 5: analytics on a fixture with repeats, back, duplicates and shuf
       ]),
     );
     expect(reached).toEqual({
-      intro: [7, 3, 4],
+      intro: [8, 4, 4],
       team_size: [6, 4, 2],
       work_mode: [8, 4, 4],
       priorities: [5, 4, 1],
@@ -285,7 +286,7 @@ describe('test 5: analytics on a fixture with repeats, back, duplicates and shuf
       summary.steps.map((s) => [s.stepId, [s.metrics.all.completed, s.metrics.all.passRate]]),
     );
     expect(pass).toEqual({
-      intro: [7, 1],
+      intro: [7, 7 / 8],
       team_size: [5, 5 / 6],
       work_mode: [7, 7 / 8],
       priorities: [4, 4 / 5],
@@ -303,7 +304,8 @@ describe('test 5: analytics on a fixture with repeats, back, duplicates and shuf
         .filter((s) => s.metrics.all.droppedHere > 0)
         .map((s) => [s.stepId, [s.metrics.A?.droppedHere, s.metrics.B?.droppedHere]]),
     );
-    // s5 never rendered a step: it left on the first one. s9 is synthetic: final at once.
+    // s5 sent no step event: it reached the first step and left there.
+    // s9 is synthetic: final at once, although its last event is recent.
     expect(dropped).toEqual({
       intro: [1, 0],
       work_mode: [0, 1],
@@ -312,6 +314,19 @@ describe('test 5: analytics on a fixture with repeats, back, duplicates and shuf
     });
     const total = summary.steps.reduce((n, s) => n + s.metrics.all.droppedHere, 0);
     expect(total + summary.kpis.all.inProgress + summary.kpis.all.reachedResult).toBe(9);
+  });
+
+  it('never drops more sessions on a step than reached it', () => {
+    for (const step of summary.steps) {
+      expect(step.metrics.all.droppedHere).toBeLessThanOrEqual(
+        step.metrics.all.reached - step.metrics.all.completed,
+      );
+    }
+    expect(stepOf(summary, 'intro').metrics.A).toMatchObject({
+      reached: 4,
+      completed: 3,
+      droppedHere: 1,
+    });
   });
 
   it('counts sessions that came back to a step', () => {
@@ -457,6 +472,31 @@ describe('aggregate filters', () => {
     expect(summary.kpis.all.started).toBe(0);
     expect(summary.daily).toEqual([]);
     expect(summary.experiment.verdict).toBe('Not enough data yet: both variants need sessions.');
+  });
+});
+
+describe('aggregate: server-owned facts', () => {
+  it('takes the result of a session from its row, not from client events', () => {
+    const { sessions, events } = fixture();
+    const rows = sessions.map((s) => (s.id === 's4' ? { ...s, resultId: 'office_core' } : s));
+    const summary = run({}, { sessions: rows, events });
+    const byResult = Object.fromEntries(summary.results.map((r) => [r.resultId, r.sessions.A]));
+    expect(byResult).toMatchObject({ async_native: 1, office_core: 1, hybrid_structured: 1 });
+  });
+
+  it('splits a branch only among sessions whose variant has the conditional step', () => {
+    const b = resolveFunnel(v1(), 'B');
+    const version = {
+      ...version1,
+      funnels: {
+        A: version1.funnels.A,
+        B: { ...b, sequence: b.sequence.filter((id) => id !== 'office_days') },
+      },
+    };
+    const summary = run({}, { versions: [version] });
+    expect(summary.branches).toEqual([
+      { stepId: 'office_days', parentStepId: 'work_mode', seen: 1, parentReached: 4, share: 1 / 4 },
+    ]);
   });
 });
 
