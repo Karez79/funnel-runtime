@@ -2,34 +2,36 @@
 // redeploy, so shutdown stops accepting requests and closes the database cleanly, with
 // a hard deadline so a stuck connection cannot keep the old container alive.
 import { buildApp } from './app.ts';
-import { openDb } from './db/client.ts';
+import { openDb, type DbHandle } from './db/client.ts';
+import type { App } from './plugins/route.ts';
 import { runMigrations } from './db/migrate.ts';
 import { loadEnv } from './env.ts';
 
 const SHUTDOWN_DEADLINE_MS = 10_000;
 
 const env = loadEnv(process.env);
-const handle = openDb(env.databasePath);
-runMigrations(handle.db);
-const app = await buildApp(env, handle.db);
 
-let closing = false;
+// Signal handlers go first: a SIGTERM that arrives while migrations run must still
+// stop the process promptly instead of waiting for the platform's SIGKILL.
+const proc: { app?: App; handle?: DbHandle; closing: boolean } = { closing: false };
 const shutdown = async (signal: string): Promise<void> => {
-  if (closing) return;
-  closing = true;
-  app.log.info({ signal }, 'shutting down');
+  if (proc.closing) return;
+  proc.closing = true;
+  proc.app?.log.info({ signal }, 'shutting down');
   setTimeout(() => {
-    app.log.error('shutdown deadline exceeded');
     process.exit(1);
   }, SHUTDOWN_DEADLINE_MS).unref();
   try {
-    await app.close();
+    await proc.app?.close();
   } finally {
-    handle.close();
+    proc.handle?.close();
   }
   process.exit(0);
 };
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
-await app.listen({ host: env.host, port: env.port });
+proc.handle = openDb(env.databasePath);
+runMigrations(proc.handle.db);
+proc.app = await buildApp(env, proc.handle.db);
+if (!proc.closing) await proc.app.listen({ host: env.host, port: env.port });

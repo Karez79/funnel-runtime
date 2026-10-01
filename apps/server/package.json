@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p .",
-    "dev": "node --watch src/main.ts",
-    "start": "node src/main.ts",
+    "dev": "node --env-file-if-exists=../../.env --watch src/main.ts",
+    "start": "node --env-file-if-exists=../../.env src/main.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
