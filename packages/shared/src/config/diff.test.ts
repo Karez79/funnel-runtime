@@ -147,11 +147,17 @@ describe('diffConfigs', () => {
     b.title = 'New title';
     b.events.privacy.storeRawAnswers = true;
     b['futureFlag'] = true;
+    b.experiment.variants.B['note'] = 'x';
+    const cta = b.events.allowed.find((e) => e.name === 'cta_clicked');
+    if (!cta) throw new Error('fixture');
+    cta.trigger = 'Changed trigger.';
     expect(summary(diffConfigs(a, b))).toEqual([
       'config_changed:-:title',
       'config_changed:-:session.ttlHours',
       'config_changed:-:progress.excludeTypes',
+      'config_changed:-:experiment.variants.B.note',
       'privacy_changed:-:events.privacy.storeRawAnswers',
+      'config_changed:-:events.allowed.cta_clicked.trigger',
       'config_changed:-:futureFlag',
     ]);
   });

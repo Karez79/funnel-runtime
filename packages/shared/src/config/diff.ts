@@ -181,26 +181,33 @@ function diffEvents(a: FunnelConfig, b: FunnelConfig, out: ConfigChange[]): void
  * Everything not compared above (title, session TTL, progress, privacy, schemaVersion,
  * fields unknown to this engine), so no change is ever silently missing from the list.
  */
-function rest(config: FunnelConfig): Record<string, unknown> {
+function rest(config: FunnelConfig, other: FunnelConfig): Record<string, unknown> {
   // Release notes describe each version and differ by design.
-  const top = [
-    'version',
-    'status',
-    'releaseNote',
-    'steps',
-    'results',
-    'resultRules',
-    'defaultResultId',
-  ];
+  const top = ['version', 'status', 'releaseNote', 'steps', 'results', 'resultRules'];
+  const variantFields = ['weight', 'stepSequence', 'stepOverrides', 'resultOverrides'];
+  // Added and removed events are reported above; here only the rest of kept events.
+  const kept = new Set(other.events.allowed.map((e) => e.name));
   return {
-    ...omit(config, [...top, 'experiment', 'events']),
-    experiment: omit(config.experiment, ['id', 'variants']),
-    events: omit(config.events, ['allowed']),
+    ...omit(config, [...top, 'defaultResultId', 'experiment', 'events']),
+    experiment: {
+      ...omit(config.experiment, ['id', 'variants']),
+      variants: Object.fromEntries(
+        VARIANTS.map((v) => [v, omit(config.experiment.variants[v], variantFields)]),
+      ),
+    },
+    events: {
+      ...omit(config.events, ['allowed']),
+      allowed: Object.fromEntries(
+        config.events.allowed
+          .filter((e) => kept.has(e.name))
+          .map((e) => [e.name, omit(e, ['name', 'properties'])]),
+      ),
+    },
   };
 }
 
 function diffRest(a: FunnelConfig, b: FunnelConfig, out: ConfigChange[]): void {
-  for (const path of changedPaths(rest(a), rest(b), 3)) {
+  for (const path of changedPaths(rest(a, b), rest(b, a), 4)) {
     const privacy = path.startsWith('events.privacy');
     out.push({
       kind: privacy ? 'privacy_changed' : 'config_changed',
