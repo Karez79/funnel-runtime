@@ -29,25 +29,50 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
 
+  # The Playwright version is read from the lockfile so the container image always
+  # matches @playwright/test; browsers and their system libraries are preinstalled
+  # in the image, so CI never runs apt or downloads browsers.
+  playwright-version:
+    name: playwright version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.pw.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: pnpm-lock.yaml
+          sparse-checkout-cone-mode: false
+      # The root importer's resolved version, validated as a plain release (image tags
+      # exist only for releases); anything else fails loudly instead of picking a wrong tag.
+      - id: pw
+        run: |
+          version="$(yq '.importers.".".devDependencies."@playwright/test".version' pnpm-lock.yaml)"
+          echo "resolved: $version"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   e2e:
     name: e2e
+    needs: playwright-version
+    # A skipped required check counts as passed; run even if the version job failed so
+    # the image pull fails and `e2e` turns red instead of silently skipping.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+      # The image ships its own Node; setup-node pins the exact .nvmrc version so e2e
+      # runs on the same Node as `check` and production.
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - id: pw
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
       - uses: actions/upload-artifact@v7
         if: failure()
