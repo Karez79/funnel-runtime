@@ -73,7 +73,7 @@ const dataLines = (text: string): LiveEntry[] =>
 
 describe('live bus', () => {
   it('keeps the last entries, oldest first', () => {
-    const bus = createLiveBus(3);
+    const bus = createLiveBus(3, () => 0);
     bus.publish([1, 2, 3, 4, 5].map(entry));
     expect(bus.recent().map((e) => e.eventId)).toEqual(['e-3', 'e-4', 'e-5']);
   });
@@ -93,7 +93,7 @@ describe('live bus', () => {
   });
 
   it('delivers new entries to subscribers until they unsubscribe', () => {
-    const bus = createLiveBus(50);
+    const bus = createLiveBus(50, () => 0);
     const seen: (string | null)[] = [];
     const stop = bus.subscribe((e) => seen.push(e.eventId));
     bus.publish([entry(1)]);

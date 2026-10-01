@@ -11,7 +11,7 @@ type Listener = (entry: LiveEntry) => void;
  * microseconds and only grows, so numbers stay unique across server restarts and a page
  * that reconnects can tell the replayed backlog from new entries.
  */
-export function createLiveBus(capacity: number, now: () => number = Date.now) {
+export function createLiveBus(capacity: number, now: () => number) {
   const recent: LiveEntry[] = [];
   const listeners = new Set<Listener>();
   let seq = 0;
