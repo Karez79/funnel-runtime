@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClientEventSchema } from '@funnel/shared';
+import { z } from 'zod';
 import { createEventSink, createTracker, type EventSink } from './tracking.ts';
 
 describe('track', () => {
@@ -75,5 +76,24 @@ describe('live sink', () => {
     sink.push('step_viewed', 'intro', {});
     expect(sink.pending()).toBe(2);
     closeAgain();
+  });
+
+  it('a push after close is stored but leaves no running queue behind', () => {
+    const sink = createEventSink(response);
+    const close = sink.open();
+    close();
+    sink.push('step_completed', 'intro', { next_step_id: 'team_size' });
+    expect(sink.pending()).toBe(0);
+    const stored = ClientEventSchema.array().parse(
+      JSON.parse(data.get(`funnel:events:${SESSION_ID}`) ?? '[]'),
+    );
+    expect(stored.map((e) => e.name)).toEqual(['step_completed']);
+    const doc = z
+      .object({
+        addEventListener: z.custom<ReturnType<typeof vi.fn>>(),
+        removeEventListener: z.custom<ReturnType<typeof vi.fn>>(),
+      })
+      .parse(document);
+    expect(doc.addEventListener.mock.calls.length).toBe(doc.removeEventListener.mock.calls.length);
   });
 });

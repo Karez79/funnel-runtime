@@ -36,14 +36,6 @@ export interface EventQueueContext {
   readonly funnelVersion: number;
   readonly experimentId: string;
   readonly variant: VariantKey;
-  /** UTM the session was created with; unknown keys are omitted from events. */
-  readonly utm?:
-    | {
-        readonly source?: string | null | undefined;
-        readonly medium?: string | null | undefined;
-        readonly campaign?: string | null | undefined;
-      }
-    | undefined;
 }
 
 export interface BatchBody {
@@ -134,16 +126,6 @@ function loadOutbox(storage: StorageLike | null, sessionId: string): ClientEvent
   return events;
 }
 
-type UtmFields = Partial<Pick<ClientEvent, 'utm_source' | 'utm_medium' | 'utm_campaign'>>;
-
-function utmFields(utm: EventQueueContext['utm']): UtmFields {
-  const fields: UtmFields = {};
-  if (utm?.source) fields.utm_source = utm.source;
-  if (utm?.medium) fields.utm_medium = utm.medium;
-  if (utm?.campaign) fields.utm_campaign = utm.campaign;
-  return fields;
-}
-
 function onDocumentHidden(callback: () => void): () => void {
   const listener = (): void => {
     if (document.visibilityState === 'hidden') callback();
@@ -228,7 +210,6 @@ export function createEventQueue(
 ): EventQueue {
   const deps: EventQueueDeps = { ...defaultDeps(), ...overrides };
   const { sessionId } = context;
-  const utm = utmFields(context.utm);
 
   /** The counter as stored; another tab of the same session may have moved it on. */
   const storedSeq = (): number => {
@@ -365,7 +346,6 @@ export function createEventQueue(
       experiment_id: context.experimentId,
       variant: context.variant,
       step_id: stepId,
-      ...utm,
       properties: { ...properties },
     });
     nextSeq += 1;

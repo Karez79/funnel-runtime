@@ -37,16 +37,18 @@ export interface LiveSink extends EventSink {
   open(): () => void;
 }
 
-/**
- * The event queue of a live session (7.4). The queue is created on first use rather than
- * once: React may stop and start effects again (StrictMode, remounts), and a stopped queue
- * ignores pushes, so a new one takes over the same outbox and `client_seq` from storage.
- */
 type SinkSession = Pick<
   SessionResponse['session'],
   'id' | 'funnelVersion' | 'experimentId' | 'variant'
 >;
 
+/**
+ * The event queue of a live session (7.4). The queue is created on first use rather than
+ * once: React may stop and start effects again (StrictMode, remounts), and children's
+ * effects track before the parent's effect opens the sink. A push after the sink was
+ * closed (a move that finishes after unmount) still lands in the stored outbox through a
+ * queue that is stopped right away, so no queue outlives the component.
+ */
 export function createEventSink({
   session,
   funnel,
@@ -55,22 +57,32 @@ export function createEventSink({
   funnel: { meta: Pick<SessionResponse['funnel']['meta'], 'funnelId'> };
 }): LiveSink {
   let queue: EventQueue | null = null;
-  const current = (): EventQueue =>
-    (queue ??= createEventQueue({
+  let closed = false;
+  const create = (): EventQueue =>
+    createEventQueue({
       sessionId: session.id,
       funnelId: funnel.meta.funnelId,
       funnelVersion: session.funnelVersion,
       experimentId: session.experimentId,
       variant: session.variant,
-    }));
+    });
+  const current = (): EventQueue => (queue ??= create());
   return {
     push: (name, stepId, properties) => {
-      current().push(name, stepId, properties);
+      if (!closed) {
+        current().push(name, stepId, properties);
+        return;
+      }
+      const late = create();
+      late.push(name, stepId, properties);
+      late.dispose();
     },
     pending: () => queue?.pending() ?? 0,
     open: () => {
+      closed = false;
       current();
       return () => {
+        closed = true;
         queue?.dispose();
         queue = null;
       };
