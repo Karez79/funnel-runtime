@@ -7,7 +7,12 @@
 // Back uses the history stack, not the visible path, so changing an answer that
 // reshapes the path never sends the user somewhere they have not been.
 import { answerKey, isInteractive, isKnownStep } from '../config/schema.ts';
-import { evaluateCondition, type Answers, type AnswerValue } from './conditions.ts';
+import {
+  evaluateCondition,
+  type Answers,
+  type AnswerValue,
+  type EvaluateOptions,
+} from './conditions.ts';
 import type { ResolvedFunnel } from './resolve.ts';
 
 interface Walk {
@@ -15,13 +20,13 @@ interface Walk {
   readonly answers: Answers;
 }
 
-function walk(resolved: ResolvedFunnel, answers: Answers): Walk {
+function walk(resolved: ResolvedFunnel, answers: Answers, options: EvaluateOptions): Walk {
   const path: string[] = [];
   const visible: Record<string, AnswerValue> = {};
   for (const id of resolved.sequence) {
     const step = resolved.steps[id];
     if (!step) continue;
-    if (step.visibleWhen && !evaluateCondition(step.visibleWhen, visible)) continue;
+    if (step.visibleWhen && !evaluateCondition(step.visibleWhen, visible, options)) continue;
     path.push(id);
     if (!isInteractive(step)) continue;
     const key = answerKey(step);
@@ -31,13 +36,21 @@ function walk(resolved: ResolvedFunnel, answers: Answers): Walk {
   return { path, answers: visible };
 }
 
-export function visiblePath(resolved: ResolvedFunnel, answers: Answers): string[] {
-  return walk(resolved, answers).path;
+export function visiblePath(
+  resolved: ResolvedFunnel,
+  answers: Answers,
+  options: EvaluateOptions = {},
+): string[] {
+  return walk(resolved, answers, options).path;
 }
 
 /** Only answers of visible steps: the input for results and completeness checks. */
-export function effectiveAnswers(resolved: ResolvedFunnel, answers: Answers): Answers {
-  return walk(resolved, answers).answers;
+export function effectiveAnswers(
+  resolved: ResolvedFunnel,
+  answers: Answers,
+  options: EvaluateOptions = {},
+): Answers {
+  return walk(resolved, answers, options).answers;
 }
 
 /**
@@ -48,10 +61,11 @@ export function nextStep(
   resolved: ResolvedFunnel,
   answers: Answers,
   currentId: string,
+  options: EvaluateOptions = {},
 ): string | null {
   const position = resolved.sequence.indexOf(currentId);
   if (position === -1) return null;
-  const path = new Set(visiblePath(resolved, answers));
+  const path = new Set(visiblePath(resolved, answers, options));
   return resolved.sequence.slice(position + 1).find((id) => path.has(id)) ?? null;
 }
 
@@ -61,17 +75,25 @@ export interface Progress {
   readonly total: number;
 }
 
-/** Counts visible steps of known types that are not in `progress.excludeTypes`. */
-export function progress(resolved: ResolvedFunnel, answers: Answers, currentId: string): Progress {
+/**
+ * Counts visible steps of known types that are not in `progress.excludeTypes`. The index
+ * goes by sequence position, so a current step that is hidden or not counted itself
+ * (stale state, unknown type) shows the count reached so far instead of dropping to 0.
+ */
+export function progress(
+  resolved: ResolvedFunnel,
+  answers: Answers,
+  currentId: string,
+  options: EvaluateOptions = {},
+): Progress {
   const excluded = new Set(resolved.meta.progressExcludeTypes);
-  const counted = (id: string): boolean => {
+  const counted = visiblePath(resolved, answers, options).filter((id) => {
     const step = resolved.steps[id];
     return step !== undefined && isKnownStep(step) && !excluded.has(step.type);
-  };
-  const path = visiblePath(resolved, answers);
-  const position = path.indexOf(currentId);
-  const upToCurrent = position === -1 ? [] : path.slice(0, position + 1);
-  return { index: upToCurrent.filter(counted).length, total: path.filter(counted).length };
+  });
+  const position = resolved.sequence.indexOf(currentId);
+  const index = counted.filter((id) => resolved.sequence.indexOf(id) <= position).length;
+  return { index, total: counted.length };
 }
 
 /** Pops the history stack; `null` when there is nowhere to go back to. */

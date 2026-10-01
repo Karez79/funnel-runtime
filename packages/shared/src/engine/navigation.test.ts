@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { v1, v2 } from '../../test/fixtures.ts';
 import type { Answers } from './conditions.ts';
 import { effectiveAnswers, nextStep, progress, stepBack, visiblePath } from './navigation.ts';
@@ -33,6 +33,23 @@ describe('visiblePath', () => {
     expect(visiblePath(resolved, { ...hybrid, office_days: 3 })).toContain('tool_count');
     expect(visiblePath(resolved, stale)).not.toContain('tool_count');
     expect(visiblePath(resolved, stale)).not.toContain('office_days');
+  });
+});
+
+describe('unknown operators at runtime', () => {
+  it('hide the step and report through warn in every navigation function', () => {
+    const config = v1();
+    const office = config.steps['office_days'];
+    if (!office) throw new Error('fixture');
+    office.visibleWhen = { answer: 'work_mode', operator: 'matches', value: 'hy' };
+    const resolved = resolveFunnel(config, 'A');
+    const warn = vi.fn();
+    expect(visiblePath(resolved, hybrid, { warn })).not.toContain('office_days');
+    expect(effectiveAnswers(resolved, { ...hybrid, office_days: 2 }, { warn })).toEqual(hybrid);
+    expect(nextStep(resolved, hybrid, 'timezone_span', { warn })).toBe('async_maturity');
+    expect(progress(resolved, hybrid, 'result', { warn }).total).toBe(6);
+    expect(warn).toHaveBeenCalledTimes(4);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('matches'));
   });
 });
 
@@ -86,6 +103,11 @@ describe('progress', () => {
     expect(progress(v2a, hybrid, 'result')).toEqual({ index: 8, total: 8 });
   });
 
+  it('keeps the count reached so far on a step that is not on the visible path', () => {
+    expect(progress(a, remote, 'office_days')).toEqual({ index: 4, total: 6 });
+    expect(progress(a, remote, 'ghost')).toEqual({ index: 0, total: 6 });
+  });
+
   it('does not count a step of an unknown type', () => {
     const config = v1();
     config.steps['slider'] = { id: 'slider', type: 'slider', content: {} };
@@ -93,6 +115,8 @@ describe('progress', () => {
     const resolved = resolveFunnel(config, 'A');
     expect(visiblePath(resolved, remote)).toContain('slider');
     expect(progress(resolved, remote, 'result')).toEqual({ index: 6, total: 6 });
+    expect(progress(resolved, remote, 'slider')).toEqual({ index: 0, total: 6 });
+    expect(progress(resolved, remote, 'team_size')).toEqual({ index: 1, total: 6 });
   });
 });
 
