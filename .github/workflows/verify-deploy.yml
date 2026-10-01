@@ -1,0 +1,35 @@
+# Runs after Railway reports a successful deployment of a commit (GitHub deployment
+# status). Kept out of ci.yml on purpose: Railway's "Wait for CI" waits for every
+# workflow on the commit, so a prod check inside CI would deadlock the deploy.
+name: Verify deploy
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    name: prod health
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'funnel-runtime / production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED: ${{ github.event.deployment.sha }}
+      URL: https://app-production-183d.up.railway.app/api/health
+    steps:
+      - name: Wait until prod serves the deployed commit
+        run: |
+          want="${EXPECTED:0:7}"
+          for i in $(seq 1 40); do
+            body="$(curl -fsS --max-time 5 "$URL" || true)"
+            echo "attempt $i: $body"
+            if echo "$body" | grep -q "\"status\":\"ok\"" && echo "$body" | grep -q "\"version\":\"$want\""; then
+              echo "prod is healthy on $want"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::prod did not report version $want with status ok"
+          exit 1

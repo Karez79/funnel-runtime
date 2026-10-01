@@ -1,7 +1,10 @@
 // Stop hook: Claude may not finish a turn while `pnpm check` is red (CLAUDE.md 14).
 // No-op until the workspace has a `check` script. Blocks up to MAX_BLOCKS times in a
 // row per session (counter in tmpdir), then lets Claude stop so it cannot loop forever.
-import { spawnSync } from 'node:child_process';
+// Skips the run when the working tree is byte-identical to the last green run (a reply
+// without code changes should not cost a full check).
+import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +18,35 @@ const root = repoRoot(input.cwd ?? process.cwd());
 const pkgPath = join(root, 'package.json');
 if (!existsSync(pkgPath)) process.exit(0);
 if (!JSON.parse(readFileSync(pkgPath, 'utf8')).scripts?.check) process.exit(0);
+
+// Fingerprint of HEAD + tracked changes + untracked files (names and contents).
+function treeFingerprint() {
+  const git = (args) => execFileSync('git', args, { cwd: root, maxBuffer: 256 * 1024 * 1024 });
+  const hash = createHash('sha256');
+  hash.update(git(['rev-parse', 'HEAD']));
+  hash.update(git(['diff', 'HEAD', '--binary']));
+  const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'])
+    .toString()
+    .split('\0');
+  for (const file of untracked.filter(Boolean).sort()) {
+    hash.update(file);
+    hash.update(readFileSync(join(root, file)));
+  }
+  return hash.digest('hex');
+}
+const greenFile = join(
+  tmpdir(),
+  `funnel-stop-check-green-${createHash('sha256').update(root).digest('hex').slice(0, 12)}`,
+);
+let fingerprint = '';
+try {
+  fingerprint = treeFingerprint();
+} catch {
+  // Not a git checkout or git failed: fall through to a full check.
+}
+if (fingerprint && existsSync(greenFile) && readFileSync(greenFile, 'utf8') === fingerprint) {
+  process.exit(0);
+}
 
 const counterFile = join(tmpdir(), `funnel-stop-check-${input.session_id ?? 'default'}`);
 const blocks =
@@ -30,6 +62,7 @@ const res = spawnSync('pnpm', ['check'], {
 });
 if (res.status === 0) {
   rmSync(counterFile, { force: true });
+  if (fingerprint) writeFileSync(greenFile, fingerprint);
   process.exit(0);
 }
 if (blocks >= MAX_BLOCKS) {
