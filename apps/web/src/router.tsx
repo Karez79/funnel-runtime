@@ -4,7 +4,7 @@ import { AdminLayout } from './features/admin-shell/AdminLayout.tsx';
 import { FunnelPage } from './features/funnel/FunnelPage.tsx';
 
 export const router = createBrowserRouter([
-  { path: '/', element: <FunnelPage /> },
-  { path: '/s/:stepId', element: <FunnelPage /> },
+  // One layout route, so the funnel stays mounted while the URL moves between steps.
+  { element: <FunnelPage />, children: [{ path: '/' }, { path: '/s/:stepId' }] },
   { path: '/admin/*', element: <AdminLayout /> },
 ]);

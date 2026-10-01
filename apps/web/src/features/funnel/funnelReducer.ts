@@ -41,7 +41,9 @@ export type FunnelAction =
   | { readonly type: 'change'; readonly value: AnswerValue | undefined }
   | { readonly type: 'continue' }
   /** Back one step, or to `to` deeper in the history (browser Back over several entries). */
-  | { readonly type: 'back'; readonly to?: string };
+  | { readonly type: 'back'; readonly to?: string }
+  /** Commit a state computed by this reducer earlier (a move rendered in a transition). */
+  | { readonly type: 'set'; readonly state: FunnelState };
 
 export interface TrackedEvent {
   readonly name: string;
@@ -116,6 +118,8 @@ export function funnelReducer(state: FunnelState, action: FunnelAction): FunnelS
       return goForward(state);
     case 'back':
       return goBack(state, action.to);
+    case 'set':
+      return action.state;
   }
 }
 
