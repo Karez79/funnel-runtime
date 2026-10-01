@@ -7,7 +7,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { AnalyticsSummary } from '@funnel/shared';
-import { generateTraffic } from './lib/generator.ts';
+import { z } from 'zod';
+import { generateTraffic, MIN_SESSIONS } from './lib/generator.ts';
 import { cliEnv } from './lib/env.ts';
 
 const { values } = parseArgs({
@@ -20,14 +21,20 @@ const { values } = parseArgs({
   },
 });
 
+const flags = z
+  .object({
+    sessions: z.coerce.number().int().min(MIN_SESSIONS),
+    seed: z.coerce.number().int(),
+  })
+  .parse({ sessions: values.sessions, seed: values.seed });
 const env = cliEnv(process.env);
 const write = (line: string) => process.stdout.write(`${line}\n`);
 const pct = (rate: number | null) => (rate === null ? '—' : `${(rate * 100).toFixed(1)}%`);
 
 const result = await generateTraffic({
   baseUrl: values['base-url'],
-  sessions: Number(values.sessions),
-  seed: Number(values.seed),
+  sessions: flags.sessions,
+  seed: flags.seed,
   publishNext: values['publish-next'],
   generatorKey: env.generatorKey,
   admin: env.admin,
@@ -64,6 +71,9 @@ write(
     `${String(report.delivered.length)} events stored, ${String(report.duplicates)} duplicates, ` +
     `${String(report.rejected.reduce((n, r) => n + r.count, 0))} rejected on purpose`,
 );
+if (result.skipped.length > 0) {
+  write(`  checks left out (no sessions): ${result.skipped.join(', ')}`);
+}
 if (result.published !== null) write(`  published v${String(result.published)} mid-run`);
 for (const surprise of report.surprises) write(`  unexpected ingest status: ${surprise}`);
 write(`Written to ${values.out}; uploaded to the server.`);

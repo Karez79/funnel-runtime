@@ -37,7 +37,12 @@ const GroundTruthCheckSchema = z
       ),
     expected: AnalyticsSummarySchema,
   })
-  .refine((check) => check.expected.kpis.all.started > 0, 'a check must cover sessions');
+  .refine((check) => coversSessions(check.expected), 'a check must cover sessions');
+
+/** A check proves something only if its expected summary has sessions (see header). */
+export function coversSessions(expected: AnalyticsSummary): boolean {
+  return expected.kpis.all.started > 0;
+}
 
 export const GroundTruthSchema = z.object({
   generatedAt: z.iso.datetime({ offset: true }),

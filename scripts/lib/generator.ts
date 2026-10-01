@@ -12,6 +12,7 @@
 import {
   aggregate,
   AnalyticsFiltersSchema,
+  coversSessions,
   VARIANTS,
   type AnalyticsEvent,
   type AnalyticsSession,
@@ -176,9 +177,9 @@ export async function generateTraffic(options: GenerateOptions) {
   await delivery.sendBroken(brokenItems(visitors));
   onDate((await call('health')).date);
 
-  const truth = await groundTruth(options, call, visitors, delivery.report(), window);
+  const { truth, skipped } = await groundTruth(options, call, visitors, delivery.report(), window);
   const upload = (await call('uploadGroundTruth', { body: truth })).data;
-  return { truth, upload, published, visitors, delivery: delivery.report() };
+  return { truth, skipped, upload, published, visitors, delivery: delivery.report() };
 }
 
 type RejectReason = (typeof REJECT_REASONS)[number];
@@ -217,7 +218,7 @@ async function groundTruth(
   visitors: readonly Visitor[],
   report: Report,
   window: { first: number; last: number },
-): Promise<GroundTruth> {
+): Promise<{ truth: GroundTruth; skipped: string[] }> {
   const listed = (await call('listVersions')).data.versions.filter((v) => v.state === 'published');
   const versions: AnalyticsVersion[] = [];
   for (const v of listed) {
@@ -282,7 +283,8 @@ async function groundTruth(
       { name: `${name} · variant B`, query: { ...base, variant: 'B' } },
     ];
   });
-  return {
+  const skipped: string[] = [];
+  const truth: GroundTruth = {
     generatedAt: new Date(window.last).toISOString(),
     seed: options.seed,
     sessions: visitors.length,
@@ -299,8 +301,13 @@ async function groundTruth(
           now: new Date(window.last),
         }),
       }))
-      // A check without sessions proves nothing (the server refuses it): e.g. a version
-      // that no session of this run reached the campaign of.
-      .filter((check) => check.expected.kpis.all.started > 0),
+      // A check without sessions proves nothing and the server refuses it, e.g. a
+      // campaign no session of a version came from; the CLI lists what was left out.
+      .filter((check) => {
+        if (coversSessions(check.expected)) return true;
+        skipped.push(check.name);
+        return false;
+      }),
   };
+  return { truth, skipped };
 }

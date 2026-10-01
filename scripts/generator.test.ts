@@ -66,7 +66,6 @@ describe('pnpm generate', () => {
       expect(summary.kpis.all.backUsage).toBeGreaterThan(0);
       expect(summary.dataQuality.outOfOrder).toBeGreaterThan(0);
       expect(summary.dataQuality.duplicates).toBeGreaterThan(0);
-      expect(summary.dataQuality.contextMismatch).toBeGreaterThanOrEqual(0);
       expect(summary.dataQuality.rejected.map((r) => r.reason)).toEqual([
         'invalid_event',
         'server_only',
