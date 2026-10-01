@@ -1,6 +1,5 @@
 // Composition root: wires repos -> services -> routes. The only module that sees all
 // layers at once, so routes never reach the database directly (CLAUDE.md 3.1).
-import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -14,18 +13,48 @@ import { createRetentionRepo } from './modules/retention/repo.ts';
 import { createRetentionService } from './modules/retention/service.ts';
 import { createVersionsRepo } from './modules/versions/repo.ts';
 import { versionsRoutes } from './modules/versions/routes.ts';
-import { createVersionsService } from './modules/versions/service.ts';
+import { createVersionsService, type VersionsService } from './modules/versions/service.ts';
+import { createSessionsRepo } from './modules/sessions/repo.ts';
+import { sessionsRoutes } from './modules/sessions/routes.ts';
+import { createSessionsService } from './modules/sessions/service.ts';
 import { basicAuth } from './plugins/auth.ts';
 import { errorsPlugin } from './plugins/errors.ts';
 import type { App } from './plugins/route.ts';
+import { securityPlugin } from './plugins/security.ts';
 import { webPlugin } from './plugins/web.ts';
 
 export type AppEnv = Pick<
   Env,
-  'adminUser' | 'adminPassword' | 'buildVersion' | 'logLevel' | 'webDist'
+  | 'adminUser'
+  | 'adminPassword'
+  | 'generatorKey'
+  | 'buildVersion'
+  | 'logLevel'
+  | 'rateLimits'
+  | 'webDist'
 >;
 
-export async function buildApp(env: AppEnv, db: Db, clock: Clock = systemClock): Promise<App> {
+const MINUTE_MS = 60_000;
+
+/**
+ * Services shared across modules. One instance per process: the versions service caches
+ * the active version and invalidates it on its own writes (CLAUDE.md 6.1), so every
+ * module, and a test that publishes a version, must go through the same instance.
+ */
+export interface SharedServices {
+  versions: VersionsService;
+}
+
+export function createSharedServices(db: Db, clock: Clock = systemClock): SharedServices {
+  return { versions: createVersionsService(createVersionsRepo(db), clock) };
+}
+
+export async function buildApp(
+  env: AppEnv,
+  db: Db,
+  clock: Clock = systemClock,
+  shared: SharedServices = createSharedServices(db, clock),
+): Promise<App> {
   const app = Fastify({
     logger: { level: env.logLevel },
     // Railway terminates TLS in front of us; client IPs (rate limits) come from the proxy.
@@ -37,23 +66,17 @@ export async function buildApp(env: AppEnv, db: Db, clock: Clock = systemClock):
   app.setSerializerCompiler(serializerCompiler);
   errorsPlugin(app);
 
-  await app.register(helmet, {
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:'],
-        styleSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        fontSrc: ["'self'"],
-        connectSrc: ["'self'"],
-      },
-    },
-  });
+  await securityPlugin(app, env.generatorKey);
   app.decorate('adminGuard', basicAuth(env.adminUser, env.adminPassword));
 
   healthRoutes(app, createHealthService(createHealthRepo(db), env.buildVersion));
-  const versions = createVersionsService(createVersionsRepo(db), clock);
+  const { versions } = shared;
   versionsRoutes(app, versions);
+  sessionsRoutes(
+    app,
+    createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
+    { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
+  );
 
   const stopRetention = createRetentionService(createRetentionRepo(db), clock, app.log).start();
   app.addHook('onClose', (_instance, done) => {

@@ -22,6 +22,8 @@ const EnvSchema = z
     ADMIN_USER: z.string().min(1).optional(),
     ADMIN_PASSWORD: z.string().min(1).optional(),
     GENERATOR_KEY: z.string().min(1).optional(),
+    // Requests per minute per client IP on public write routes (CLAUDE.md 6.0).
+    RATE_LIMIT_SESSIONS: z.coerce.number().int().positive().default(30),
     BUILD_VERSION: z.string().optional(),
     RAILWAY_GIT_COMMIT_SHA: z.string().optional(),
   })
@@ -44,6 +46,7 @@ const EnvSchema = z
       adminUser: secret('ADMIN_USER'),
       adminPassword: secret('ADMIN_PASSWORD'),
       generatorKey: secret('GENERATOR_KEY'),
+      rateLimits: { sessions: raw.RATE_LIMIT_SESSIONS },
       buildVersion: raw.BUILD_VERSION ?? raw.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
     };
   });
