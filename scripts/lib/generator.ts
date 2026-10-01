@@ -286,17 +286,21 @@ async function groundTruth(
     generatedAt: new Date(window.last).toISOString(),
     seed: options.seed,
     sessions: visitors.length,
-    checks: checks.map(({ name, query }) => ({
-      name,
-      query,
-      expected: aggregate({
-        sessions,
-        events,
-        versions,
-        ingest: { duplicates: report.duplicates, rejected: report.rejected },
-        filters: AnalyticsFiltersSchema.parse(query),
-        now: new Date(window.last),
-      }),
-    })),
+    checks: checks
+      .map(({ name, query }) => ({
+        name,
+        query,
+        expected: aggregate({
+          sessions,
+          events,
+          versions,
+          ingest: { duplicates: report.duplicates, rejected: report.rejected },
+          filters: AnalyticsFiltersSchema.parse(query),
+          now: new Date(window.last),
+        }),
+      }))
+      // A check without sessions proves nothing (the server refuses it): e.g. a version
+      // that no session of this run reached the campaign of.
+      .filter((check) => check.expected.kpis.all.started > 0),
   };
 }
