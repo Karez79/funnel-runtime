@@ -1,0 +1,52 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--r-pill);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    transform 0.25s var(--spring),
+    background 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.primary {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.primary:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--ink) 85%, var(--card));
+}
+
+.ghost {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--panel);
+}
+
+.sm {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 12.5px;
+}

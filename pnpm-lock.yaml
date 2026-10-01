@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))
+      '@funnel/shared':
+        specifier: workspace:*
+        version: link:packages/shared
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -132,6 +135,9 @@ importers:
       uuid:
         specifier: ^14.0.2
         version: 14.0.2
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@babel/core':
         specifier: ^8.0.6
