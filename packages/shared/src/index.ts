@@ -92,3 +92,12 @@ export {
   VARIANT_SOURCES,
   VERSION_STATES,
 } from './api/domain.ts';
+
+export { aggregate, IN_PROGRESS_WINDOW_MS } from './analytics/aggregate.ts';
+export type {
+  AggregateInput,
+  AnalyticsEvent,
+  AnalyticsSession,
+  AnalyticsVersion,
+  IngestQuality,
+} from './analytics/aggregate.ts';
