@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BatchEnvelopeSchema, ClientEventSchema } from './schema.ts';
+import { BatchEnvelopeSchema, BatchResponseSchema, ClientEventSchema } from './schema.ts';
 
 const event = {
   event_id: '01928f5e-7b3a-7c4d-9e2f-0123456789ab',
@@ -30,7 +30,7 @@ describe('ClientEventSchema', () => {
     ['client_timestamp', { client_timestamp: 'yesterday' }],
     ['client_seq', { client_seq: -1 }],
     ['variant', { variant: 'C' }],
-    ['properties', { properties: { nested: { a: 1 } } }],
+    ['properties', { properties: 'none' }],
     ['name', { name: '' }],
   ])('rejects a bad %s', (_field, patch) => {
     expect(ClientEventSchema.safeParse({ ...event, ...patch }).success).toBe(false);
@@ -51,5 +51,15 @@ describe('BatchEnvelopeSchema', () => {
     expect(BatchEnvelopeSchema.safeParse({}).success).toBe(false);
     expect(BatchEnvelopeSchema.safeParse({ events: Array(101).fill(event) }).success).toBe(false);
     expect(BatchEnvelopeSchema.safeParse({ events: [] }).success).toBe(true);
+  });
+});
+
+describe('BatchResponseSchema', () => {
+  it('requires a reason exactly for rejected results', () => {
+    const ok = (results: unknown[]) =>
+      BatchResponseSchema.safeParse({ results, accepted: 0, duplicates: 0, rejected: 0 }).success;
+    expect(ok([{ event_id: 'e', status: 'accepted' }])).toBe(true);
+    expect(ok([{ event_id: null, status: 'rejected', reason: 'invalid_event' }])).toBe(true);
+    expect(ok([{ event_id: 'e', status: 'rejected' }])).toBe(false);
   });
 });

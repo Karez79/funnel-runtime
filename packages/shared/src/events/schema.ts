@@ -7,8 +7,6 @@ import { VARIANTS } from '../config/schema.ts';
 
 export const MAX_BATCH_EVENTS = 100;
 
-const PropertyValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
-
 export const ClientEventSchema = z.object({
   event_id: z.uuid(),
   session_id: z.string().min(1),
@@ -23,10 +21,13 @@ export const ClientEventSchema = z.object({
   utm_source: z.string().optional(),
   utm_medium: z.string().optional(),
   utm_campaign: z.string().optional(),
-  properties: z.record(z.string(), PropertyValue),
+  // Values are checked after the whitelist (catalog.ts), so an extra key with a nested
+  // value is dropped and flagged rather than failing the whole event.
+  properties: z.record(z.string(), z.unknown()),
 });
 export type ClientEvent = z.infer<typeof ClientEventSchema>;
-export type EventProperties = ClientEvent['properties'];
+/** Properties as stored: whitelisted, flat values only. */
+export type EventProperties = Record<string, string | number | boolean | null>;
 
 export const BatchEnvelopeSchema = z.object({
   batch_id: z.string().min(1).max(100).optional(),
@@ -41,12 +42,15 @@ export const REJECT_REASONS = [
   'unknown_step',
 ] as const;
 
-const EventResult = z.object({
-  /** null when the item had no readable event_id. */
-  event_id: z.string().nullable(),
-  status: z.enum(['accepted', 'duplicate', 'rejected']),
-  reason: z.enum(REJECT_REASONS).optional(),
-});
+/** `event_id` is null when the item had no readable id. Only a rejection has a reason. */
+const EventResult = z.discriminatedUnion('status', [
+  z.object({ event_id: z.string().nullable(), status: z.enum(['accepted', 'duplicate']) }),
+  z.object({
+    event_id: z.string().nullable(),
+    status: z.literal('rejected'),
+    reason: z.enum(REJECT_REASONS),
+  }),
+]);
 
 export const BatchResponseSchema = z.object({
   results: z.array(EventResult),
