@@ -1,0 +1,42 @@
+.dialog {
+  border: 0;
+  padding: 0;
+  border-radius: var(--r-glass-sm);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.2s,
+    transform 0.3s var(--spring),
+    overlay 0.2s allow-discrete,
+    display 0.2s allow-discrete;
+}
+
+.dialog:not([open]) {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.dialog::backdrop {
+  background: color-mix(in oklch, var(--ink) 22%, transparent);
+  backdrop-filter: blur(4px);
+  transition:
+    opacity 0.2s,
+    overlay 0.2s allow-discrete,
+    display 0.2s allow-discrete;
+}
+
+@starting-style {
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
