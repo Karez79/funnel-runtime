@@ -140,10 +140,17 @@ export type KnownStep = z.infer<KnownStepSchema>;
 
 /**
  * A step that is already parsed, without the parse-time transform of StepSchema: for API
- * responses, which zod must be able to encode. Known schemas come first, so a valid known
- * step never falls through to UnknownStep.
+ * responses, which zod must be able to encode. The fallback accepts only unknown types, so
+ * a broken known step fails here instead of reaching the renderer as "unknown".
  */
-export const ParsedStepSchema = z.union([...Object.values(KNOWN_STEP_SCHEMAS), UnknownStep]);
+export const ParsedStepSchema = z.union([
+  ...Object.values(KNOWN_STEP_SCHEMAS),
+  UnknownStep.extend({
+    type: z
+      .string()
+      .refine((type) => !isKnownType(type), 'a known step type must match its schema'),
+  }),
+]);
 export type Step = z.infer<typeof ParsedStepSchema>;
 
 function isKnownType(type: string): type is keyof typeof KNOWN_STEP_SCHEMAS {

@@ -69,6 +69,18 @@ describe('resolveFunnel', () => {
     expect(ResolvedFunnelSchema.parse(resolved)).toEqual(resolved);
   });
 
+  it('wire schema rejects a known step without its input, keeps an unknown type', () => {
+    const resolved = resolveFunnel(v1(), 'B');
+    const broken = Object.fromEntries(
+      Object.entries(resolved.steps['work_mode'] ?? {}).filter(([key]) => key !== 'input'),
+    );
+    const withBroken = { ...resolved, steps: { ...resolved.steps, work_mode: broken } };
+    expect(ResolvedFunnelSchema.safeParse(withBroken).success).toBe(false);
+    const slider = { id: 'slider', type: 'slider', content: {} };
+    const withUnknown = { ...resolved, steps: { ...resolved.steps, slider } };
+    expect(ResolvedFunnelSchema.safeParse(withUnknown).success).toBe(true);
+  });
+
   it('deep-merges result overrides', () => {
     const config = v1();
     const a = resolveFunnel(config, 'A').results['async_native'];
