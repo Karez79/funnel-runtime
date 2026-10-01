@@ -1,3 +1,4 @@
+import { connect } from 'node:net';
 import Fastify from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -32,19 +33,36 @@ async function readUntil(
   body: ReadableStream<Uint8Array>,
   done: (text: string) => boolean,
   timeoutMs = 3000,
-): Promise<{ text: string; reader: ReadableStreamDefaultReader<Uint8Array> }> {
+): Promise<{ text: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let text = '';
-  const deadline = Date.now() + timeoutMs;
-  while (!done(text)) {
-    if (Date.now() > deadline) throw new Error(`stream timed out, got: ${text}`);
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    text += decoder.decode(chunk.value, { stream: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`stream timed out, got: ${text}`));
+    }, timeoutMs);
+  });
+  try {
+    while (!done(text)) {
+      const chunk = await Promise.race([reader.read(), timeout]);
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+  } finally {
+    clearTimeout(timer);
+    reader.releaseLock();
   }
-  reader.releaseLock();
-  return { text, reader };
+  return { text };
+}
+
+/** Polls until `check()` holds (server-side effects of a client disconnect are async). */
+async function eventually(check: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error('condition not reached');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 const dataLines = (text: string): LiveEntry[] =>
@@ -128,13 +146,37 @@ describe('GET /api/live', () => {
       },
     ]);
 
-    await post([event, { ...event, event_id: uuidv7(), name: 'nope' }]);
+    const rejectedId = uuidv7();
+    await post([event, { ...event, event_id: rejectedId, name: 'nope' }]);
     const next = await readUntil(body, (text) => dataLines(text).length >= 2);
-    expect(dataLines(next.text).map((e) => [e.status, e.reason])).toEqual([
-      ['duplicate', null],
-      ['rejected', 'unknown_event'],
+    expect(dataLines(next.text)).toMatchObject([
+      { eventId: event.event_id, status: 'duplicate', reason: null },
+      {
+        eventId: rejectedId,
+        sessionId: session.id,
+        name: 'nope',
+        // A rejected event of a known session still shows the session's version and variant.
+        version: session.funnelVersion,
+        variant: session.variant,
+        status: 'rejected',
+        reason: 'unknown_event',
+      },
     ]);
+    expect(t.services.live.subscribers()).toBe(1);
     controller.abort();
+    await eventually(() => t?.services.live.subscribers() === 0);
+  });
+
+  it('cuts untrusted strings of rejected items short', async () => {
+    t = await createTestApp();
+    await t.app.inject({
+      method: 'POST',
+      url: '/api/events/batch',
+      payload: { events: [{ event_id: 'x'.repeat(10_000), name: 'n'.repeat(10_000) }] },
+    });
+    const [entry] = t.services.live.recent();
+    expect(entry?.eventId).toHaveLength(200);
+    expect(entry?.name).toHaveLength(200);
   });
 
   it('ends open streams when the server shuts down', async () => {
@@ -152,6 +194,33 @@ describe('GET /api/live', () => {
 });
 
 describe('sse plugin', () => {
+  it('ends a stream whose unsent buffer grows past the cap', async () => {
+    const app = Fastify().withTypeProvider<ZodTypeProvider>();
+    const start = sseStreams(app, 60_000);
+    let ended = false;
+    app.get('/flood', (_req, reply) => {
+      const stream = start(reply);
+      stream.onClose(() => {
+        ended = true;
+      });
+      const chunk = 'x'.repeat(64 * 1024);
+      for (let i = 0; i < 200 && !ended; i++) stream.send(chunk);
+    });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    if (address === null || typeof address === 'string') throw new Error('no port');
+    // A raw socket that never reads: nothing drains, so the buffer only grows.
+    const socket = connect(address.port, '127.0.0.1');
+    socket.pause();
+    socket.write('GET /flood HTTP/1.1\r\nHost: localhost\r\n\r\n');
+    try {
+      await eventually(() => ended);
+    } finally {
+      socket.destroy();
+      await app.close();
+    }
+  });
+
   it('sends a heartbeat comment while the stream is idle', async () => {
     const app = Fastify().withTypeProvider<ZodTypeProvider>();
     const start = sseStreams(app, 20);

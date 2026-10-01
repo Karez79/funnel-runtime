@@ -21,7 +21,7 @@ import { createSessionsService } from './modules/sessions/service.ts';
 import { createEventsRepo } from './modules/events/repo.ts';
 import { eventsRoutes } from './modules/events/routes.ts';
 import { createEventsService } from './modules/events/service.ts';
-import { createLiveBus } from './modules/live/bus.ts';
+import { createLiveBus, type LiveBus } from './modules/live/bus.ts';
 import { liveRoutes } from './modules/live/routes.ts';
 import { basicAuth } from './plugins/auth.ts';
 import { errorsPlugin } from './plugins/errors.ts';
@@ -53,10 +53,15 @@ const LIVE_HEARTBEAT_MS = 15_000;
  */
 export interface SharedServices {
   versions: VersionsService;
+  /** Feed of ingest results for Live events (11.1); in memory, one per process. */
+  live: LiveBus;
 }
 
 export function createSharedServices(db: Db, clock: Clock = systemClock): SharedServices {
-  return { versions: createVersionsService(createVersionsRepo(db), clock) };
+  return {
+    versions: createVersionsService(createVersionsRepo(db), clock),
+    live: createLiveBus(LIVE_STREAM.backlog),
+  };
 }
 
 /** `shared` is required so a second versions service with its own cache cannot slip in. */
@@ -82,14 +87,13 @@ export async function buildApp(
   app.decorate('adminGuard', basicAuth(env.adminUser, env.adminPassword));
 
   healthRoutes(app, createHealthService(createHealthRepo(db), env.buildVersion));
-  const { versions } = shared;
+  const { versions, live } = shared;
   versionsRoutes(app, versions);
   sessionsRoutes(
     app,
     createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
-  const live = createLiveBus(LIVE_STREAM.backlog);
   const publish = (entries: LiveEntry[]) => {
     live.publish(entries);
   };

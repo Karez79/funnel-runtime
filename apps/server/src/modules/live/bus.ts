@@ -21,6 +21,10 @@ export function createLiveBus(capacity: number) {
     recent(): LiveEntry[] {
       return [...recent];
     },
+    /** Open subscriptions (a closed stream must not leave one behind). */
+    subscribers(): number {
+      return listeners.size;
+    },
     subscribe(listener: Listener): () => void {
       listeners.add(listener);
       return () => {

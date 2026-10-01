@@ -12,6 +12,9 @@ export interface SseStream {
   onClose: (listener: () => void) => void;
 }
 
+/** Unsent bytes a slow client may hold before its stream is dropped. */
+const MAX_BUFFERED_BYTES = 1024 * 1024;
+
 export function sseStreams(app: App, heartbeatMs: number) {
   const open = new Set<() => void>();
 
@@ -33,8 +36,16 @@ export function sseStreams(app: App, heartbeatMs: number) {
     res.write(': connected\n\n');
 
     const listeners: (() => void)[] = [];
-    const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), heartbeatMs);
     let closed = false;
+    // A client that stops reading (a stalled tab) would make every entry pile up in
+    // memory; past the cap the stream is ended and EventSource reconnects with the backlog.
+    const write = (chunk: string) => {
+      if (closed) return;
+      if (!res.write(chunk) && res.writableLength > MAX_BUFFERED_BYTES) end();
+    };
+    const heartbeat = setInterval(() => {
+      write(': heartbeat\n\n');
+    }, heartbeatMs);
     const end = () => {
       if (closed) return;
       closed = true;
@@ -48,7 +59,7 @@ export function sseStreams(app: App, heartbeatMs: number) {
 
     return {
       send: (data) => {
-        if (!closed) res.write(`data: ${JSON.stringify(data)}\n\n`);
+        write(`data: ${JSON.stringify(data)}\n\n`);
       },
       onClose: (listener) => {
         listeners.push(listener);

@@ -42,9 +42,13 @@ interface Checked {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Longest string copied from a rejected item into a response, a row or the Live stream. */
+const FIELD_LIMIT = 200;
+
+/** A string field of an item that failed validation: untrusted, so it is cut short. */
 const stringField = (item: unknown, key: string): string | null => {
   const value = isRecord(item) ? item[key] : undefined;
-  return typeof value === 'string' ? value : null;
+  return typeof value === 'string' ? value.slice(0, FIELD_LIMIT) : null;
 };
 
 /** Top-level keys a client event may have; anything else in a rejected item is dropped. */
