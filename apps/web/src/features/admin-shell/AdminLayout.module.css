@@ -81,6 +81,49 @@
   align-items: center;
 }
 
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  margin-right: 4px;
+  text-decoration: none;
+}
+
+.live:hover {
+  color: var(--ink);
+}
+
+.dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.pulse {
+  background: var(--ok);
+}
+
+.pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: ping 1.8s infinite;
+}
+
+@keyframes ping {
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
 .me {
   width: 38px;
   height: 38px;
@@ -117,6 +160,12 @@
 .main {
   padding: 0 28px 48px 6px;
   min-width: 0;
+}
+
+@media (width <= 860px) {
+  .live {
+    display: none;
+  }
 }
 
 @media (width <= 720px) {

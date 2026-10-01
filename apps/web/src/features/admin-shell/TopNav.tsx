@@ -3,6 +3,7 @@ import { IconButton } from '../../ui/IconButton.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import { iconButtonClass } from '../../ui/iconButtonClass.ts';
 import styles from './AdminLayout.module.css';
+import { LiveIndicator } from './LiveIndicator.tsx';
 import { ADMIN_PAGES } from './pages.ts';
 
 export function TopNav({ onSearch }: { onSearch: () => void }) {
@@ -24,6 +25,7 @@ export function TopNav({ onSearch }: { onSearch: () => void }) {
         </a>
       </nav>
       <div className={styles.right}>
+        <LiveIndicator />
         <IconButton icon="search" aria-label="Search and commands (Command K)" onClick={onSearch} />
         <Link
           to="/admin/live?status=rejected"
