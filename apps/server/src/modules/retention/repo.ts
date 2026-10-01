@@ -12,9 +12,11 @@ export function createRetentionRepo(db: Db) {
         .where(
           and(
             lte(sessions.expiresAt, nowIso),
-            // One malformed row must not abort the whole statement (json_extract throws).
-            sql`json_valid(${sessions.stateJson})`,
-            sql`json_extract(${sessions.stateJson}, '$.answers') != '{}'`,
+            // One malformed row must not abort the whole statement: json_extract throws on
+            // invalid JSON, and SQLite does not promise the order of AND terms, so the
+            // validity check guards the extraction inside one CASE.
+            sql`case when json_valid(${sessions.stateJson})
+              then json_extract(${sessions.stateJson}, '$.answers') != '{}' end`,
           ),
         )
         .run().changes;
