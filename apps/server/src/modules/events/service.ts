@@ -16,6 +16,7 @@ import {
   isServerOnly,
   type BatchResponseSchema,
   type ClientEvent,
+  type LiveEntry,
   type EventProperties,
   type REJECT_REASONS,
 } from '@funnel/shared';
@@ -38,22 +39,16 @@ interface Checked {
   flags: Record<string, unknown>;
 }
 
-/** What the stream of ingest results (Live events, 11.1) needs to know about one item. */
-interface IngestOutcome {
-  result: EventResult;
-  name: string | null;
-  sessionId: string | null;
-  stepId: string | null;
-  version: number | null;
-  variant: IngestSession['variant'] | null;
-}
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Longest string copied from a rejected item into a response, a row or the Live stream. */
+const FIELD_LIMIT = 200;
+
+/** A string field of an item that failed validation: untrusted, so it is cut short. */
 const stringField = (item: unknown, key: string): string | null => {
   const value = isRecord(item) ? item[key] : undefined;
-  return typeof value === 'string' ? value : null;
+  return typeof value === 'string' ? value.slice(0, FIELD_LIMIT) : null;
 };
 
 /** Top-level keys a client event may have; anything else in a rejected item is dropped. */
@@ -102,12 +97,18 @@ function mismatch(event: ClientEvent, session: IngestSession): boolean {
   );
 }
 
-export function createEventsService(repo: EventsRepo, versions: VersionsService, clock: Clock) {
+/**
+ * `publish` receives one Live events entry per item (11.1) after the batch is committed,
+ * so the stream never shows an event that was rolled back.
+ */
+export function createEventsService(
+  repo: EventsRepo,
+  versions: VersionsService,
+  clock: Clock,
+  publish: (entries: LiveEntry[]) => void,
+) {
   return {
-    ingest(envelope: { batch_id?: string | undefined; events: unknown[] }): {
-      response: BatchResponse;
-      outcomes: IngestOutcome[];
-    } {
+    ingest(envelope: { batch_id?: string | undefined; events: unknown[] }): BatchResponse {
       const receivedAt = clock.now().toISOString();
       const batchId = envelope.batch_id ?? null;
       // Per batch: sessions read once, and the highest client_seq stored so far per
@@ -196,46 +197,60 @@ export function createEventsService(repo: EventsRepo, versions: VersionsService,
       );
 
       let next = 0;
-      const outcomes = items.map((i): IngestOutcome => {
+      const outcomes = items.map((i) => {
         if (!i.ok) {
           const sessionId = stringField(i.item, 'session_id');
           const session = sessionId === null ? undefined : sessionOf(sessionId);
+          const result: EventResult = {
+            event_id: stringField(i.item, 'event_id'),
+            status: 'rejected',
+            reason: i.reason,
+          };
           return {
-            result: {
-              event_id: stringField(i.item, 'event_id'),
-              status: 'rejected',
-              reason: i.reason,
+            result,
+            about: {
+              sessionId,
+              name: stringField(i.item, 'name'),
+              stepId: stringField(i.item, 'step_id'),
+              version: session?.funnelVersion ?? null,
+              variant: session?.variant ?? null,
             },
-            name: stringField(i.item, 'name'),
-            sessionId,
-            stepId: stringField(i.item, 'step_id'),
-            version: session?.funnelVersion ?? null,
-            variant: session?.variant ?? null,
           };
         }
         const { event, session } = i.checked;
-        const isNew = inserted[next++] ?? false;
+        const result: EventResult = {
+          event_id: event.event_id,
+          status: (inserted[next++] ?? false) ? 'accepted' : 'duplicate',
+        };
         return {
-          result: { event_id: event.event_id, status: isNew ? 'accepted' : 'duplicate' },
-          name: event.name,
-          sessionId: session.id,
-          stepId: event.step_id,
-          version: session.funnelVersion,
-          variant: session.variant,
+          result,
+          about: {
+            sessionId: session.id,
+            name: event.name,
+            stepId: event.step_id,
+            version: session.funnelVersion,
+            variant: session.variant,
+          },
         };
       });
+      publish(
+        outcomes.map(({ result, about }) => ({
+          receivedAt,
+          eventId: result.event_id,
+          ...about,
+          status: result.status,
+          reason: result.status === 'rejected' ? result.reason : null,
+        })),
+      );
 
       const results = outcomes.map((o) => o.result);
       const count = (status: EventResult['status']) =>
         results.filter((r) => r.status === status).length;
       return {
-        response: {
-          results,
-          accepted: count('accepted'),
-          duplicates: count('duplicate'),
-          rejected: count('rejected'),
-        },
-        outcomes,
+        results,
+        accepted: count('accepted'),
+        duplicates: count('duplicate'),
+        rejected: count('rejected'),
       };
     },
   };
