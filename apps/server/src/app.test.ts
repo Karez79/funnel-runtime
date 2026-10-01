@@ -187,6 +187,21 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ NODE_ENV: 'production' })).toThrow(/ADMIN_USER/);
   });
 
+  it('reads the client IP from X-Real-IP in production only, unless configured', () => {
+    const prod = {
+      NODE_ENV: 'production',
+      ADMIN_USER: 'u',
+      ADMIN_PASSWORD: 'p',
+      GENERATOR_KEY: 'k',
+    };
+    expect(loadEnv(prod).clientIpHeader).toBe('x-real-ip');
+    expect(loadEnv({ ...prod, CLIENT_IP_HEADER: '' }).clientIpHeader).toBeNull();
+    expect(loadEnv({ CLIENT_IP_HEADER: 'CF-Connecting-IP' }).clientIpHeader).toBe(
+      'cf-connecting-ip',
+    );
+    expect(loadEnv({}).clientIpHeader).toBeNull();
+  });
+
   it('takes the build version from the Railway commit', () => {
     const env = loadEnv({
       NODE_ENV: 'production',

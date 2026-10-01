@@ -48,7 +48,18 @@ declare module 'fastify' {
 const absentAsUndefined = (schema: z.ZodType) =>
   z.preprocess((value) => (value === null ? undefined : value), schema);
 
-export function route<D extends RouteDef>(app: App, def: D, handler: Handler<D>): void {
+/** Per-route options that are deployment settings rather than part of the contract. */
+export interface RouteOptions {
+  /** Requests per window per client (plugins/security.ts); omitted means unlimited. */
+  rateLimit?: { max: number; timeWindow: number };
+}
+
+export function route<D extends RouteDef>(
+  app: App,
+  def: D,
+  handler: Handler<D>,
+  options: RouteOptions = {},
+): void {
   const status = def.status ?? 200;
   app.route({
     method: def.method,
@@ -60,6 +71,7 @@ export function route<D extends RouteDef>(app: App, def: D, handler: Handler<D>)
       response: { [status]: def.response },
     },
     ...(def.bodyLimit === undefined ? {} : { bodyLimit: def.bodyLimit }),
+    ...(options.rateLimit ? { config: { rateLimit: options.rateLimit } } : {}),
     // onRequest runs before body parsing, so an anonymous caller gets 401, not 400.
     ...(def.auth === 'admin' ? { onRequest: app.adminGuard } : {}),
     handler: async (req, reply) => {

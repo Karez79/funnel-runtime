@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../../app.ts';
+import { buildApp, createSharedServices } from '../../app.ts';
 import { createTestApp, TEST_ENV, testClock, type TestApp } from '../../test/harness.ts';
 import { createRetentionRepo } from './repo.ts';
 import { createRetentionService } from './service.ts';
@@ -115,7 +115,13 @@ describe('expired answers cleanup', () => {
     insertSession('expired', '2026-09-02T00:00:00.000Z');
     await t.app.close();
     // A second app on the same database sweeps on build.
-    const app = await buildApp(TEST_ENV, t.handle.db, testClock());
+    const clock = testClock();
+    const app = await buildApp(
+      TEST_ENV,
+      t.handle.db,
+      createSharedServices(t.handle.db, clock),
+      clock,
+    );
     expect(stateOf('expired')).toMatchObject({ answers: {} });
     await app.close();
   });
