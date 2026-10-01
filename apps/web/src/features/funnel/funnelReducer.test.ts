@@ -103,6 +103,15 @@ describe('funnelReducer', () => {
     });
   });
 
+  it('keeps the answer of a step that became hidden', () => {
+    let s = run(start(), { type: 'continue' }, ...answer(5), ...answer('hybrid'));
+    s = run(s, ...answer(['speed']), ...answer('same'), ...answer(2));
+    expect(s.answers.office_days).toBe(2);
+    s = run(s, { type: 'back', to: 'work_mode' }, ...answer('remote'));
+    expect(s.answers.office_days).toBe(2);
+    expect(visiblePathOf(s)).not.toContain('office_days');
+  });
+
   it('does not move past the last step', () => {
     const s = initialState(funnel(), { answers: {}, history: [], currentStepId: 'result' });
     expect(run(s, { type: 'continue' })).toBe(s);
@@ -121,6 +130,30 @@ describe('progress', () => {
     s = run(s, { type: 'change', value: 'remote' });
     expect(progressOf(s).total).toBe(6);
     expect(progressOf(start())).toEqual({ index: 0, total: 6 });
+  });
+});
+
+describe('optional question', () => {
+  function optional(): FunnelState {
+    const base = funnel();
+    const step = base.steps.team_size;
+    if (!step) throw new Error('fixture: team_size is missing');
+    const relaxed = { ...step, validation: { required: false } };
+    return initialState(
+      { ...base, steps: { ...base.steps, team_size: relaxed } },
+      { answers: { team_size: 4 }, history: ['intro'], currentStepId: 'team_size' },
+    );
+  }
+
+  it('cleared and continued drops the old answer and submits nothing', () => {
+    const before = run(optional(), { type: 'change', value: undefined });
+    const action: FunnelAction = { type: 'continue' };
+    const after = funnelReducer(before, action);
+    expect(after.currentStepId).toBe('work_mode');
+    expect(after.answers).toEqual({});
+    expect(transitionEvents(before, after, action)).toEqual([
+      { name: 'step_completed', stepId: 'team_size', properties: { next_step_id: 'work_mode' } },
+    ]);
   });
 });
 

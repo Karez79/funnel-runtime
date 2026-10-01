@@ -89,8 +89,12 @@ function goForward(state: FunnelState): FunnelState {
   let answers = state.answers;
   if (step && isInteractive(step)) {
     if (!validateAnswer(step, state.draft).ok) return { ...state, attempted: true };
-    // An optional question left empty moves on without an answer.
-    if (state.draft !== undefined) answers = { ...state.answers, [answerKey(step)]: state.draft };
+    const key = answerKey(step);
+    // An optional question left empty moves on without an answer, and clears an old one.
+    answers =
+      state.draft === undefined
+        ? Object.fromEntries(Object.entries(state.answers).filter(([k]) => k !== key))
+        : { ...state.answers, [key]: state.draft };
   }
   const next = nextStep(state.funnel, answers, state.currentStepId);
   if (next === null) return state;
@@ -98,12 +102,7 @@ function goForward(state: FunnelState): FunnelState {
 }
 
 function goBack(state: FunnelState, to: string | undefined): FunnelState {
-  if (to !== undefined) {
-    const index = state.history.lastIndexOf(to);
-    if (index === -1) return state;
-    return moveTo(state, state.answers, state.history.slice(0, index), to);
-  }
-  const back = stepBack(state.history);
+  const back = stepBack(state.history, to);
   return back ? moveTo(state, state.answers, back.history, back.stepId) : state;
 }
 
@@ -210,6 +209,13 @@ export function transitionEvents(
   if (action.type !== 'continue') return [];
   const step = currentStep(before);
   if (!step || !isInteractive(step)) return [];
+  const completed: TrackedEvent = {
+    name: 'step_completed',
+    stepId: from,
+    properties: { next_step_id: after.currentStepId },
+  };
+  // An optional question left empty submitted no answer.
+  if (before.draft === undefined) return [completed];
   const kind = answerKind(step, before.draft);
   return [
     {
@@ -217,6 +223,6 @@ export function transitionEvents(
       stepId: from,
       properties: kind === null ? {} : { answer_kind: kind },
     },
-    { name: 'step_completed', stepId: from, properties: { next_step_id: after.currentStepId } },
+    completed,
   ];
 }

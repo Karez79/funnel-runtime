@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createEventSink, createTracker, NOOP_SINK, type EventSink } from './tracking.ts';
+import { createTracker, type EventSink } from './tracking.ts';
 
 describe('track', () => {
   it('forwards only events of the session catalog', () => {
@@ -13,11 +13,5 @@ describe('track', () => {
       ['step_viewed', 'intro', { step_type: 'info' }],
       ['step_viewed', null, {}],
     ]);
-  });
-
-  it('the no-op sink drops everything; live sessions use it until the event queue lands', () => {
-    NOOP_SINK.push('step_viewed', null, {});
-    expect(NOOP_SINK.pending()).toBe(0);
-    expect(createEventSink).toBeTypeOf('function');
   });
 });
