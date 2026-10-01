@@ -154,6 +154,12 @@ describe('lintConfig: errors', () => {
     expect(errors[0]?.message).toContain('back_clicked');
   });
 
+  it('raw answers stored in events', () => {
+    const config = v1();
+    config.events.privacy.storeRawAnswers = true;
+    expect(codes(config)).toEqual(['privacy']);
+  });
+
   it('an unknown major schema version', () => {
     const config = v1();
     config.schemaVersion = '2.0';
@@ -247,5 +253,49 @@ describe('lintConfig: warnings', () => {
       'resultRules[5]: "sped" is not an option ("priorities")',
       'resultRules[6]: compares a number with a non-number ("team_size")',
     ]);
+  });
+});
+
+describe('lintConfig: changes against the active version', () => {
+  it('warns about a new result, but not about new steps or texts', () => {
+    const { errors, warnings } = lintConfig(v2(), { previous: v1() });
+    expect(errors).toEqual([]);
+    expect(warnings).toEqual([{ code: 'config_change', message: 'Result "meeting_heavy" added' }]);
+  });
+
+  it('warns about a step removed from a variant, new and removed events and results', () => {
+    const next = v2();
+    next.experiment.variants.B.stepSequence = next.experiment.variants.B.stepSequence.filter(
+      (id) => id !== 'tool_count',
+    );
+    next.events.allowed.push({ name: 'plan_opened', properties: [] });
+    const previous = v2();
+    previous.events.allowed.push({ name: 'old_event', properties: [] });
+    const balanced = previous.results['balanced'];
+    if (!balanced) throw new Error('fixture');
+    previous.results['legacy'] = { ...balanced, id: 'legacy' };
+    expect(lintConfig(next, { previous }).warnings.map((w) => w.message)).toEqual([
+      'Result "legacy" removed',
+      'Event "plan_opened" added',
+      'Event "old_event" removed',
+      'Variant B: step "tool_count" removed',
+    ]);
+  });
+
+  it('warns when an event loses a whitelisted property', () => {
+    const next = v2();
+    const cta = next.events.allowed.find((e) => e.name === 'cta_clicked');
+    if (!cta) throw new Error('fixture');
+    cta.properties = ['result_id'];
+    expect(lintConfig(next, { previous: v2() }).warnings.map((w) => w.message)).toEqual([
+      'Event "cta_clicked": properties removed action',
+    ]);
+  });
+
+  it('skips the comparison when the config does not resolve', () => {
+    const broken = v2();
+    broken.experiment.variants.B.stepSequence.push('ghost');
+    const { warnings } = lintConfig(broken, { previous: v1() });
+    expect(warnings.filter((w) => w.code === 'config_change')).toEqual([]);
   });
 });

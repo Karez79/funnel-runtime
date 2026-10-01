@@ -6,6 +6,7 @@ import { DomainError } from '../api/errors.ts';
 import { conditionLeaves } from '../engine/conditions.ts';
 import { resolveFunnel, type ResolvedFunnel } from '../engine/resolve.ts';
 import { BASE_EVENTS } from '../events/catalog.ts';
+import { diffConfigs, type ChangeKind } from './diff.ts';
 import {
   answerKey,
   isInteractive,
@@ -34,10 +35,11 @@ export type LintErrorCode =
   | 'unknown_override'
   | 'invalid_override'
   | 'variant_weight'
-  | 'missing_base_event';
+  | 'missing_base_event'
+  | 'privacy';
 
 export type LintWarningCode =
-  'unknown_step_type' | 'unused_step' | 'unknown_answer' | 'operator_type';
+  'unknown_step_type' | 'unused_step' | 'unknown_answer' | 'operator_type' | 'config_change';
 
 export interface LintIssue<C extends string> {
   readonly code: C;
@@ -56,7 +58,20 @@ export interface LintContext {
    * uploaded after it must not block it, so the server lints without `existing` there.
    */
   readonly existing?: readonly { readonly funnelId: string; readonly version: number }[];
+  /** The active version: changes against it that deserve a second look become warnings. */
+  readonly previous?: FunnelConfig;
 }
+
+/** Changes that are allowed but change what users see or what analytics can compare. */
+const WARN_ON_CHANGE: ReadonlySet<ChangeKind> = new Set([
+  'step_removed',
+  'result_added',
+  'result_removed',
+  'event_added',
+  'event_removed',
+  'event_changed',
+  'privacy_changed',
+]);
 
 const SUPPORTED_SCHEMA_MAJOR = '1';
 
@@ -113,6 +128,12 @@ function lintDefinitions(config: FunnelConfig, out: Collector): void {
   }
   if (!(config.defaultResultId in config.results)) {
     out.error('unknown_result', `defaultResultId "${config.defaultResultId}" does not exist`);
+  }
+  if (config.events.privacy.storeRawAnswers) {
+    out.error(
+      'privacy',
+      'events.privacy.storeRawAnswers must be false: raw answers never go into events',
+    );
   }
   const catalog = new Set(config.events.allowed.map((e) => e.name));
   const missing = BASE_EVENTS.filter((name) => !catalog.has(name));
@@ -332,5 +353,10 @@ export function lintConfig(config: FunnelConfig, context: LintContext = {}): Lin
   }
   for (const r of resolved) lintVariantAnswers(r, out);
   lintConditions(config, resolved, out);
+  if (context.previous && resolved.length === VARIANTS.length) {
+    for (const change of diffConfigs(context.previous, config)) {
+      if (WARN_ON_CHANGE.has(change.kind)) out.warn('config_change', change.message);
+    }
+  }
   return { errors: out.errors, warnings: out.warnings };
 }
