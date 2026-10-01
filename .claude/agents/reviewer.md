@@ -36,7 +36,7 @@ Post exactly one comment to the PR with `mcp__github__add_issue_comment` in this
 ```
 ## Reviewer: <APPROVE | CHANGES REQUESTED>
 
-Checked: <what you read and ran, e.g. "diff (12 files), pnpm check: green">
+Checked (agent: <your agent type, e.g. reviewer or general-purpose>): <what you read and ran, e.g. "diff (12 files), pnpm check: green">
 
 | # | Severity | Where | Finding |
 |---|---|---|---|
