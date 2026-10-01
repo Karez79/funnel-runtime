@@ -43,15 +43,21 @@ jobs:
         with:
           sparse-checkout: pnpm-lock.yaml
           sparse-checkout-cone-mode: false
+      # The root importer's resolved version, validated as a plain release (image tags
+      # exist only for releases); anything else fails loudly instead of picking a wrong tag.
       - id: pw
         run: |
-          version="$(grep -oE "^  '?@playwright/test@[0-9]+\.[0-9]+\.[0-9]+" pnpm-lock.yaml | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')"
-          test -n "$version"
+          version="$(yq '.importers.".".devDependencies."@playwright/test".version' pnpm-lock.yaml)"
+          echo "resolved: $version"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: e2e
     needs: playwright-version
+    # A skipped required check counts as passed; run even if the version job failed so
+    # the image pull fails and `e2e` turns red instead of silently skipping.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
@@ -60,6 +66,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+      # The image ships its own Node; setup-node pins the exact .nvmrc version so e2e
+      # runs on the same Node as `check` and production.
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc

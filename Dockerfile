@@ -9,13 +9,8 @@ ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 
-# Native build tools only in the install stages, never in the runtime image.
-FROM base AS toolchain
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
-
 # Manifests first so dependency layers are cached across source-only changes.
-FROM toolchain AS manifests
+FROM base AS manifests
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
@@ -27,7 +22,7 @@ COPY . .
 RUN pnpm --filter @funnel/web build
 
 FROM manifests AS prod-deps
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts=false --filter "@funnel/server..."
+RUN pnpm install --frozen-lockfile --prod --filter "@funnel/server..."
 
 # Runs as root on purpose: Railway mounts the volume root-owned (RAILWAY_RUN_UID=0 is
 # set as a belt-and-braces default, see docs/DECISIONS.md).
