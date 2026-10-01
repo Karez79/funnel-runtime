@@ -16,6 +16,7 @@ export {
 export type {
   Condition,
   ConditionLeaf,
+  EventDefinition,
   FunnelConfig,
   InteractiveStep,
   KnownStep,
@@ -24,6 +25,7 @@ export type {
   Option,
   ParseConfigResult,
   Result,
+  ResultRule,
   SingleSelectStep,
   Step,
   VariantKey,

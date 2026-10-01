@@ -22,14 +22,18 @@ describe('parseConfig', () => {
     expect(!res.ok && res.issues.join('\n')).toMatch(/funnelId/);
   });
 
-  it('rejects a known step type with a malformed input', () => {
+  it('rejects a known step type with a malformed input and points at the broken field', () => {
     const raw = rawV1Clone();
     const config = v1();
     const steps = {
       ...config.steps,
       work_mode: { ...config.steps['work_mode'], input: { name: 'work_mode', options: 'nope' } },
     };
-    expect(parseConfig({ ...raw, steps }).ok).toBe(false);
+    const res = parseConfig({ ...raw, steps });
+    expect(res.ok).toBe(false);
+    expect(!res.ok && res.issues).toEqual([
+      expect.stringMatching(/^steps\.work_mode\.input\.options: /),
+    ]);
   });
 
   it('accepts a step of an unknown future type', () => {
@@ -57,6 +61,65 @@ describe('parseConfig', () => {
       },
     };
     expect(parseConfig({ ...raw, steps }).ok).toBe(true);
+  });
+
+  it.each([
+    ['two groups in one node', { all: [{ answer: 'a', operator: 'eq', value: 1 }], any: [] }],
+    ['a leaf with a stray key', { answer: 'a', operator: 'eq', value: 1, not: {} }],
+    ['an unknown group key', { one: [] }],
+  ])('rejects a condition node with %s instead of dropping keys', (_name, visibleWhen) => {
+    const raw = rawV1Clone();
+    const steps = { ...v1().steps, office_days: { ...v1().steps['office_days'], visibleWhen } };
+    expect(parseConfig({ ...raw, steps }).ok).toBe(false);
+  });
+
+  it('parses an unknown operator (lint rejects it) and an exists leaf without value', () => {
+    const raw = rawV1Clone();
+    const steps = {
+      ...v1().steps,
+      office_days: {
+        ...v1().steps['office_days'],
+        visibleWhen: {
+          all: [
+            { answer: 'work_mode', operator: 'matches', value: 'h' },
+            { answer: 'work_mode', operator: 'exists' },
+          ],
+        },
+      },
+    };
+    const res = parseConfig({ ...raw, steps });
+    expect(res.ok && res.config.steps['office_days']?.visibleWhen).toEqual(
+      steps.office_days.visibleWhen,
+    );
+  });
+
+  it('keeps unknown fields inside steps and results', () => {
+    const raw = rawV1Clone();
+    const config = v1();
+    const steps = { ...config.steps, intro: { ...config.steps['intro'], media: { src: 'x.png' } } };
+    const results = {
+      ...config.results,
+      balanced: { ...config.results['balanced'], badge: 'new' },
+    };
+    const res = parseConfig({ ...raw, steps, results });
+    expect(res.ok && res.config.steps['intro']?.['media']).toEqual({ src: 'x.png' });
+    expect(res.ok && res.config.results['balanced']?.['badge']).toBe('new');
+  });
+
+  it('applies defaults for optional sections', () => {
+    const raw = rawV1Clone();
+    delete raw['progress'];
+    delete raw['resultRules'];
+    const res = parseConfig(raw);
+    expect(res.ok && res.config.progress.excludeTypes).toEqual(['info', 'result']);
+    expect(res.ok && res.config.resultRules).toEqual([]);
+  });
+
+  it('rejects a variant other than A and B', () => {
+    const raw = rawV1Clone();
+    const experiment = v1().experiment;
+    const variants = { ...experiment.variants, C: experiment.variants.A };
+    expect(parseConfig({ ...raw, experiment: { ...experiment, variants } }).ok).toBe(false);
   });
 
   it('rejects a malformed condition node', () => {

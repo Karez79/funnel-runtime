@@ -20,29 +20,35 @@ export const KNOWN_OPERATORS = [
   'exists',
 ] as const;
 
-export interface ConditionLeaf {
-  answer: string;
-  /** Kept as a string so an unknown operator parses; lint rejects it on publish. */
-  operator: string;
-  value?: unknown;
-}
-export type Condition =
-  ConditionLeaf | { all: Condition[] } | { any: Condition[] } | { not: Condition };
-
-const ConditionLeafSchema = z.object({
+// Strict objects: a node with an extra key (`{ all, any }`, a leaf with a stray `not`)
+// is an authoring error, and stripping the key would silently change the condition.
+const ConditionLeafSchema = z.strictObject({
   answer: z.string().min(1),
+  /** A string, so an unknown operator parses; lint rejects it on publish (4.2). */
   operator: z.string().min(1),
   value: z.unknown().optional(),
 });
+export type ConditionLeaf = z.infer<typeof ConditionLeafSchema>;
 
-const ConditionSchema: z.ZodType<Condition> = z.lazy(() =>
-  z.union([
-    ConditionLeafSchema,
-    z.object({ all: z.array(ConditionSchema) }),
-    z.object({ any: z.array(ConditionSchema) }),
-    z.object({ not: ConditionSchema }),
-  ]),
-);
+const ConditionSchema = z.union([
+  ConditionLeafSchema,
+  z.strictObject({
+    get all() {
+      return z.array(ConditionSchema);
+    },
+  }),
+  z.strictObject({
+    get any() {
+      return z.array(ConditionSchema);
+    },
+  }),
+  z.strictObject({
+    get not() {
+      return ConditionSchema;
+    },
+  }),
+]);
+export type Condition = z.infer<typeof ConditionSchema>;
 
 // ---------- steps ----------
 
@@ -113,35 +119,46 @@ const ResultStep = z.looseObject({
   type: z.literal('result'),
   resultSource: z.string().optional(),
 });
-const UnknownStep = z.looseObject({
-  ...stepBase,
-  type: z.string().refine((t) => !(KNOWN_STEP_TYPES as readonly string[]).includes(t), {
-    message: 'known step types must match their own schema',
-  }),
+const UnknownStep = z.looseObject({ ...stepBase, type: z.string() });
+
+const KNOWN_STEP_SCHEMAS = {
+  info: InfoStep,
+  'single-select': SingleSelectStep,
+  'multi-select': MultiSelectStep,
+  number: NumberStep,
+  result: ResultStep,
+} as const satisfies Record<(typeof KNOWN_STEP_TYPES)[number], z.ZodType>;
+
+type KnownStepSchema = (typeof KNOWN_STEP_SCHEMAS)[keyof typeof KNOWN_STEP_SCHEMAS];
+export type KnownStep = z.infer<KnownStepSchema>;
+export type Step = KnownStep | z.infer<typeof UnknownStep>;
+
+function isKnownType(type: string): type is keyof typeof KNOWN_STEP_SCHEMAS {
+  return Object.hasOwn(KNOWN_STEP_SCHEMAS, type);
+}
+
+// The schema is chosen by `type` before parsing, so issues of a broken known step point
+// at the broken field, and a step of an unknown type falls back to UnknownStep (8.2).
+const StepSchema = z.looseObject({ type: z.string() }).transform((raw, ctx): Step => {
+  const schema: z.ZodType<Step> = isKnownType(raw.type)
+    ? KNOWN_STEP_SCHEMAS[raw.type]
+    : UnknownStep;
+  const parsed = schema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  for (const issue of parsed.error.issues) {
+    ctx.addIssue({ code: 'custom', message: issue.message, path: issue.path });
+  }
+  return z.NEVER;
 });
 
-const KnownStepSchema = z.discriminatedUnion('type', [
-  InfoStep,
-  SingleSelectStep,
-  MultiSelectStep,
-  NumberStep,
-  ResultStep,
-]);
-
-const StepSchema = z.union([KnownStepSchema, UnknownStep]);
-
-type InfoStep = z.infer<typeof InfoStep>;
 export type SingleSelectStep = z.infer<typeof SingleSelectStep>;
 export type MultiSelectStep = z.infer<typeof MultiSelectStep>;
 export type NumberStep = z.infer<typeof NumberStep>;
-type ResultStep = z.infer<typeof ResultStep>;
-export type KnownStep = z.infer<typeof KnownStepSchema>;
-export type Step = z.infer<typeof StepSchema>;
 export type InteractiveStep = SingleSelectStep | MultiSelectStep | NumberStep;
 
 /** Parsing guarantees a known `type` matched its own schema (see UnknownStep). */
 export function isKnownStep(step: Step): step is KnownStep {
-  return (KNOWN_STEP_TYPES as readonly string[]).includes(step.type);
+  return isKnownType(step.type);
 }
 
 export function isInteractive(step: Step): step is InteractiveStep {
@@ -174,14 +191,13 @@ const Variant = z.looseObject({
   stepOverrides: z.record(z.string(), PlainObject).default({}),
   resultOverrides: z.record(z.string(), PlainObject).default({}),
 });
-type Variant = z.infer<typeof Variant>;
 
 export const VARIANTS = ['A', 'B'] as const;
 export type VariantKey = (typeof VARIANTS)[number];
 
 const Experiment = z.looseObject({
   id: z.string().min(1),
-  variants: z.object({ A: Variant, B: Variant }),
+  variants: z.strictObject({ A: Variant, B: Variant }),
 });
 
 const EventDefinition = z.looseObject({
@@ -189,7 +205,7 @@ const EventDefinition = z.looseObject({
   trigger: z.string().optional(),
   properties: z.array(z.string()).default([]),
 });
-type EventDefinition = z.infer<typeof EventDefinition>;
+export type EventDefinition = z.infer<typeof EventDefinition>;
 
 const Events = z.looseObject({
   baseProperties: z.array(z.string()).default([]),
@@ -201,7 +217,7 @@ const Events = z.looseObject({
 });
 
 const ResultRule = z.looseObject({ resultId: z.string().min(1), when: ConditionSchema });
-type ResultRule = z.infer<typeof ResultRule>;
+export type ResultRule = z.infer<typeof ResultRule>;
 
 const FunnelConfigSchema = z.looseObject({
   schemaVersion: z.string().min(1),

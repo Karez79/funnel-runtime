@@ -12,6 +12,7 @@ import {
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core';
+import { VARIANTS } from '@funnel/shared';
 
 export const funnelVersions = sqliteTable(
   'funnel_versions',
@@ -58,7 +59,7 @@ export const sessions = sqliteTable(
     funnelId: text('funnel_id').notNull(),
     funnelVersion: integer('funnel_version').notNull(),
     experimentId: text('experiment_id').notNull(),
-    variant: text('variant', { enum: ['A', 'B'] }).notNull(),
+    variant: text('variant', { enum: VARIANTS }).notNull(),
     variantSource: text('variant_source', { enum: ['hash', 'override'] }).notNull(),
     trafficType: text('traffic_type', { enum: ['live', 'qa', 'synthetic'] })
       .notNull()
@@ -81,7 +82,11 @@ export const sessions = sqliteTable(
       foreignColumns: [funnelVersions.funnelId, funnelVersions.version],
     }),
     index('sessions_version_idx').on(t.funnelId, t.funnelVersion, t.variant),
-    check('sessions_variant_check', sql`${t.variant} IN ('A','B')`),
+    // Values come from the shared list, so the CHECK cannot drift from the domain type.
+    check(
+      'sessions_variant_check',
+      sql`${t.variant} IN ${sql.raw(`(${VARIANTS.map((v) => `'${v}'`).join(',')})`)}`,
+    ),
     check('sessions_variant_source_check', sql`${t.variantSource} IN ('hash','override')`),
     check('sessions_traffic_type_check', sql`${t.trafficType} IN ('live','qa','synthetic')`),
   ],
