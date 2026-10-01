@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { buildApp, type AppEnv } from '../app.ts';
 import { openDb, type DbHandle } from '../db/client.ts';
 import { runMigrations } from '../db/migrate.ts';
+import { z } from 'zod';
+import { readConfig, seedIfEmpty } from '../db/seed.ts';
+import type { Clock } from '../clock.ts';
 import type { App } from '../plugins/route.ts';
 
 const TEST_ENV: AppEnv = {
@@ -22,11 +25,34 @@ export interface TestApp {
   close: () => Promise<void>;
 }
 
-export async function createTestApp(env: Partial<AppEnv> = {}): Promise<TestApp> {
+/** A clock the test can move: `clock.set('2026-01-01T00:00:00Z')`, `clock.advance(ms)`. */
+export function testClock(start = '2026-10-01T12:00:00.000Z') {
+  let current = new Date(start).getTime();
+  return {
+    now: () => new Date(current),
+    set: (iso: string) => {
+      current = new Date(iso).getTime();
+    },
+    advance: (ms: number) => {
+      current += ms;
+    },
+  } satisfies Clock & Record<string, unknown>;
+}
+
+interface TestAppOptions {
+  env?: Partial<AppEnv>;
+  /** Seed v1 (active) and v2 (draft) like a first start does; default true. */
+  seed?: boolean;
+  clock?: Clock;
+}
+
+export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
+  const { env = {}, seed = true, clock = testClock() } = options;
   const dir = mkdtempSync(join(tmpdir(), 'funnel-test-'));
   const handle = openDb(join(dir, 'test.db'));
   runMigrations(handle.db);
-  const app = await buildApp({ ...TEST_ENV, ...env }, handle.db);
+  if (seed) seedIfEmpty(handle.db, clock);
+  const app = await buildApp({ ...TEST_ENV, ...env }, handle.db, clock);
   return {
     app,
     handle,
@@ -39,3 +65,10 @@ export async function createTestApp(env: Partial<AppEnv> = {}): Promise<TestApp>
 }
 
 export const adminAuth = `Basic ${Buffer.from('admin:secret').toString('base64')}`;
+
+const JsonObject = z.record(z.string(), z.unknown());
+
+/** A config from `configs/` with top-level fields replaced, for upload tests. */
+export function configJson(name: string, patch: Record<string, unknown> = {}) {
+  return { ...JsonObject.parse(readConfig(name)), ...patch };
+}
