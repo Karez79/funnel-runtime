@@ -7,6 +7,7 @@
 // every module that needs versions gets that instance.
 import { createHash } from 'node:crypto';
 import {
+  contract,
   DomainError,
   diffConfigs,
   lintConfig,
@@ -20,7 +21,6 @@ import {
   type VariantKey,
   type VersionSummary,
 } from '@funnel/shared';
-import { z } from 'zod';
 import type { Clock } from '../../clock.ts';
 import type { ActivationRow, VersionRow, VersionsRepo } from './repo.ts';
 
@@ -37,8 +37,6 @@ export interface ActiveVersion {
   version: number;
   config: FunnelConfig;
 }
-
-const StoredJson = z.record(z.string(), z.unknown());
 
 function hashConfig(json: string): string {
   return createHash('sha256').update(json).digest('hex');
@@ -186,6 +184,7 @@ export function createVersionsService(repo: VersionsRepo, clock: Clock) {
     const counts = new Map(
       repo.sessionCounts(funnelId, clock.now().toISOString()).map((c) => [c.version, c]),
     );
+    // repo.list() holds only this funnel: upload refuses another funnelId (one per database).
     return repo.list().map((row) => ({
       funnelId: row.funnelId,
       version: row.version,
@@ -232,7 +231,7 @@ export function createVersionsService(repo: VersionsRepo, clock: Clock) {
       const row = repo.get(funnelId, active.version);
       if (!row) throw notFound(active.version);
       // The config as uploaded, including fields the schema ignores (4.1).
-      const raw = StoredJson.parse(JSON.parse(row.configJson));
+      const raw = contract.activeVersion.response.shape.config.parse(JSON.parse(row.configJson));
       return { version: summary(funnelId, active.version), config: raw };
     },
 

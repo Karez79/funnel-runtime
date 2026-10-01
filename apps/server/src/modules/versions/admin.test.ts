@@ -17,9 +17,12 @@ async function api(method: 'GET' | 'POST', url: string, payload?: unknown) {
   const res = await t.app.inject({
     method,
     url,
-    headers: auth,
-    ...(payload === undefined ? {} : { payload: JSON.stringify(payload) }),
-    ...(payload === undefined ? {} : { headers: { ...auth, 'content-type': 'application/json' } }),
+    ...(payload === undefined
+      ? { headers: auth }
+      : {
+          headers: { ...auth, 'content-type': 'application/json' },
+          payload: JSON.stringify(payload),
+        }),
   });
   return { status: res.statusCode, body: res.json<Record<string, unknown>>() };
 }
@@ -229,6 +232,15 @@ describe('test 4: publish and rollback', () => {
       expect.objectContaining({ version: 1, state: 'published', active: true }),
       expect.objectContaining({ version: 2, state: 'published', active: false }),
     ]);
+  });
+
+  it('a second rollback undoes the first one', async () => {
+    t = await createTestApp();
+    await api('POST', '/api/admin/versions/2/publish');
+    await api('POST', '/api/admin/rollback');
+    const again = await api('POST', '/api/admin/rollback');
+    expect(again.body.activation).toMatchObject({ version: 2, action: 'rollback', fromVersion: 1 });
+    expect(await activeVersion()).toBe(2);
   });
 
   it('answers 409 when there is nothing to roll back to', async () => {
