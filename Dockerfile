@@ -23,14 +23,29 @@ RUN pnpm --filter @funnel/web build
 
 FROM manifests AS prod-deps
 RUN pnpm install --frozen-lockfile --prod --filter "@funnel/server..."
+# better-sqlite3 ships prebuilds for 8 platforms plus the SQLite sources (~27 MB);
+# keep only the glibc binary for the architecture node actually runs on, then prove
+# the trimmed package still opens a database (fails the build otherwise).
+RUN arch="$(node -p process.arch)" \
+  && for pkg in node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3; do \
+       test -f "$pkg/prebuilds/linux-$arch.node" || exit 1; \
+       rm -rf "$pkg/deps" "$pkg/src" "$pkg/binding.gyp" || exit 1; \
+       find "$pkg/prebuilds" -type f ! -name "linux-$arch.node" -delete || exit 1; \
+     done \
+  && cd apps/server && node -e "new (require('better-sqlite3'))(':memory:').close()"
 
 # Runs as root on purpose: Railway mounts the volume root-owned (RAILWAY_RUN_UID=0 is
 # set as a belt-and-braces default, see docs/DECISIONS.md).
-FROM base AS runtime
+# Starts from the plain Node image: no pnpm, corepack or npm at runtime.
+FROM node:24-slim AS runtime
+WORKDIR /app
 # tini as PID 1: forwards SIGTERM and lets the default action kill node even before
 # node has registered its own handlers (a bare PID 1 ignores unhandled SIGTERM).
 RUN apt-get update && apt-get install -y --no-install-recommends tini \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules /usr/local/include \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
