@@ -31,6 +31,9 @@ import type { SessionRow, SessionsRepo } from './repo.ts';
 
 const HOUR_MS = 60 * 60 * 1000;
 
+/** `?utm_campaign=` arrives as '' (or spaces): no campaign, not a campaign named ''. */
+const utmValue = (value: string | undefined): string | null => value?.trim() || null;
+
 export type CreateSessionInput = z.output<typeof contract.createSession.body> & {
   /** Value of the generator header, if sent. */
   generatorKey: string | undefined;
@@ -107,9 +110,9 @@ export function createSessionsService(
     const createdAt = now.toISOString();
     const state: SessionState = { answers: {}, history: [], currentStepId: firstStep };
     const utm = {
-      utmSource: input.utm.source ?? null,
-      utmMedium: input.utm.medium ?? null,
-      utmCampaign: input.utm.campaign ?? null,
+      utmSource: utmValue(input.utm.source),
+      utmMedium: utmValue(input.utm.medium),
+      utmCampaign: utmValue(input.utm.campaign),
     };
     const row: SessionRow = {
       id,
@@ -121,8 +124,8 @@ export function createSessionsService(
       // An override is QA traffic even from the generator: QA is hidden by default (11.2).
       trafficType: override ? 'qa' : synthetic ? 'synthetic' : 'live',
       ...utm,
-      utmContent: input.utm.content ?? null,
-      utmTerm: input.utm.term ?? null,
+      utmContent: utmValue(input.utm.content),
+      utmTerm: utmValue(input.utm.term),
       stateJson: JSON.stringify(state),
       stateRev: 0,
       resultId: null,

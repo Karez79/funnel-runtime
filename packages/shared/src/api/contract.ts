@@ -11,6 +11,7 @@ import { ConfigChangeSchema } from '../config/diff.ts';
 import { LintReportSchema } from '../config/lint.ts';
 import { ResultSchema, VARIANTS } from '../config/schema.ts';
 import { AnswerValueSchema } from '../engine/conditions.ts';
+import { VALIDATION_CODES } from '../engine/validation.ts';
 import { ResolvedFunnelSchema } from '../engine/resolve.ts';
 import { BatchEnvelopeSchema, BatchResponseSchema, REJECT_REASONS } from '../events/schema.ts';
 
@@ -93,7 +94,7 @@ export const StateConflictDetailsSchema = z.object({
  * is wrong and the validation code. Never the answer value (privacy, 7.2).
  */
 export const SessionUnprocessableDetailsSchema = z.union([
-  z.object({ stepId: z.string(), code: z.string().optional() }),
+  z.object({ stepId: z.string(), code: z.enum(VALIDATION_CODES).optional() }),
   z.object({ answer: z.string() }),
 ]);
 
