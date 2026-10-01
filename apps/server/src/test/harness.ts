@@ -15,7 +15,7 @@ export const TEST_ENV: AppEnv = {
   adminPassword: 'secret',
   generatorKey: 'generator-secret',
   // High enough that only the rate-limit tests themselves ever hit it.
-  rateLimits: { sessions: 1000 },
+  rateLimits: { sessions: 1000, events: 1000 },
   clientIpHeader: null,
   buildVersion: 'test',
   logLevel: 'silent',
