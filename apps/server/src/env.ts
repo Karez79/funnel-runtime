@@ -14,7 +14,8 @@ const EnvSchema = z
     HOST: z.string().default('0.0.0.0'),
     PORT: z.coerce.number().int().positive().default(3000),
     DATABASE_PATH: z.string().default('./data/funnel.db'),
-    WEB_DIST: z.string().optional(),
+    // Relative to apps/server (the cwd of `pnpm start`); Docker sets an absolute path.
+    WEB_DIST: z.string().default('../web/dist'),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),

@@ -12,7 +12,8 @@ const TEST_ENV: AppEnv = {
   adminPassword: 'secret',
   buildVersion: 'test',
   logLevel: 'silent',
-  webDist: undefined,
+  // No web build in API tests: unknown paths must answer with the JSON 404.
+  webDist: '/nonexistent/web-dist',
 };
 
 export interface TestApp {
