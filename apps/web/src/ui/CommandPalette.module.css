@@ -94,7 +94,8 @@
 }
 
 .empty {
-  padding: 16px 12px;
+  margin: 0;
+  padding: 8px 20px 16px;
   color: var(--ink-3);
 }
 

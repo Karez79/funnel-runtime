@@ -7,7 +7,13 @@ import fastifyStatic from '@fastify/static';
 import { errorBody } from './errors.ts';
 import type { App } from './route.ts';
 
-const ADMIN_PAGE = /^\/admin(?:[/?#]|$)/;
+const ADMIN_PAGE = /^\/admin(?:\/|$)/;
+
+/** The SPA router matches paths case-insensitively and tolerates doubled slashes. */
+function isAdminPage(url: string): boolean {
+  const path = (url.split(/[?#]/)[0] ?? '').replaceAll(/\/{2,}/g, '/').toLowerCase();
+  return ADMIN_PAGE.test(path);
+}
 
 export async function webPlugin(app: App, webDist: string | undefined): Promise<void> {
   // @fastify/static needs an absolute root; WEB_DIST may be relative to the cwd.
@@ -23,7 +29,7 @@ export async function webPlugin(app: App, webDist: string | undefined): Promise<
     }
     // Admin pages ask for Basic Auth themselves: the browser prompts once on the page and
     // then sends the credentials with every admin API call from it.
-    if (ADMIN_PAGE.test(req.url)) {
+    if (isAdminPage(req.url)) {
       await app.adminGuard(req, reply);
       if (reply.sent) return reply;
     }

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router';
+import { Link, NavLink, useNavigate } from 'react-router';
 import { Icon } from '../../ui/Icon.tsx';
 import { IconButton } from '../../ui/IconButton.tsx';
 import { cx } from '../../ui/cx.ts';
@@ -44,14 +44,14 @@ export function Rail({ onSearch }: { onSearch: () => void }) {
       <IconButton icon="search" aria-label="Search" onClick={onSearch} />
       <span className={styles.spacer} />
       <IconButton icon="help" aria-label="Commands and shortcuts" onClick={onSearch} />
-      <NavLink
+      <Link
         to="/admin/versions"
         className={iconButtonClass(true)}
-        aria-label="Settings: versions"
+        aria-label="Settings (versions)"
         title="Settings"
       >
         <Icon name="gear" />
-      </NavLink>
+      </Link>
     </aside>
   );
 }

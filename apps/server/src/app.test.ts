@@ -105,7 +105,13 @@ describe('unknown routes and static web', () => {
     writeFileSync(join(dist, 'index.html'), '<!doctype html><title>funnel</title>');
     try {
       t = await createTestApp({ env: { webDist: dist } });
-      for (const url of ['/admin', '/admin/live?session=1', '/admin/versions']) {
+      for (const url of [
+        '/admin',
+        '/admin/live?session=1',
+        '/admin/versions',
+        '/Admin',
+        '//admin',
+      ]) {
         const res = await t.app.inject({ method: 'GET', url });
         expect(res.statusCode).toBe(401);
         expect(res.headers['www-authenticate']).toContain('Basic');

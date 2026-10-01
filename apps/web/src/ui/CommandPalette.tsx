@@ -92,7 +92,6 @@ export function CommandPalette({
         <kbd className={styles.kbd}>Esc</kbd>
       </div>
       <ul className={styles.list} id={listId} role="listbox" aria-label="Commands">
-        {visible.length === 0 && <li className={styles.empty}>Nothing matches “{query}”.</li>}
         {groups.map((group) => (
           <li key={group} role="presentation">
             <div className={styles.group} aria-hidden="true">
@@ -126,6 +125,11 @@ export function CommandPalette({
           </li>
         ))}
       </ul>
+      {visible.length === 0 && (
+        <p className={styles.empty} role="status">
+          Nothing matches “{query}”.
+        </p>
+      )}
       <div className={styles.foot}>
         <span>
           <kbd className={styles.kbd}>↑</kbd> <kbd className={styles.kbd}>↓</kbd> to move
