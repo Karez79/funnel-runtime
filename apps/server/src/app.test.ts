@@ -54,6 +54,7 @@ describe('migrations', () => {
       'events',
       'funnel_activations',
       'funnel_versions',
+      'ground_truth',
       'ingest_log',
       'rejected_events',
       'sessions',

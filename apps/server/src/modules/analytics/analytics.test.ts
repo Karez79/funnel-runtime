@@ -285,3 +285,93 @@ describe('analytics API', () => {
     expect((await summary(a, '?variant=C')).statusCode).toBe(400);
   });
 });
+
+describe('generator ground truth', () => {
+  async function upload(a: TestApp, body: unknown, auth = true) {
+    return a.app.inject({
+      method: 'PUT',
+      url: '/api/admin/ground-truth',
+      headers: auth ? { authorization: adminAuth } : {},
+      payload: body as Record<string, unknown>,
+    });
+  }
+
+  const truth = (checks: unknown[]) => ({
+    generatedAt: '2026-10-01T12:00:00.000Z',
+    seed: 42,
+    sessions: 2,
+    checks,
+  });
+
+  it('requires admin auth and a valid file', async () => {
+    const a = await start();
+    expect((await upload(a, truth([]), false)).statusCode).toBe(401);
+    expect((await upload(a, truth([]))).statusCode).toBe(400);
+  });
+
+  it('answers and shows whether the stored checks match the server numbers', async () => {
+    const a = await start();
+    const one = await newSession(a, { utm: { campaign: 'spring_launch' } });
+    await newSession(a);
+    insertEvent(a, one, 'result_viewed', 'result', { props: { result_id: 'balanced' } });
+    const expected = await okSummary(a, '?version=1');
+    const campaign = await okSummary(a, '?version=1&campaign=spring_launch');
+
+    const res = await upload(
+      a,
+      truth([
+        { name: 'v1', query: { version: '1' }, expected },
+        {
+          name: 'v1 · spring_launch',
+          query: { version: '1', campaign: 'spring_launch' },
+          expected: campaign,
+        },
+      ]),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(contract.uploadGroundTruth.response.parse(res.json())).toEqual({
+      matches: true,
+      differences: [],
+    });
+    expect((await okSummary(a)).groundTruthMatches).toBe(true);
+
+    // New data inside the checked scope breaks the match.
+    insertEvent(a, one, 'cta_clicked', 'result', { props: { result_id: 'balanced', action: 'x' } });
+    expect((await okSummary(a)).groundTruthMatches).toBe(false);
+  });
+
+  it('lists the differences and treats an unknown version as a mismatch', async () => {
+    const a = await start();
+    await newSession(a);
+    const expected = await okSummary(a, '?version=1');
+    const wrong = structuredClone(expected);
+    wrong.kpis.all.started = 5;
+    const res = await upload(
+      a,
+      truth([
+        { name: 'v1', query: { version: '1' }, expected: wrong },
+        { name: 'v9', query: { version: '9' }, expected },
+        { name: 'bad', query: { variant: 'C' }, expected },
+      ]),
+    );
+    const body = contract.uploadGroundTruth.response.parse(res.json());
+    expect(body.matches).toBe(false);
+    expect(body.differences).toEqual([
+      'v1: kpis.all.started: expected 5, got 1',
+      'v9: Version 9 not found',
+      'bad: invalid filters',
+    ]);
+    expect((await okSummary(a)).groundTruthMatches).toBe(false);
+  });
+
+  it('uses the newest upload', async () => {
+    const a = await start();
+    const expected = await okSummary(a, '?version=1');
+    const wrong = structuredClone(expected);
+    wrong.kpis.all.started = 5;
+    await upload(a, truth([{ name: 'v1', query: { version: '1' }, expected: wrong }]));
+    expect((await okSummary(a)).groundTruthMatches).toBe(false);
+    await upload(a, truth([{ name: 'v1', query: { version: '1' }, expected }]));
+    expect((await okSummary(a)).groundTruthMatches).toBe(true);
+  });
+});

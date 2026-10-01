@@ -2,10 +2,23 @@
 // filters that live on the session row (funnel, QA, campaign, period); every metric is
 // computed by the shared aggregator, never here. Raw answers (`state_json`) are never
 // selected: analytics has no use for them (5, privacy).
-import { and, asc, count, eq, gte, isNotNull, lte, ne, sql, sum, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  lte,
+  ne,
+  sql,
+  sum,
+  type SQL,
+} from 'drizzle-orm';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { Db } from '../../db/client.ts';
-import { events, ingestLog, rejectedEvents, sessions } from '../../db/schema.ts';
+import { events, groundTruth, ingestLog, rejectedEvents, sessions } from '../../db/schema.ts';
 
 export interface Period {
   from?: string | undefined;
@@ -105,6 +118,20 @@ export function createAnalyticsRepo(db: Db) {
         .orderBy(asc(field))
         .all()
         .map((row) => row.value);
+    },
+
+    saveGroundTruth(json: string, createdAt: string): void {
+      db.insert(groundTruth).values({ json, createdAt }).run();
+    },
+
+    /** The newest uploaded ground truth as stored, or undefined before the first upload. */
+    latestGroundTruth(): string | undefined {
+      return db
+        .select({ json: groundTruth.json })
+        .from(groundTruth)
+        .orderBy(desc(groundTruth.id))
+        .limit(1)
+        .get()?.json;
     },
   };
 }
