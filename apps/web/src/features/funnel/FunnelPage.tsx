@@ -2,9 +2,8 @@
 // then runs it. The step is mirrored in the URL (`/s/:stepId`) with real history
 // entries, so the browser's Back goes to the previous step and counts as `back_clicked`;
 // a URL the state does not lead to is replaced by the current step.
-import { initialState, sessionState } from './funnelReducer.ts';
 import { stepBack } from '@funnel/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   NavigationType,
@@ -17,11 +16,16 @@ import {
 import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import { Toast, type ToastMessage } from '../../ui/Toast.tsx';
+import { call } from '../../lib/api.ts';
+import { DebugOverlay } from './DebugOverlay.tsx';
+import { currentStep, initialState, sessionState, visiblePathOf } from './funnelReducer.ts';
 import styles from './FunnelPage.module.css';
 import stepStyles from './steps/steps.module.css';
 import { FunnelView } from './FunnelView.tsx';
+import { ResultScreen, type ResultOutcome } from './ResultScreen.tsx';
 import {
   DEFAULT_FUNNEL_ID,
+  forgetSession,
   loadSession,
   readMirror,
   startingState,
@@ -29,7 +33,7 @@ import {
 } from './session.ts';
 import { createEventSink, createTracker } from './tracking.ts';
 import { useFunnelMachine } from './useFunnelMachine.ts';
-import { useStateSaver } from './useStateSaver.ts';
+import { sessionScope, useStateSaver } from './useStateSaver.ts';
 
 const EXPIRED_NOTICE = 'Your previous answers expired, starting over';
 
@@ -54,7 +58,7 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     );
   };
 
-  const save = useStateSaver({
+  const { save, savedRev } = useStateSaver({
     funnelId: DEFAULT_FUNNEL_ID,
     sessionId: session.id,
     stateRev: session.stateRev,
@@ -65,10 +69,20 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     onRejected: onReload,
   });
 
+  // The server computes the result (6.3); it runs after the saves queued before it.
+  const complete = useMutation({
+    scope: sessionScope(session.id),
+    mutationFn: () => call('completeSession', { params: { id: session.id } }),
+  });
+  const completeIfResult = (stepId: string) => {
+    if (funnel.steps[stepId]?.type === 'result') complete.mutate();
+  };
+
   const machine = useFunnelMachine(() => initialState(funnel, start.state), {
     track,
     onMove: (next, { url = 'push' }) => {
       save(sessionState(next));
+      completeIfResult(next.currentStepId);
       const there = window.location.pathname === `/s/${next.currentStepId}`;
       // After a browser Back the URL is normally there already; if the user moved through
       // history again meanwhile (the transition is async), the URL follows the state.
@@ -78,13 +92,27 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
   });
   const { state } = machine;
 
-  // A state that was never saved (offline, tab closed mid-save) is sent once on load.
-  const saveUnsaved = useEffectEvent(() => {
+  // A state that was never saved (offline, tab closed mid-save) is sent once on load,
+  // and a session reopened on its result asks the server for it again.
+  const onLoad = useEffectEvent(() => {
     if (start.unsaved) save(start.state);
+    completeIfResult(start.state.currentStepId);
   });
   useEffect(() => {
-    saveUnsaved();
+    onLoad();
   }, []);
+
+  const outcome: ResultOutcome = complete.isSuccess
+    ? { status: 'ready', resultId: complete.data.resultId, result: complete.data.result }
+    : complete.isError
+      ? {
+          status: 'error',
+          retry: () => {
+            complete.mutate();
+          },
+        }
+      : { status: 'pending' };
+  const step = currentStep(state);
 
   // Back in the card is the browser's Back when the previous entry is the step it goes
   // back to, so the funnel's history and the browser's stay one stack; the POP below does
@@ -129,17 +157,26 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
   }, [location.key]);
 
   return (
-    <FunnelView
-      state={state}
-      act={machine.act}
-      onBack={goBack}
-      track={track}
-      result={
-        <h1 className={stepStyles.title}>
-          {funnel.steps[state.currentStepId]?.content.loadingTitle}
-        </h1>
-      }
-    />
+    <>
+      <FunnelView
+        state={state}
+        act={machine.act}
+        onBack={goBack}
+        track={track}
+        result={step && <ResultScreen step={step} outcome={outcome} track={track} />}
+      />
+      <DebugOverlay
+        session={session}
+        visiblePath={visiblePathOf(state)}
+        currentStepId={state.currentStepId}
+        stateRev={savedRev}
+        sink={sink}
+        onReset={() => {
+          forgetSession(DEFAULT_FUNNEL_ID);
+          window.location.assign(`/${location.search}`);
+        }}
+      />
+    </>
   );
 }
 

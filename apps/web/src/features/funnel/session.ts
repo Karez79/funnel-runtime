@@ -49,6 +49,12 @@ export function writeMirror(funnelId: string, mirror: Mirror): void {
   writeJson(mirrorKey(funnelId), mirror);
 }
 
+/** Forget the session on this device: the next load starts a new one (debug Reset). */
+export function forgetSession(funnelId: string): void {
+  remove(sessionKey(funnelId));
+  remove(mirrorKey(funnelId));
+}
+
 /** Drop local changes the server refused, so a reload starts from the server state. */
 export function clearMirror(funnelId: string): void {
   remove(mirrorKey(funnelId));
