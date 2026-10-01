@@ -47,3 +47,13 @@
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);
 }
+
+.vA {
+  color: var(--a-ink);
+  font-weight: 600;
+}
+
+.vB {
+  color: var(--b-ink);
+  font-weight: 600;
+}

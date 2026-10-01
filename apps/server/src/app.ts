@@ -1,6 +1,6 @@
 // Composition root: wires repos -> services -> routes. The only module that sees all
 // layers at once, so routes never reach the database directly (CLAUDE.md 3.1).
-import { LIVE_STREAM, type LiveEntry } from '@funnel/shared';
+import { LIVE_STREAM, type LiveEntryDraft } from '@funnel/shared';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -98,7 +98,7 @@ export async function buildApp(
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
   analyticsRoutes(app, createAnalyticsService(createAnalyticsRepo(db), versions, clock));
-  const publish = (entries: LiveEntry[]) => {
+  const publish = (entries: LiveEntryDraft[]) => {
     live.publish(entries);
   };
   eventsRoutes(app, createEventsService(createEventsRepo(db), versions, clock, publish), {

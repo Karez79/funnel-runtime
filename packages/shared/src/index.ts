@@ -76,7 +76,13 @@ export {
   SessionUnprocessableDetailsSchema,
   StateConflictDetailsSchema,
 } from './api/contract.ts';
-export type { LiveEntry, SessionResponse, SessionState, VersionSummary } from './api/contract.ts';
+export type {
+  LiveEntry,
+  LiveEntryDraft,
+  SessionResponse,
+  SessionState,
+  VersionSummary,
+} from './api/contract.ts';
 export {
   AnalyticsFiltersSchema,
   AnalyticsSummarySchema,

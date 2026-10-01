@@ -7,9 +7,15 @@ const dateTime = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
   hourCycle: 'h23',
 });
+const time = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
 const integer = new Intl.NumberFormat('en-US');
 
 export const formatDateTime = (iso: string) => dateTime.format(new Date(iso));
+export const formatTime = (iso: string) => time.format(new Date(iso));
 export const formatCount = (n: number) => integer.format(n);
 
 /** A 0..1 share as a percentage; a dash when there is no denominator. */

@@ -34,3 +34,9 @@ export function Td({
 export function Mono({ children }: { children: ReactNode }) {
   return <span className={styles.mono}>{children}</span>;
 }
+
+/** Variant label in its color: A blue, B coral (CLAUDE.md 10). */
+export function VariantText({ variant }: { variant: 'A' | 'B' | null }) {
+  if (variant === null) return <span className={styles.mono}>–</span>;
+  return <span className={variant === 'A' ? styles.vA : styles.vB}>{variant}</span>;
+}

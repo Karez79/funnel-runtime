@@ -34,7 +34,10 @@ async function newSession(a: TestApp, body: Record<string, unknown> = {}) {
   return contract.createSession.response.parse(res.json()).session;
 }
 
-/** Ingest is another module: tests write accepted events straight into the table. */
+/**
+ * Most tests write accepted rows straight into the table to set up exact cases; the
+ * "through ingest" test below proves that real ingest writes the same format.
+ */
 function insertEvent(
   a: TestApp,
   s: SessionResponse['session'],
@@ -231,6 +234,49 @@ describe('analytics API', () => {
       [2, true, 1],
     ]);
     expect((await okSummary(a, '?version=1')).kpis.all.started).toBe(1);
+  });
+
+  it('counts what ingest stores: unique sessions, duplicates, flags', async () => {
+    const a = await start();
+    const s = await newSession(a);
+    const event = (name: string, stepId: string | null, seq: number, extra = {}) => ({
+      event_id: uuidv7(),
+      session_id: s.id,
+      name,
+      client_timestamp: '2026-10-01T12:00:00.000Z',
+      client_seq: seq,
+      funnel_id: FUNNEL,
+      funnel_version: s.funnelVersion,
+      experiment_id: s.experimentId,
+      variant: s.variant,
+      step_id: stepId,
+      properties: {},
+      ...extra,
+    });
+    const batch = {
+      events: [
+        event('step_viewed', 'intro', 2),
+        // Arrives after seq 2 was accepted: flagged out of order.
+        event('step_viewed', 'team_size', 1),
+        // Claims another version: stored with the session's one and flagged.
+        event('step_viewed', 'work_mode', 3, { funnel_version: 9 }),
+        event('no_such_event', null, 4),
+      ],
+    };
+    for (let i = 0; i < 2; i += 1) {
+      const res = await a.app.inject({ method: 'POST', url: '/api/events/batch', payload: batch });
+      expect(res.statusCode).toBe(200);
+    }
+    const summary = await okSummary(a);
+    const reached = (id: string) =>
+      summary.steps.find((step) => step.stepId === id)?.metrics.all.reached;
+    expect([reached('intro'), reached('team_size'), reached('work_mode')]).toEqual([1, 1, 1]);
+    expect(summary.dataQuality).toEqual({
+      duplicates: 3,
+      outOfOrder: 1,
+      contextMismatch: 1,
+      rejected: [{ reason: 'unknown_event', count: 2 }],
+    });
   });
 
   it('answers 404 for a version that does not exist and 400 for a bad filter', async () => {
