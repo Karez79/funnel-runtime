@@ -184,12 +184,3 @@ tr[aria-current='true'] {
 .lint[role='alert'] h3 {
   color: var(--b-ink);
 }
-
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}

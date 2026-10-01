@@ -4,6 +4,7 @@ import { formatCount, formatDateTime } from '../../lib/format.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Pill } from '../../ui/Pill.tsx';
 import { Mono, Table, Td, Th } from '../../ui/Table.tsx';
+import { VisuallyHidden } from '../../ui/VisuallyHidden.tsx';
 import styles from './VersionsPage.module.css';
 
 function Status({ version }: { version: VersionSummary }) {
@@ -40,7 +41,7 @@ export function VersionsTable({
           <Th numeric>In progress</Th>
           <Th numeric>Sessions</Th>
           <Th>
-            <span className={styles.srOnly}>Actions</span>
+            <VisuallyHidden>Actions</VisuallyHidden>
           </Th>
         </tr>
       </thead>
