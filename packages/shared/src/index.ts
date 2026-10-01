@@ -59,3 +59,6 @@ export type {
   LintReport,
   LintWarningCode,
 } from './config/lint.ts';
+
+export { diffConfigs } from './config/diff.ts';
+export type { ChangeKind, ConfigChange } from './config/diff.ts';

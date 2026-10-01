@@ -249,3 +249,37 @@ describe('lintConfig: warnings', () => {
     ]);
   });
 });
+
+describe('lintConfig: changes against the active version', () => {
+  it('warns about a new result, but not about new steps or texts', () => {
+    const { errors, warnings } = lintConfig(v2(), { previous: v1() });
+    expect(errors).toEqual([]);
+    expect(warnings).toEqual([{ code: 'config_change', message: 'Result "meeting_heavy" added' }]);
+  });
+
+  it('warns about a step removed from a variant, new and removed events and results', () => {
+    const next = v2();
+    next.experiment.variants.B.stepSequence = next.experiment.variants.B.stepSequence.filter(
+      (id) => id !== 'tool_count',
+    );
+    next.events.allowed.push({ name: 'plan_opened', properties: [] });
+    const previous = v2();
+    previous.events.allowed.push({ name: 'old_event', properties: [] });
+    const balanced = previous.results['balanced'];
+    if (!balanced) throw new Error('fixture');
+    previous.results['legacy'] = { ...balanced, id: 'legacy' };
+    expect(lintConfig(next, { previous }).warnings.map((w) => w.message)).toEqual([
+      'Result "legacy" removed',
+      'Event "plan_opened" added',
+      'Event "old_event" removed',
+      'Variant B: step "tool_count" removed',
+    ]);
+  });
+
+  it('skips the comparison when the config does not resolve', () => {
+    const broken = v2();
+    broken.experiment.variants.B.stepSequence.push('ghost');
+    const { warnings } = lintConfig(broken, { previous: v1() });
+    expect(warnings.filter((w) => w.code === 'config_change')).toEqual([]);
+  });
+});
