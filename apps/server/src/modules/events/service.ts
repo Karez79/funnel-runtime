@@ -56,15 +56,35 @@ const stringField = (item: unknown, key: string): string | null => {
   return typeof value === 'string' ? value : null;
 };
 
-/** The item as JSON with property values replaced by their keys, cut to 4 KB. */
+/** Top-level keys a client event may have; anything else in a rejected item is dropped. */
+const EVENT_KEYS = Object.keys(ClientEventSchema.shape);
+
+/**
+ * A rejected item as stored: only the known event fields, `properties` reduced to its
+ * keys (a raw answer would sit in a value), cut to 4 KB at a UTF-8 character boundary.
+ */
 function rawForStorage(item: unknown): string {
-  const redacted =
-    isRecord(item) && isRecord(item.properties)
-      ? { ...item, properties: Object.keys(item.properties) }
-      : item;
-  const json = JSON.stringify(redacted);
-  const bytes = Buffer.from(json);
-  return bytes.length <= RAW_LIMIT_BYTES ? json : bytes.subarray(0, RAW_LIMIT_BYTES).toString();
+  let kept: unknown;
+  if (isRecord(item)) {
+    const fields: Record<string, unknown> = {};
+    for (const key of EVENT_KEYS) {
+      if (Object.hasOwn(item, key)) fields[key] = item[key];
+    }
+    const { properties } = item;
+    if (Object.hasOwn(item, 'properties')) {
+      fields.properties = isRecord(properties) ? Object.keys(properties) : null;
+    }
+    kept = fields;
+  } else {
+    // Not an event at all: only its JSON type is worth keeping.
+    kept = { type: Array.isArray(item) ? 'array' : item === null ? 'null' : typeof item };
+  }
+  const bytes = Buffer.from(JSON.stringify(kept));
+  if (bytes.length <= RAW_LIMIT_BYTES) return bytes.toString();
+  let end = RAW_LIMIT_BYTES;
+  // Step back over continuation bytes (10xxxxxx) so no character is cut in half.
+  while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString();
 }
 
 /** A client claim differs from the session; UTM only counts when the client sent one. */

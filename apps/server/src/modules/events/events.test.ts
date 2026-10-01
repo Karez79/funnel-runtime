@@ -4,7 +4,13 @@ import { contract, type ClientEvent, type SessionResponse } from '@funnel/shared
 import { v7 as uuidv7 } from 'uuid';
 import { z } from 'zod';
 import { events, ingestLog, rejectedEvents } from '../../db/schema.ts';
-import { createTestApp, generatorHeaders, type TestApp } from '../../test/harness.ts';
+import {
+  adminAuth,
+  configJson,
+  createTestApp,
+  generatorHeaders,
+  type TestApp,
+} from '../../test/harness.ts';
 
 const FUNNEL = 'workstyle-planner';
 const JsonObject = z.record(z.string(), z.unknown());
@@ -168,15 +174,82 @@ describe('test 3: deduplication and per-event validation', () => {
 
   it('the order of arrival does not matter for what is stored', async () => {
     const a = await app();
-    const s1 = await session(a);
-    const s2 = await session(a);
-    const forS1 = [event(s1), event(s1, { name: 'step_completed', properties: {} })];
-    const forS2 = forS1.map((e) => ({ ...e, event_id: uuidv7(), session_id: s2.id }));
-    await batch(a, forS1);
-    await batch(a, [forS2[1], forS2[0]]);
-    const shape = (id: string) =>
-      clientRows(a, id).map((r) => [r.name, r.stepId, r.clientSeq, r.propsJson]);
-    expect(shape(s2.id)).toEqual(shape(s1.id));
+    const s1 = await session(a, { variantOverride: 'A' });
+    const s2 = await session(a, { variantOverride: 'A' });
+    // Events that exercise every per-event rule: whitelist, mismatch, null step.
+    const make = (s: SessionResponse['session']) => [
+      event(s, { client_seq: 1 }),
+      event(s, {
+        client_seq: 2,
+        name: 'answer_submitted',
+        properties: { answer_kind: 'number', value: 3 },
+      }),
+      event(s, { client_seq: 3, name: 'step_completed', properties: { next_step_id: 'x' } }),
+      event(s, {
+        client_seq: 4,
+        name: 'back_clicked',
+        step_id: null,
+        variant: 'B',
+        properties: {},
+      }),
+      event(s, { client_seq: 5, name: 'result_viewed', step_id: 'result', properties: {} }),
+    ];
+    const ordered = make(s1);
+    await batch(a, ordered);
+    // Same events for s2, shuffled across three batches, with duplicates in between.
+    const [e1, e2, e3, e4, e5] = make(s2);
+    await batch(a, [e5, e3]);
+    await batch(a, [e2, e5, e1]);
+    await batch(a, [e4, e3, e1]);
+    const stored = (id: string) =>
+      clientRows(a, id).map((r) => {
+        const rest = flags(r);
+        delete rest.out_of_order;
+        return [r.name, r.stepId, r.clientSeq, r.propsJson, rest, r.variant, r.funnelVersion];
+      });
+    expect(stored(s2.id)).toEqual(stored(s1.id));
+    expect(stored(s1.id)).toHaveLength(5);
+  });
+
+  it('checks the step against the session variant, not the whole version', async () => {
+    const a = await app();
+    const config = configJson('funnel-v2.json', { version: 3 });
+    const experiment = z
+      .object({
+        variants: z.object({ B: z.object({ stepSequence: z.array(z.string()) }).loose() }).loose(),
+      })
+      .loose()
+      .parse(config.experiment);
+    const B = experiment.variants.B;
+    const withoutToolCount = {
+      ...experiment,
+      variants: {
+        ...experiment.variants,
+        B: { ...B, stepSequence: B.stepSequence.filter((id) => id !== 'tool_count') },
+      },
+    };
+    const auth = { authorization: adminAuth };
+    const upload = await a.app.inject({
+      method: 'POST',
+      url: '/api/admin/versions',
+      payload: { ...config, experiment: withoutToolCount },
+      headers: auth,
+    });
+    expect(upload.statusCode).toBe(201);
+    const publish = await a.app.inject({
+      method: 'POST',
+      url: '/api/admin/versions/3/publish',
+      headers: auth,
+    });
+    expect(publish.statusCode).toBe(200);
+    const sa = await session(a, { variantOverride: 'A' });
+    const sb = await session(a, { variantOverride: 'B' });
+    const inA = event(sa, { step_id: 'tool_count' });
+    const inB = event(sb, { step_id: 'tool_count' });
+    expect((await batch(a, [inA, inB])).results.map((r) => r.status)).toEqual([
+      'accepted',
+      'rejected',
+    ]);
   });
 
   it('takes version, experiment, variant and UTM from the session, flagging a mismatch', async () => {
@@ -258,19 +331,55 @@ describe('ingest: per-event checks', () => {
     expect(bySeq).toEqual({ 1: {}, 2: { out_of_order: true }, 3: {}, 4: {} });
   });
 
-  it('stores a rejected item truncated to 4 KB and without property values', async () => {
+  it('stores a rejected item without property values or unknown keys', async () => {
     const a = await app();
     const s = await session(a);
     const e = event(s, {
       name: 'nope',
-      properties: { team_size: 'secret-answer', padding: 'x'.repeat(10_000) },
+      properties: { team_size: 'secret-answer' },
+      answer: 'secret-top-level',
     });
-    await batch(a, [e], { batch_id: 'b-raw' });
-    const [row] = a.handle.db.select().from(rejectedEvents).all();
-    expect(row).toMatchObject({ batchId: 'b-raw', eventId: e.event_id, reason: 'unknown_event' });
-    expect(Buffer.byteLength(row?.rawJson ?? '')).toBeLessThanOrEqual(4096);
-    expect(row?.rawJson).not.toContain('secret-answer');
-    expect(row?.rawJson).toContain('team_size');
+    await batch(a, [e, 'secret-string'], { batch_id: 'b-raw' });
+    const rows = a.handle.db.select().from(rejectedEvents).all();
+    expect(rows[0]).toMatchObject({
+      batchId: 'b-raw',
+      eventId: e.event_id,
+      reason: 'unknown_event',
+    });
+    expect(JSON.parse(rows[0]?.rawJson ?? '')).toMatchObject({ properties: ['team_size'] });
+    expect(rows[0]?.rawJson).not.toContain('secret');
+    expect(rows[1]?.rawJson).toBe('{"type":"string"}');
+  });
+
+  it('cuts a stored rejected item to 4 KB without splitting a character', async () => {
+    const a = await app();
+    const s = await session(a);
+    // Two-byte padding with both parities, so one of the cuts falls inside a character.
+    for (const prefix of ['', 'a']) {
+      await batch(a, [event(s, { name: 'nope', step_id: prefix + 'é'.repeat(5000) })]);
+    }
+    const raws = a.handle.db
+      .select()
+      .from(rejectedEvents)
+      .all()
+      .map((r) => r.rawJson);
+    expect(raws).toHaveLength(2);
+    for (const raw of raws) {
+      expect(Buffer.byteLength(raw)).toBeLessThanOrEqual(4096);
+      expect(Buffer.byteLength(raw)).toBeGreaterThan(4090);
+      expect(raw).not.toContain('\uFFFD');
+    }
+  });
+
+  it('answers 413 to a body over 256 KB', async () => {
+    const a = await app();
+    const res = await a.app.inject({
+      method: 'POST',
+      url: '/api/events/batch',
+      payload: { events: [{ padding: 'x'.repeat(257 * 1024) }] },
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ error: { code: 'payload_too_large' } });
   });
 
   it('answers 400 to a broken envelope and stores nothing', async () => {
