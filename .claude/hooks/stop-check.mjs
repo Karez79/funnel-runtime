@@ -17,9 +17,10 @@ if (!existsSync(pkgPath)) process.exit(0);
 if (!JSON.parse(readFileSync(pkgPath, 'utf8')).scripts?.check) process.exit(0);
 
 const counterFile = join(tmpdir(), `funnel-stop-check-${input.session_id ?? 'default'}`);
-const blocks = input.stop_hook_active && existsSync(counterFile)
-  ? Number(readFileSync(counterFile, 'utf8')) || 0
-  : 0;
+const blocks =
+  input.stop_hook_active && existsSync(counterFile)
+    ? Number(readFileSync(counterFile, 'utf8')) || 0
+    : 0;
 
 const res = spawnSync('pnpm', ['check'], {
   cwd: root,
@@ -39,5 +40,7 @@ if (blocks >= MAX_BLOCKS) {
 writeFileSync(counterFile, String(blocks + 1));
 const reason = res.error ? `pnpm check did not finish: ${res.error.message}` : 'pnpm check is red.';
 const tail = `${res.stdout ?? ''}\n${res.stderr ?? ''}`.split('\n').slice(-60).join('\n');
-process.stderr.write(`${reason} Fix it before finishing (attempt ${blocks + 1}/${MAX_BLOCKS}).\n\n${tail}\n`);
+process.stderr.write(
+  `${reason} Fix it before finishing (attempt ${blocks + 1}/${MAX_BLOCKS}).\n\n${tail}\n`,
+);
 process.exit(2);

@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+apps/server/drizzle
+playwright-report
+test-results
+.generated
+docs/design/reference.html
+CLAUDE.md
+configs

@@ -26,6 +26,7 @@ Also check: no v3-specific code before Phase 7; no external services; no lowered
 ## Output
 
 Severity:
+
 - `blocker` — breaks an invariant, privacy, correctness, data loss, red CI, security hole.
 - `major` — spec deviation, missing required test, layer/source-of-truth violation, likely bug.
 - `minor` — style, naming, small simplification, docs.

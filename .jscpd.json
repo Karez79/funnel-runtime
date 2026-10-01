@@ -1,0 +1,19 @@
+{
+  "threshold": 2,
+  "minTokens": 40,
+  "reporters": ["console"],
+  "format": ["typescript", "tsx", "javascript", "css"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "e2e/**",
+    "apps/server/drizzle/**",
+    "docs/**",
+    "configs/**"
+  ],
+  "absolute": false,
+  "gitignore": true
+}
