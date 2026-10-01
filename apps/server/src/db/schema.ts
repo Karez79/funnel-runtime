@@ -12,6 +12,20 @@ import {
   sqliteTable,
   text,
 } from 'drizzle-orm/sqlite-core';
+import {
+  ACTIVATION_ACTIONS,
+  TRAFFIC_TYPES,
+  VARIANT_SOURCES,
+  VARIANTS,
+  VERSION_STATES,
+} from '@funnel/shared';
+import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
+
+const EVENT_ORIGINS = ['client', 'server'] as const;
+
+/** CHECK (column IN (...)) from the shared value list, so it cannot drift from the domain type. */
+const oneOf = (name: string, column: SQLiteColumn, values: readonly string[]) =>
+  check(name, sql`${column} IN ${sql.raw(`(${values.map((v) => `'${v}'`).join(',')})`)}`);
 
 export const funnelVersions = sqliteTable(
   'funnel_versions',
@@ -21,12 +35,12 @@ export const funnelVersions = sqliteTable(
     configJson: text('config_json').notNull(),
     configHash: text('config_hash').notNull(),
     releaseNote: text('release_note'),
-    state: text('state', { enum: ['draft', 'published'] }).notNull(),
+    state: text('state', { enum: VERSION_STATES }).notNull(),
     createdAt: text('created_at').notNull(),
   },
   (t) => [
     primaryKey({ columns: [t.funnelId, t.version] }),
-    check('funnel_versions_state_check', sql`${t.state} IN ('draft','published')`),
+    oneOf('funnel_versions_state_check', t.state, VERSION_STATES),
   ],
 );
 
@@ -37,7 +51,7 @@ export const funnelActivations = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     funnelId: text('funnel_id').notNull(),
     version: integer('version').notNull(),
-    action: text('action', { enum: ['publish', 'rollback', 'activate'] }).notNull(),
+    action: text('action', { enum: ACTIVATION_ACTIONS }).notNull(),
     fromVersion: integer('from_version'),
     note: text('note'),
     createdAt: text('created_at').notNull(),
@@ -47,7 +61,7 @@ export const funnelActivations = sqliteTable(
       columns: [t.funnelId, t.version],
       foreignColumns: [funnelVersions.funnelId, funnelVersions.version],
     }),
-    check('funnel_activations_action_check', sql`${t.action} IN ('publish','rollback','activate')`),
+    oneOf('funnel_activations_action_check', t.action, ACTIVATION_ACTIONS),
   ],
 );
 
@@ -58,11 +72,9 @@ export const sessions = sqliteTable(
     funnelId: text('funnel_id').notNull(),
     funnelVersion: integer('funnel_version').notNull(),
     experimentId: text('experiment_id').notNull(),
-    variant: text('variant', { enum: ['A', 'B'] }).notNull(),
-    variantSource: text('variant_source', { enum: ['hash', 'override'] }).notNull(),
-    trafficType: text('traffic_type', { enum: ['live', 'qa', 'synthetic'] })
-      .notNull()
-      .default('live'),
+    variant: text('variant', { enum: VARIANTS }).notNull(),
+    variantSource: text('variant_source', { enum: VARIANT_SOURCES }).notNull(),
+    trafficType: text('traffic_type', { enum: TRAFFIC_TYPES }).notNull().default('live'),
     utmSource: text('utm_source'),
     utmMedium: text('utm_medium'),
     utmCampaign: text('utm_campaign'),
@@ -81,9 +93,9 @@ export const sessions = sqliteTable(
       foreignColumns: [funnelVersions.funnelId, funnelVersions.version],
     }),
     index('sessions_version_idx').on(t.funnelId, t.funnelVersion, t.variant),
-    check('sessions_variant_check', sql`${t.variant} IN ('A','B')`),
-    check('sessions_variant_source_check', sql`${t.variantSource} IN ('hash','override')`),
-    check('sessions_traffic_type_check', sql`${t.trafficType} IN ('live','qa','synthetic')`),
+    oneOf('sessions_variant_check', t.variant, VARIANTS),
+    oneOf('sessions_variant_source_check', t.variantSource, VARIANT_SOURCES),
+    oneOf('sessions_traffic_type_check', t.trafficType, TRAFFIC_TYPES),
   ],
 );
 
@@ -104,7 +116,7 @@ export const events = sqliteTable(
     clientTs: text('client_ts'),
     serverTs: text('server_ts').notNull(),
     clientSeq: integer('client_seq'),
-    origin: text('origin', { enum: ['client', 'server'] }).notNull(),
+    origin: text('origin', { enum: EVENT_ORIGINS }).notNull(),
     propsJson: text('props_json').notNull().default('{}'),
     flagsJson: text('flags_json').notNull().default('{}'),
   },
@@ -112,7 +124,7 @@ export const events = sqliteTable(
     index('events_session_idx').on(t.sessionId),
     index('events_agg_idx').on(t.funnelId, t.funnelVersion, t.variant, t.name),
     index('events_campaign_idx').on(t.utmCampaign),
-    check('events_origin_check', sql`${t.origin} IN ('client','server')`),
+    oneOf('events_origin_check', t.origin, EVENT_ORIGINS),
   ],
 );
 
