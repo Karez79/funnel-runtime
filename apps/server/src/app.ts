@@ -10,6 +10,8 @@ import type { Env } from './env.ts';
 import { createHealthRepo } from './modules/health/repo.ts';
 import { healthRoutes } from './modules/health/routes.ts';
 import { createHealthService } from './modules/health/service.ts';
+import { createRetentionRepo } from './modules/retention/repo.ts';
+import { createRetentionService } from './modules/retention/service.ts';
 import { createVersionsRepo } from './modules/versions/repo.ts';
 import { versionsRoutes } from './modules/versions/routes.ts';
 import { createVersionsService } from './modules/versions/service.ts';
@@ -52,6 +54,12 @@ export async function buildApp(env: AppEnv, db: Db, clock: Clock = systemClock):
   healthRoutes(app, createHealthService(createHealthRepo(db), env.buildVersion));
   const versions = createVersionsService(createVersionsRepo(db), clock);
   versionsRoutes(app, versions);
+
+  const stopRetention = createRetentionService(createRetentionRepo(db), clock, app.log).start();
+  app.addHook('onClose', (_instance, done) => {
+    stopRetention();
+    done();
+  });
 
   await webPlugin(app, env.webDist);
   return app;
