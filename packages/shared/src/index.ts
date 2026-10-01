@@ -62,3 +62,14 @@ export type {
 
 export { diffConfigs } from './config/diff.ts';
 export type { ChangeKind, ConfigChange } from './config/diff.ts';
+
+export {
+  BatchEnvelopeSchema,
+  BatchResponseSchema,
+  ClientEventSchema,
+  MAX_BATCH_EVENTS,
+  REJECT_REASONS,
+} from './events/schema.ts';
+export type { ClientEvent, EventProperties } from './events/schema.ts';
+export { BASE_EVENTS, catalogEvent, filterProperties, isServerOnly } from './events/catalog.ts';
+export { answerKind } from './events/answerKind.ts';
