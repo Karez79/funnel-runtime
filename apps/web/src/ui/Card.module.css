@@ -1,0 +1,32 @@
+.card {
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+}
+
+.panel {
+  position: relative;
+  min-width: 0;
+  background: color-mix(in oklch, var(--panel) 80%, transparent);
+  border-radius: var(--r-panel);
+  padding: 22px 24px 24px;
+  box-shadow: var(--panel-rim);
+}
+
+.glass {
+  width: 100%;
+  max-width: 560px;
+  background: color-mix(in oklch, var(--card) 88%, transparent);
+  backdrop-filter: blur(20px);
+  border-radius: var(--r-glass);
+  box-shadow: var(--shadow-glass);
+  padding: 28px 36px 36px;
+}
+
+@media (width <= 720px) {
+  .glass {
+    padding: 22px 18px 24px;
+    border-radius: var(--r-glass-sm);
+  }
+}

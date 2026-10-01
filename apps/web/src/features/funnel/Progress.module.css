@@ -1,0 +1,51 @@
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  view-transition-name: funnel-progress;
+}
+
+.dots {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  justify-content: center;
+}
+
+.dots i {
+  height: 4px;
+  flex: 1 1 0;
+  max-width: 36px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+  transition:
+    background 0.3s,
+    flex-grow 0.4s var(--ease-out),
+    max-width 0.4s var(--ease-out);
+}
+
+@starting-style {
+  .dots i {
+    flex-grow: 0;
+    max-width: 0;
+  }
+}
+
+.dots i.done {
+  background: var(--ink);
+}
+
+.dots i.now {
+  background: var(--a);
+}
+
+.count {
+  min-width: 48px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
