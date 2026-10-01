@@ -45,6 +45,8 @@ Checked: <what you read and ran, e.g. "diff (12 files), pnpm check: green">
 Blockers: N, majors: N, minors: N.
 ```
 
+The last line counts only findings that are **new in this round** (`pnpm review:stats` sums it across rounds). In a re-review, put still-open earlier findings on a separate line before it: `Still open from earlier rounds: N.`
+
 Verdict is `CHANGES REQUESTED` if there is any blocker or major. If there are no findings, say so explicitly and list what you verified. Be concrete: file and line, what is wrong, why it matters, how to fix. Do not pad with praise. Return the same table as your final answer.
 
 ## Re-review mode
