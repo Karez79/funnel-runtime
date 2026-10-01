@@ -4,15 +4,21 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    projects: ['packages/shared', 'apps/server'],
+    projects: ['packages/shared', 'apps/server', 'apps/web'],
     passWithNoTests: true,
     coverage: {
       provider: 'v8',
-      include: ['packages/shared/src/**/*.ts', 'apps/server/src/**/*.ts'],
+      include: [
+        'packages/shared/src/**/*.ts',
+        'apps/server/src/**/*.ts',
+        // The rest of apps/web is covered by e2e (CLAUDE.md 3.1); the queue is pure logic.
+        'apps/web/src/features/funnel/eventQueue.ts',
+      ],
       exclude: ['**/*.test.ts', 'apps/server/src/main.ts'],
       thresholds: {
         'packages/shared/src/**': { lines: 90 },
         'apps/server/src/**': { lines: 80 },
+        'apps/web/src/features/funnel/eventQueue.ts': { lines: 85 },
       },
     },
   },
