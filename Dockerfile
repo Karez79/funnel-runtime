@@ -4,8 +4,9 @@
 # layout: @funnel/shared is a symlink outside node_modules, where stripping is allowed.
 
 FROM node:24-slim AS base
-ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
-RUN npm install -g pnpm@11.21.0
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+# pnpm version comes only from package.json#packageManager.
+RUN npm install -g corepack@latest && corepack enable
 WORKDIR /app
 
 # Native build tools only in the install stages, never in the runtime image.
