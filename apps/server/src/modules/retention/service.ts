@@ -14,19 +14,22 @@ export function createRetentionService(repo: RetentionRepo, clock: Clock, log: F
     return cleared;
   }
 
+  /** A failed sweep is logged and retried on the next tick; it never stops the server. */
+  function safeSweep(): void {
+    try {
+      sweep();
+    } catch (err) {
+      log.error({ err }, 'expired answers cleanup failed');
+    }
+  }
+
   return {
     sweep,
 
     /** Sweeps now and every `intervalMs`; the returned function stops the timer. */
     start(intervalMs = HOUR_MS): () => void {
-      sweep();
-      const timer = setInterval(() => {
-        try {
-          sweep();
-        } catch (err) {
-          log.error({ err }, 'expired answers cleanup failed');
-        }
-      }, intervalMs);
+      safeSweep();
+      const timer = setInterval(safeSweep, intervalMs);
       // Never keeps the process alive on its own (shutdown, tests).
       timer.unref();
       return () => {

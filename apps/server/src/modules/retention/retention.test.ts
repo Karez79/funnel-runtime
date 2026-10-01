@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.ts';
-import { createTestApp, testClock, type TestApp } from '../../test/harness.ts';
+import { createTestApp, TEST_ENV, testClock, type TestApp } from '../../test/harness.ts';
 import { createRetentionRepo } from './repo.ts';
 import { createRetentionService } from './service.ts';
 
@@ -14,12 +14,11 @@ afterEach(async () => {
 
 const ANSWERS = { work_mode: 'hybrid', team_size: 12 };
 
-function insertSession(id: string, expiresAt: string) {
-  const state = JSON.stringify({
-    answers: ANSWERS,
-    history: ['intro'],
-    currentStepId: 'team_size',
-  });
+function insertSession(
+  id: string,
+  expiresAt: string,
+  state = JSON.stringify({ answers: ANSWERS, history: ['intro'], currentStepId: 'team_size' }),
+) {
   t?.handle.db.run(sql`insert into sessions (id, funnel_id, funnel_version, experiment_id,
     variant, variant_source, state_json, created_at, updated_at, expires_at)
     values (${id}, 'workstyle-planner', 1, 'x', 'A', 'hash', ${state},
@@ -57,6 +56,37 @@ describe('expired answers cleanup', () => {
     expect(service.sweep()).toBe(0);
   });
 
+  it('skips malformed states instead of failing the whole sweep', async () => {
+    const { service } = await setup();
+    const expired = '2026-09-02T00:00:00.000Z';
+    insertSession('broken', expired, '{not json');
+    insertSession('no-answers', expired, JSON.stringify({ history: [], currentStepId: 'intro' }));
+    insertSession('null-answers', expired, JSON.stringify({ answers: null }));
+    insertSession('valid', expired);
+    expect(service.sweep()).toBe(1);
+    expect(stateOf('valid')).toMatchObject({ answers: {} });
+    expect(stateOf('no-answers')).toEqual({ history: [], currentStepId: 'intro' });
+    expect(stateOf('null-answers')).toEqual({ answers: null });
+  });
+
+  it('logs a failed sweep instead of throwing at start', async () => {
+    t = await createTestApp();
+    const errors: unknown[] = [];
+    const log = { ...t.app.log, info: () => undefined, error: (o: unknown) => errors.push(o) };
+    const failing = createRetentionService(
+      {
+        clearExpiredAnswers: () => {
+          throw new Error('disk gone');
+        },
+      },
+      testClock(),
+      log,
+    );
+    const stop = failing.start();
+    stop();
+    expect(errors).toHaveLength(1);
+  });
+
   it('keeps the session row for analytics', async () => {
     const { service } = await setup();
     insertSession('expired', '2026-09-02T00:00:00.000Z');
@@ -85,17 +115,7 @@ describe('expired answers cleanup', () => {
     insertSession('expired', '2026-09-02T00:00:00.000Z');
     await t.app.close();
     // A second app on the same database sweeps on build.
-    const app = await buildApp(
-      {
-        adminUser: 'a',
-        adminPassword: 'b',
-        buildVersion: 't',
-        logLevel: 'silent',
-        webDist: '/none',
-      },
-      t.handle.db,
-      testClock(),
-    );
+    const app = await buildApp(TEST_ENV, t.handle.db, testClock());
     expect(stateOf('expired')).toMatchObject({ answers: {} });
     await app.close();
   });

@@ -10,7 +10,7 @@ import { readConfig, seedIfEmpty } from '../db/seed.ts';
 import type { Clock } from '../clock.ts';
 import type { App } from '../plugins/route.ts';
 
-const TEST_ENV: AppEnv = {
+export const TEST_ENV: AppEnv = {
   adminUser: 'admin',
   adminPassword: 'secret',
   buildVersion: 'test',

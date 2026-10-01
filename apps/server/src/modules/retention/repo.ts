@@ -12,6 +12,8 @@ export function createRetentionRepo(db: Db) {
         .where(
           and(
             lte(sessions.expiresAt, nowIso),
+            // One malformed row must not abort the whole statement (json_extract throws).
+            sql`json_valid(${sessions.stateJson})`,
             sql`json_extract(${sessions.stateJson}, '$.answers') != '{}'`,
           ),
         )
