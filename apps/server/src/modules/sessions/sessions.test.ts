@@ -401,15 +401,24 @@ describe('test 4: rollback keeps sessions and events', () => {
 
     const got = contract.getSession.response.parse((await read(a, session.id)).json());
     expect(got.funnel.meta.version).toBe(2);
-    const saved = await save(a, session.id, { ...HYBRID, meeting_hours: 6 }, 0, {
+    // meeting_heavy exists only in v2, so the result proves the v2 config was used.
+    const saved = await save(a, session.id, { ...HYBRID, meeting_hours: 20 }, 0, {
       history: [...V1_A_PATH, 'meeting_hours', 'async_maturity', 'tool_count'],
     });
     expect(saved.statusCode).toBe(200);
-    expect((await complete(a, session.id)).statusCode).toBe(200);
+    const done = await complete(a, session.id);
+    expect(done.statusCode).toBe(200);
+    expect(contract.completeSession.response.parse(done.json()).resultId).toBe('meeting_heavy');
 
     // The v2 session and its session_started are still there; only new rows were added.
     expect(row(a, session.id)?.funnelVersion).toBe(2);
     expect(countEvents()).toBe(before + 1);
+    const started = a.handle.db
+      .select()
+      .from(events)
+      .where(eq(events.eventId, `srv:session_started:${session.id}`))
+      .get();
+    expect(started).toMatchObject({ funnelVersion: 2, name: 'session_started' });
     const versions = await a.app.inject({
       method: 'GET',
       url: '/api/admin/versions',
