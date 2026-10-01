@@ -3,13 +3,8 @@
 // on v1, the preview test uses the v2 draft. `?variant=` pins the variant (QA override),
 // so step orders are known. Each test runs in a fresh browser context: a new session.
 import type { Page } from '@playwright/test';
-import { z } from 'zod';
+import { contract } from '@funnel/shared';
 import { expect, test } from './fixtures.ts';
-
-/** The part of `GET /api/sessions/:id` these tests read. */
-const StoredStep = z.object({
-  session: z.object({ state: z.object({ currentStepId: z.string() }) }),
-});
 
 const heading = (page: Page) => page.getByRole('heading', { level: 1 });
 const progress = (page: Page) => page.getByRole('progressbar', { name: 'Progress' });
@@ -111,12 +106,13 @@ test('rapid Enter presses move one step at a time and stay consistent', async ({
   const snapshot = async () => {
     const url = /\/s\/([a-z_]+)/.exec(page.url())?.[1] ?? '';
     const rendered = (await page.locator('[data-step]').getAttribute('data-step')) ?? '';
-    const stored = StoredStep.parse(
+    const stored = contract.getSession.response.parse(
       await (await request.get(`/api/sessions/${String(id)}`)).json(),
     );
     const server = stored.session.state.currentStepId;
     return `${url}|${rendered}|${server}`;
   };
+  // On failure the received value is the last `url|rendered|server` snapshot.
   let previous = '';
   await expect
     .poll(
@@ -125,12 +121,15 @@ test('rapid Enter presses move one step at a time and stay consistent', async ({
         const [url, rendered, server] = now.split('|');
         const settled = now === previous && url === rendered && rendered === server;
         previous = now;
-        return settled;
+        return settled ? 'settled' : now;
       },
       { intervals: [300], timeout: 10_000 },
     )
-    .toBe(true);
+    .toBe('settled');
   const reached = previous.split('|')[0];
+  // Every move is one step from a rendered state: from work_mode (remote) the queued keys
+  // can only reach these steps, in order; a stale move would skip or branch elsewhere.
+  expect(['priorities', 'timezone_span', 'async_maturity']).toContain(reached);
   const shown = await heading(page).textContent();
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`/s/${reached ?? 'missing'}`));
