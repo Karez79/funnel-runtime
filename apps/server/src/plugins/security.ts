@@ -28,7 +28,8 @@ export async function securityPlugin(
   });
   await app.register(rateLimit, {
     global: false,
-    // The edge's own client-IP header when configured (Railway overwrites X-Real-IP),
+    // The edge's own client-IP header when configured (Railway documents X-Real-IP as the
+    // client IP; that it overwrites a client-sent value is checked on prod, TIMELINE.md),
     // otherwise the socket address; never the client-supplied X-Forwarded-For.
     keyGenerator: (req) => {
       const header = clientIpHeader === null ? undefined : req.headers[clientIpHeader];
