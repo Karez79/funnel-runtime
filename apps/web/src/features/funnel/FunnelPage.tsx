@@ -17,6 +17,7 @@ import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import { Toast, type ToastMessage } from '../../ui/Toast.tsx';
 import styles from './FunnelPage.module.css';
+import stepStyles from './steps/steps.module.css';
 import { FunnelView } from './FunnelView.tsx';
 import {
   DEFAULT_FUNNEL_ID,
@@ -60,9 +61,12 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
 
   const machine = useFunnelMachine(() => initialState(funnel, start.state), {
     track,
-    onMove: (next, { fromHistory }) => {
+    onMove: (next, { url = 'push' }) => {
       save(sessionState(next));
-      if (!fromHistory) toStep(next.currentStepId, false);
+      const there = window.location.pathname === `/s/${next.currentStepId}`;
+      // After a browser Back the URL is normally there already; if the user moved through
+      // history again meanwhile (the transition is async), the URL follows the state.
+      if (url !== 'none' || !there) toStep(next.currentStepId, url === 'replace' || url === 'none');
     },
   });
   const { state } = machine;
@@ -75,20 +79,37 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     saveUnsaved();
   }, []);
 
-  // URL → state: the browser's Back to a visited step is a Back; anything else (first
-  // load on `/`, a stale or typed URL, Forward) is replaced by the current step.
+  // Back in the card is the browser's Back when there is an entry to go back to, so the
+  // funnel's history and the browser's stay one stack; the POP below does the move.
+  const expectBack = useRef(false);
+  const goBack = () => {
+    const entry: unknown = window.history.state;
+    const index = typeof entry === 'object' && entry !== null && 'idx' in entry ? entry.idx : 0;
+    if (typeof index === 'number' && index > 0) {
+      expectBack.current = true;
+      void navigate(-1);
+    } else {
+      machine.act({ type: 'back' }, { url: 'replace' });
+    }
+  };
+
+  // URL → state: the browser's Back to a visited step is a Back; a Back started in the
+  // card that landed on another URL still goes one step back; anything else (first load
+  // on `/`, a stale or typed URL, Forward) is replaced by the current step.
   const firstSync = useRef(true);
   const syncFromUrl = useEffectEvent(() => {
     const first = firstSync.current;
+    const expected = expectBack.current;
     firstSync.current = false;
+    expectBack.current = false;
     if (urlStepId === state.currentStepId) return;
-    if (
-      !first &&
-      navigationType === NavigationType.Pop &&
-      urlStepId &&
-      state.history.includes(urlStepId)
-    ) {
-      machine.act({ type: 'back', to: urlStepId }, { fromHistory: true });
+    const pop = !first && navigationType === NavigationType.Pop;
+    if (pop && urlStepId && state.history.includes(urlStepId)) {
+      machine.act({ type: 'back', to: urlStepId }, { url: 'none' });
+      return;
+    }
+    if (pop && expected) {
+      machine.act({ type: 'back' }, { url: 'replace' });
       return;
     }
     toStep(state.currentStepId, true);
@@ -101,9 +122,12 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     <FunnelView
       state={state}
       act={machine.act}
+      onBack={goBack}
       track={track}
       result={
-        <h1 className={styles.title}>{funnel.steps[state.currentStepId]?.content.loadingTitle}</h1>
+        <h1 className={stepStyles.title}>
+          {funnel.steps[state.currentStepId]?.content.loadingTitle}
+        </h1>
       }
     />
   );
@@ -138,8 +162,8 @@ export function FunnelPage() {
         <Card variant="glass" className={styles.card} aria-busy={query.isPending}>
           {query.isError && (
             <>
-              <h1 className={styles.title}>We could not start the funnel</h1>
-              <p className={styles.text}>Check your connection and try again.</p>
+              <h1 className={stepStyles.title}>We could not start the funnel</h1>
+              <p className={stepStyles.helper}>Check your connection and try again.</p>
               <Button onClick={() => void query.refetch()}>Try again</Button>
             </>
           )}

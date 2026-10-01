@@ -2,7 +2,11 @@
 // another step is wrapped in a view transition (left on Continue, right on Back) and its
 // events and side effects (save, URL) run with the new state. Live and preview funnels
 // share this; they differ only in `track` and `onMove`.
-import { useReducer } from 'react';
+// One move at a time: the transition renders the new step asynchronously, and a second
+// Continue or Back before that (key repeat, a double press) would be computed from the
+// step the user is leaving. Moves arriving meanwhile are dropped, so the screen, the
+// saved state, the URL and the events always describe the same step.
+import { useReducer, useRef } from 'react';
 import { withViewTransition } from '../../lib/viewTransition.ts';
 import {
   funnelReducer,
@@ -13,8 +17,11 @@ import {
 import type { Track } from './tracking.ts';
 
 export interface MoveOptions {
-  /** The move follows the browser's own Back: the URL is already there. */
-  readonly fromHistory?: boolean;
+  /**
+   * What the move does to the URL: a new history entry (default), a replaced entry, or
+   * nothing because it follows the browser's own Back and the URL is already there.
+   */
+  readonly url?: 'push' | 'replace' | 'none';
 }
 
 interface MachineOptions {
@@ -25,14 +32,17 @@ interface MachineOptions {
 
 export function useFunnelMachine(init: () => FunnelState, { track, onMove }: MachineOptions) {
   const [state, dispatch] = useReducer(funnelReducer, undefined, init);
+  const moving = useRef(false);
 
   function act(action: FunnelAction, options: MoveOptions = {}) {
+    if (moving.current && action.type !== 'change') return;
     const next = funnelReducer(state, action);
     if (next === state) return;
     if (next.currentStepId === state.currentStepId) {
       dispatch(action);
       return;
     }
+    moving.current = true;
     for (const event of transitionEvents(state, next, action)) {
       track(event.name, event.stepId, event.properties);
     }
@@ -40,6 +50,7 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
       () => {
         dispatch(action);
         onMove?.(next, options);
+        moving.current = false;
       },
       { back: action.type === 'back' },
     );

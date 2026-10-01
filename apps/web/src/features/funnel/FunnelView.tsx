@@ -31,6 +31,8 @@ interface FunnelViewProps {
   readonly track: Track;
   /** The result screen; rendered when the current step is the result step. */
   readonly result: ReactNode;
+  /** Back button, Esc and Alt+←; defaults to a Back action. */
+  readonly onBack?: () => void;
 }
 
 function KeyHint({ step }: { step: ReturnType<typeof currentStep> }) {
@@ -49,7 +51,12 @@ function KeyHint({ step }: { step: ReturnType<typeof currentStep> }) {
   );
 }
 
-export function FunnelView({ state, act, track, result }: FunnelViewProps) {
+export function FunnelView({ state, act, track, result, onBack }: FunnelViewProps) {
+  const back =
+    onBack ??
+    (() => {
+      act({ type: 'back' });
+    });
   const step = currentStep(state);
   const isResult = step?.type === 'result';
   const canGoBack = state.history.length > 0;
@@ -68,7 +75,7 @@ export function FunnelView({ state, act, track, result }: FunnelViewProps) {
     if (event.key === 'Escape' || (event.altKey && event.key === 'ArrowLeft')) {
       if (!canGoBack) return;
       event.preventDefault();
-      act({ type: 'back' });
+      back();
       return;
     }
     if (event.key !== 'Enter' || isResult || event.altKey || event.ctrlKey || event.metaKey) {
@@ -93,14 +100,7 @@ export function FunnelView({ state, act, track, result }: FunnelViewProps) {
   return (
     <Card variant="glass" className={styles.card} data-step={state.currentStepId}>
       <div className={styles.top}>
-        <IconButton
-          icon="back"
-          aria-label="Back"
-          disabled={!canGoBack}
-          onClick={() => {
-            act({ type: 'back' });
-          }}
-        />
+        <IconButton icon="back" aria-label="Back" disabled={!canGoBack} onClick={back} />
         <Progress value={progressOf(state)} done={isResult} />
       </div>
       <div className={styles.body} key={state.currentStepId}>
