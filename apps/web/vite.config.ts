@@ -8,5 +8,6 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': 'http://localhost:3000' },
   },
-  build: { outDir: 'dist', emptyOutDir: true },
+  // Never inline assets as data: URLs: the CSP allows fonts and images from 'self' only.
+  build: { outDir: 'dist', emptyOutDir: true, assetsInlineLimit: 0 },
 });

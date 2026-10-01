@@ -13,3 +13,4 @@
 - `apps/server/src/main.ts` исключён из покрытия: это только склейка процесса (env → БД → listen → сигналы), его поведение проверяют e2e и healthcheck на Railway.
 - `lint:deps` охватывает `scripts/` и `e2e/` с той задачи, где эти папки появляются (depcruise падает на несуществующем пути).
 - Stylelint `lightness-notation`, `hue-degree-notation` и `alpha-value-notation` выключены (и `custom-property-empty-line-before`, чтобы группировать токены): токены OKLCH переносятся из эталона один в один (`oklch(0.925 0.014 258)`), а не переписываются в проценты и градусы.
+- `tokens.css` = `:root` эталона один в один плюс три осознанных отличия: в `--font` первым стоит `'Plus Jakarta Sans Variable'` (имя семейства в npm-пакете fontsource), добавлены `--on-ink` (текст на чёрном, вместо `#fff` в эталоне) и `--focus-ring` (цвет фокуса, в эталоне был инлайн `color-mix`).

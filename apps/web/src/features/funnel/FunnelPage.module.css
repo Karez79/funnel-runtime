@@ -1,5 +1,6 @@
 .wrap {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: start center;
   padding: 48px 16px 72px;
