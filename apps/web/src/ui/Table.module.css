@@ -1,0 +1,43 @@
+.tbl {
+  overflow-x: auto;
+}
+
+.tbl table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tbl th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--ink-3);
+  font-size: 11px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.tbl td {
+  padding: 11px 12px;
+  border-top: 1px solid color-mix(in oklch, var(--line) 70%, var(--card));
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.tbl tbody tr {
+  transition: background 0.15s;
+}
+
+.tbl tbody tr:hover {
+  background: color-mix(in oklch, var(--card) 50%, transparent);
+}
+
+.tbl .n {
+  text-align: right;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}

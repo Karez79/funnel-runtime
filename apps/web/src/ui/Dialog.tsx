@@ -1,7 +1,8 @@
 // Modal dialogs on the native <dialog> + showModal() (CLAUDE.md 10.1): focus trap, Esc
 // and the top layer come from the platform; enter and exit animate in CSS through
 // @starting-style and `transition-behavior: allow-discrete`. React only says "open".
-import { useEffect, useEffectEvent, useRef, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, type ReactNode } from 'react';
+import { Button } from './Button.tsx';
 import styles from './Dialog.module.css';
 
 export function Dialog({
@@ -53,5 +54,40 @@ export function Dialog({
     >
       {children}
     </dialog>
+  );
+}
+
+/** "Publish version 3?" style confirmation with a cancel and a confirm button. */
+export function ConfirmDialog({
+  open,
+  title,
+  children,
+  confirmLabel,
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = useId();
+  return (
+    <Dialog open={open} onClose={onCancel} className={styles.confirm} aria-labelledby={titleId}>
+      <h2 id={titleId}>{title}</h2>
+      <div className={styles.body}>{children}</div>
+      <div className={styles.row}>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={onConfirm} disabled={busy}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Dialog>
   );
 }
