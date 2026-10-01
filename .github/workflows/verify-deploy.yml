@@ -1,6 +1,8 @@
 # Runs after Railway reports a successful deployment of a commit (GitHub deployment
-# status). Kept out of ci.yml on purpose: Railway's "Wait for CI" waits for every
-# workflow on the commit, so a prod check inside CI would deadlock the deploy.
+# status). Kept out of ci.yml on purpose: Railway's "Wait for CI" waits for the
+# push-triggered workflows of the branch, so a prod check inside CI would deadlock the
+# deploy. Each deploy produces two runs: the `in_progress` status run is skipped by the
+# `if`, which is expected, not a failure.
 name: Verify deploy
 
 on:

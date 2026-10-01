@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 
 const REPO = 'Karez79/funnel-runtime';
-const COUNTS = /Blockers:\s*(\d+),\s*majors:\s*(\d+),\s*minors:\s*(\d+)/i;
+const COUNTS = /Blockers:\s*(\d+),\s*majors:\s*(\d+),\s*minors:\s*(\d+)/gi;
 const VERDICT = /##\s*Reviewer[^\n]*?(APPROVE|CHANGES REQUESTED)/i;
 
 const Pr = z.object({ number: z.number(), title: z.string(), state: z.string() });
@@ -32,8 +32,11 @@ function roundsOf(pr: number): Round[] {
     .parse(gh(['api', '--paginate', '--slurp', `repos/${REPO}/issues/${pr}/comments`]))
     .flat();
   return comments.flatMap((c) => {
-    const counts = COUNTS.exec(c.body);
-    if (!counts || !/reviewer/i.test(c.body)) return [];
+    // Only reviewer comments count, and only their final counts line (earlier lines may
+    // quote a previous round).
+    if (!/^\s*##\s*Re(view|-review)/i.test(c.body)) return [];
+    const counts = [...c.body.matchAll(COUNTS)].at(-1);
+    if (!counts) return [];
     return [
       {
         verdict: VERDICT.exec(c.body)?.[1]?.toUpperCase() ?? '?',

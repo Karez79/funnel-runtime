@@ -8,7 +8,7 @@ Parse the arguments: the first is the PR number; if the second is `re-review`, t
 id of the previous reviewer comment; anything else is extra focus for the reviewer.
 
 Use the Agent tool with `subagent_type: reviewer` if that type is available, otherwise
-`general-purpose`, `run_in_background: true`, and exactly this prompt (fill the placeholders):
+`general-purpose` (subagents run in the background), with exactly this prompt (fill the placeholders):
 
 > You are acting as the `reviewer` subagent of this project. Read your definition with
 > `git -C <repo> fetch -q && git -C <repo> show origin/<head-branch>:.claude/agents/reviewer.md`

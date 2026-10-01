@@ -23,14 +23,19 @@ if (!JSON.parse(readFileSync(pkgPath, 'utf8')).scripts?.check) process.exit(0);
 function treeFingerprint() {
   const git = (args) => execFileSync('git', args, { cwd: root, maxBuffer: 256 * 1024 * 1024 });
   const hash = createHash('sha256');
-  hash.update(git(['rev-parse', 'HEAD']));
-  hash.update(git(['diff', 'HEAD', '--binary']));
+  const part = (chunk) => hash.update(chunk).update('\0');
+  // Toolchain and install state: a broken node_modules or a new Node must re-run the check.
+  part(process.version);
+  const modules = join(root, 'node_modules/.modules.yaml');
+  part(existsSync(modules) ? readFileSync(modules) : 'no-node_modules');
+  part(git(['rev-parse', 'HEAD']));
+  part(git(['diff', 'HEAD', '--binary']));
   const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'])
     .toString()
     .split('\0');
   for (const file of untracked.filter(Boolean).sort()) {
-    hash.update(file);
-    hash.update(readFileSync(join(root, file)));
+    part(file);
+    part(readFileSync(join(root, file)));
   }
   return hash.digest('hex');
 }
