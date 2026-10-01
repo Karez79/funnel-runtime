@@ -66,6 +66,24 @@ module.exports = {
       to: { path: '^apps/server/src/(db/|modules/[^/]+/repo\\.ts$)' },
     },
     {
+      name: 'db-only-in-repo',
+      comment: 'Only repositories, db/ and the composition root touch the database driver.',
+      severity: 'error',
+      from: {
+        path: '^apps/server/src/',
+        pathNot:
+          '^apps/server/src/(db/|modules/[^/]+/repo\\.ts$|app\\.ts$|main\\.ts$|test/)|\\.test\\.ts$',
+      },
+      to: { path: '(^apps/server/src/db/|/node_modules/(drizzle-orm|better-sqlite3)/)' },
+    },
+    {
+      name: 'not-to-unresolvable',
+      comment: 'An unresolved import would silently skip every other rule.',
+      severity: 'error',
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
       name: 'service-not-routes',
       severity: 'error',
       from: { path: '^apps/server/src/modules/[^/]+/service\\.ts$' },
@@ -97,7 +115,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: '(node_modules|dist|coverage)' },
+    exclude: { path: '(^|/)(dist|coverage)/' },
     tsPreCompilationDeps: true,
     combinedDependencies: true,
     tsConfig: { fileName: 'tsconfig.depcruise.json' },

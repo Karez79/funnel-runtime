@@ -39,7 +39,22 @@ export default tseslint.config(
     files: ['apps/web/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     languageOptions: { globals: globals.browser },
-    rules: reactHooks.configs.recommended.rules,
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      // Memoization is React Compiler's job (CLAUDE.md 2).
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              importNames: ['useMemo', 'useCallback', 'memo'],
+              message: 'React Compiler memoizes; do not memoize by hand.',
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     files: [
