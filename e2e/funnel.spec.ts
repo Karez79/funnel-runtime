@@ -216,8 +216,8 @@ test('an invalid answer shows the config message and is not saved', async ({ pag
 /** Answers whatever step is shown (first option, the lowest number) until the result. */
 async function walkToResult(page: Page) {
   for (let i = 0; i < 15; i += 1) {
+    if ((await progress(page).getAttribute('aria-valuetext')) === 'Done') return;
     const title = await heading(page).textContent();
-    if (await page.getByRole('button', { name: /action list|changes/ }).count()) return;
     if (await page.getByRole('spinbutton').count()) {
       const min = await page.getByRole('spinbutton').getAttribute('min');
       await page.getByRole('spinbutton').fill(min === null || min === '0' ? '1' : min);
@@ -226,11 +226,53 @@ async function walkToResult(page: Page) {
     } else if (await page.getByRole('checkbox').count()) {
       await page.getByRole('checkbox').first().click();
     }
-    await page.getByRole('button').last().click();
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect(heading(page)).not.toHaveText(title ?? '');
   }
   throw new Error('the result was not reached');
 }
+
+test.describe('conflict', () => {
+  test.use({ allowedConsoleErrors: [/status of 409/] });
+
+  test('a 409 on save shows the state the server has', async ({ page, request }) => {
+    await start(page, 'A');
+    await number(page, 11, /work_mode/);
+    await page.waitForLoadState('networkidle');
+    const id: unknown = JSON.parse(
+      (await page.evaluate(() => localStorage.getItem('funnel:workstyle-planner:session'))) ??
+        'null',
+    );
+    // Another tab already moved this session: the next save is rejected with its state.
+    const server: unknown = await (await request.get(`/api/sessions/${String(id)}`)).json();
+    expect(server).toMatchObject({ session: { state: { currentStepId: 'work_mode' } } });
+    await page.route(
+      '**/api/sessions/*/state',
+      (route) =>
+        route.fulfill({
+          status: 409,
+          json: {
+            error: {
+              code: 'conflict',
+              message: 'stale',
+              details: {
+                state: {
+                  answers: { team_size: 40 },
+                  history: ['intro'],
+                  currentStepId: 'team_size',
+                },
+                stateRev: 1,
+              },
+            },
+          },
+        }),
+      { times: 1 },
+    );
+    await choose(page, 'Hybrid', /team_size/);
+    await expect(heading(page)).toHaveText('How many people are on the team?');
+    await expect(page.getByRole('spinbutton')).toHaveValue('40');
+  });
+});
 
 test('preview runs a version in memory: no session, no events', async ({ page, request }) => {
   const before = await request.get('/api/admin/versions');
@@ -253,7 +295,7 @@ test('preview runs a version in memory: no session, no events', async ({ page, r
   await page.getByRole('button', { name: 'Check our setup' }).click();
   await expect(heading(page)).toHaveText('Where does the team work most of the time?');
   await walkToResult(page);
-  const cta = page.getByRole('button', { name: /action list|changes/ });
+  const cta = page.locator('button[aria-expanded]');
   await cta.click();
   await expect(cta).toHaveAttribute('aria-expanded', 'true');
 

@@ -48,14 +48,14 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
     }
     moving.current = true;
     const startedAt = epoch.current;
-    for (const event of transitionEvents(state, next, action)) {
-      track(event.name, event.stepId, event.properties);
-    }
+    const events = transitionEvents(state, next, action);
     withViewTransition(
       () => {
         moving.current = false;
+        // A 409 adopted meanwhile cancels the move: no commit, no save, no events.
         if (startedAt !== epoch.current) return;
         dispatch({ type: 'set', state: next });
+        for (const event of events) track(event.name, event.stepId, event.properties);
         onMove?.(next, options);
       },
       { back: action.type === 'back' },
