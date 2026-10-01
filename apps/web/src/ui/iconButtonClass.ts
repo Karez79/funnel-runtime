@@ -3,6 +3,6 @@
 import styles from './IconButton.module.css';
 import { cx } from './cx.ts';
 
-export function iconButtonClass(dark = false): string {
-  return cx(styles.ib, styles.md, dark && styles.dark);
+export function iconButtonClass(dark = false, size: 'sm' | 'md' = 'md'): string {
+  return cx(styles.ib, styles[size], dark && styles.dark);
 }

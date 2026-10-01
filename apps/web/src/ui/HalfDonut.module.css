@@ -20,11 +20,11 @@
 }
 
 .track.a {
-  stroke: color-mix(in oklch, var(--a) 28%, var(--card));
+  stroke: var(--a-track);
 }
 
 .track.b {
-  stroke: color-mix(in oklch, var(--b) 24%, var(--card));
+  stroke: var(--b-track);
 }
 
 .arc.a {

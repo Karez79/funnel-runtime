@@ -80,6 +80,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.nb {
+  background: var(--b);
+}
+
 .w {
   background: var(--card);
   color: var(--ink-2);

@@ -7,6 +7,8 @@ import { Link } from 'react-router';
 import { formatCount } from '../../lib/format.ts';
 import { apiQuery } from '../../lib/query.ts';
 import { Card } from '../../ui/Card.tsx';
+import { Icon, type IconName } from '../../ui/Icon.tsx';
+import { iconButtonClass } from '../../ui/iconButtonClass.ts';
 import { Chip, ChipSelect } from '../../ui/Chip.tsx';
 import { Notch, NotchButton } from '../../ui/Notch.tsx';
 import { PageHeader } from '../../ui/PageHeader.tsx';
@@ -22,6 +24,23 @@ import { PERIODS, useDashboardFilters, type DashboardFilters } from './useDashbo
 import { VersionsCompared } from './VersionsCompared.tsx';
 
 const ALL_CAMPAIGNS = '';
+
+/** Round outlined icon link in a panel header (reference `.ph .acts`). */
+function PanelLink({ to, icon, label }: { to: string; icon: IconName; label: string }) {
+  return (
+    <span className={styles.phEnd}>
+      <Link
+        to={to}
+        viewTransition
+        className={iconButtonClass(false, 'sm')}
+        aria-label={label}
+        title={label}
+      >
+        <Icon name={icon} />
+      </Link>
+    </span>
+  );
+}
 
 function Panel({
   title,
@@ -108,6 +127,7 @@ function Sources({ summary, filters }: { summary: AnalyticsSummary; filters: Das
           pressed={source !== null && source === filters.source}
           muted={source === null}
           disabled={source === null}
+          tone={filters.variant === 'B' ? 'b' : 'a'}
           onClick={() => {
             filters.toggleSource(source);
           }}
@@ -201,16 +221,38 @@ export function DashboardPage() {
           <KpiCards summary={data} />
           <Journey summary={data} filters={filters} />
           <div className={styles.grid2}>
-            <Panel title="Data quality" id="dq-title">
+            <Panel
+              title="Data quality"
+              id="dq-title"
+              actions={
+                <PanelLink
+                  to="/admin/live?status=rejected"
+                  icon="pulse"
+                  label="Open rejected events"
+                />
+              }
+            >
               <DataQuality summary={data} />
             </Panel>
-            <Panel title="A/B test, started to CTA" id="ab-title">
+            <Panel
+              title="A/B test, started to CTA"
+              id="ab-title"
+              actions={<PanelLink to="/admin/versions" icon="layers" label="Open versions" />}
+            >
               <AbPanel experiment={data.experiment} />
             </Panel>
-            <Panel title="Versions compared" id="vc-title">
+            <Panel
+              title="Versions compared"
+              id="vc-title"
+              actions={<PanelLink to="/admin/versions" icon="layers" label="Open versions" />}
+            >
               <VersionsCompared summary={data} />
             </Panel>
-            <Panel title="Other events" id="oe-title">
+            <Panel
+              title="Other events"
+              id="oe-title"
+              actions={<PanelLink to="/admin/live" icon="pulse" label="Open live events" />}
+            >
               <OtherEvents summary={data} />
             </Panel>
           </div>

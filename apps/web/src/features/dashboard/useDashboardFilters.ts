@@ -35,7 +35,6 @@ export function useDashboardFilters() {
 
   return {
     variant,
-    version: version === undefined ? null : Number(version),
     campaign: campaign ?? null,
     source: source ?? null,
     period: get('period') ?? 'all',

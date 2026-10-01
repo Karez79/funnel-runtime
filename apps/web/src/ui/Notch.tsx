@@ -18,6 +18,7 @@ export function NotchButton({
   pressed,
   muted = false,
   disabled = false,
+  tone = 'a',
   onClick,
 }: {
   /** One or two letters inside the circle. */
@@ -28,6 +29,8 @@ export function NotchButton({
   pressed: boolean;
   muted?: boolean;
   disabled?: boolean;
+  /** Badge color: the variant the counts belong to (B is always coral). */
+  tone?: 'a' | 'b';
   onClick: () => void;
 }) {
   return (
@@ -41,7 +44,13 @@ export function NotchButton({
       onClick={onClick}
     >
       <span className={muted ? `${styles.av} ${styles.muted}` : styles.av}>{short}</span>
-      <span className={muted ? `${styles.n} ${styles.w}` : styles.n}>{count}</span>
+      <span
+        className={
+          muted ? `${styles.n} ${styles.w}` : tone === 'b' ? `${styles.n} ${styles.nb}` : styles.n
+        }
+      >
+        {count}
+      </span>
     </button>
   );
 }

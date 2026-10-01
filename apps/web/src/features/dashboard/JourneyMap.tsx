@@ -121,13 +121,18 @@ export function JourneyMap({
   const columns = journeyColumns(summary.steps);
   const hot = biggestDrop(summary.steps, variant);
   const openStep = open ? summary.steps.find((s) => s.stepId === open.stepId) : undefined;
+  // Everything that moves a node: the curves are measured again whenever it changes.
+  const layoutKey = [
+    summary.version,
+    variant,
+    hot ?? '',
+    columns.map((c) => c.steps.map((s) => s.stepId).join(',')).join('|'),
+    summary.results.length,
+  ].join(':');
 
   return (
     <div className={styles.journey} ref={root}>
-      <JourneyLinks
-        root={root}
-        version={`${String(summary.version)}:${variant}:${hot ?? ''}:${String(columns.length)}`}
-      />
+      <JourneyLinks root={root} version={layoutKey} />
       {columns.map((column) => (
         <div key={column.label} className={styles.col} data-journey-col>
           <div className={styles.colbox} data-journey-box>

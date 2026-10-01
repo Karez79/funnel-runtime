@@ -2,12 +2,18 @@
 import { createBrowserRouter } from 'react-router';
 import { FunnelPage } from './features/funnel/FunnelPage.tsx';
 
+/** Nothing to show while the admin chunk loads (it is small and same-origin). */
+function AdminLoading() {
+  return null;
+}
+
 export const router = createBrowserRouter([
   { path: '/', element: <FunnelPage /> },
   { path: '/s/:stepId', element: <FunnelPage /> },
   {
     path: '/admin',
     // The admin is loaded on demand: the funnel bundle never carries the dashboard.
+    HydrateFallback: AdminLoading,
     lazy: async () => ({
       Component: (await import('./features/admin-shell/AdminLayout.tsx')).AdminLayout,
     }),
