@@ -8,7 +8,13 @@ import {
 } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { events, sessions } from '../../db/schema.ts';
-import { createTestApp, generatorHeaders, testClock, type TestApp } from '../../test/harness.ts';
+import {
+  adminAuth,
+  createTestApp,
+  generatorHeaders,
+  testClock,
+  type TestApp,
+} from '../../test/harness.ts';
 import { assignVariant, fnv1a32 } from './assignment.ts';
 import { createSessionsRepo } from './repo.ts';
 
@@ -372,6 +378,49 @@ describe('test 1: version pinning', () => {
     const fresh = await created(a);
     expect(fresh.session.funnelVersion).toBe(2);
     expect(fresh.funnel.sequence).toContain('meeting_hours');
+  });
+});
+
+describe('test 4: rollback keeps sessions and events', () => {
+  it('lets v2 sessions finish on v2 after a rollback to v1, and deletes nothing', async () => {
+    const a = await app();
+    const admin = { authorization: adminAuth };
+    await a.app.inject({ method: 'POST', url: '/api/admin/versions/2/publish', headers: admin });
+    const { session } = await created(a, { variantOverride: 'A' });
+    expect(session.funnelVersion).toBe(2);
+    const countEvents = () => a.handle.db.select().from(events).all().length;
+    const before = countEvents();
+
+    const rollback = await a.app.inject({
+      method: 'POST',
+      url: '/api/admin/rollback',
+      headers: admin,
+    });
+    expect(rollback.statusCode).toBe(200);
+    expect((await created(a)).session.funnelVersion).toBe(1);
+
+    const got = contract.getSession.response.parse((await read(a, session.id)).json());
+    expect(got.funnel.meta.version).toBe(2);
+    const saved = await save(a, session.id, { ...HYBRID, meeting_hours: 6 }, 0, {
+      history: [...V1_A_PATH, 'meeting_hours', 'async_maturity', 'tool_count'],
+    });
+    expect(saved.statusCode).toBe(200);
+    expect((await complete(a, session.id)).statusCode).toBe(200);
+
+    // The v2 session and its session_started are still there; only new rows were added.
+    expect(row(a, session.id)?.funnelVersion).toBe(2);
+    expect(countEvents()).toBe(before + 1);
+    const versions = await a.app.inject({
+      method: 'GET',
+      url: '/api/admin/versions',
+      headers: admin,
+    });
+    expect(versions.json()).toMatchObject({
+      versions: [
+        { version: 1, active: true },
+        { version: 2, state: 'published', totalSessions: 1 },
+      ],
+    });
   });
 });
 
