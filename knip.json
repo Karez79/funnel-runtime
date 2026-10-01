@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [".claude/hooks/*.mjs", "e2e/**/*.spec.ts"],
+      "playwright": {
+        "config": ["playwright.config.ts"]
+      }
+    },
+    "packages/shared": {
+      "project": ["src/**/*.ts"]
+    },
+    "apps/server": {
+      "project": ["src/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/main.tsx"],
+      "project": ["src/**/*.{ts,tsx}"]
+    }
+  },
+  "includeEntryExports": true
+}
