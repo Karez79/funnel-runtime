@@ -3,40 +3,45 @@
 // funnels, because that is what users of each variant actually see (an override can
 // change a text in B only). Lint turns the risky kinds of change into warnings, so the
 // list of changes is defined here once.
+import { z } from 'zod';
 import { conditionAnswers } from '../engine/conditions.ts';
 import type { ResultRule } from './schema.ts';
 import { resolveFunnel, type ResolvedFunnel } from '../engine/resolve.ts';
-import { VARIANTS, type FunnelConfig, type VariantKey } from './schema.ts';
+import { VARIANTS, type FunnelConfig } from './schema.ts';
 
-export type ChangeKind =
-  | 'experiment_changed'
-  | 'weight_changed'
-  | 'step_added'
-  | 'step_removed'
-  | 'step_order'
-  | 'step_changed'
-  | 'condition_changed'
-  | 'result_added'
-  | 'result_removed'
-  | 'result_changed'
-  | 'rule_added'
-  | 'rule_removed'
-  | 'rule_changed'
-  | 'rule_order'
-  | 'default_result_changed'
-  | 'event_added'
-  | 'event_removed'
-  | 'event_changed'
-  | 'privacy_changed'
-  | 'config_changed';
+const CHANGE_KINDS = [
+  'experiment_changed',
+  'weight_changed',
+  'step_added',
+  'step_removed',
+  'step_order',
+  'step_changed',
+  'condition_changed',
+  'result_added',
+  'result_removed',
+  'result_changed',
+  'rule_added',
+  'rule_removed',
+  'rule_changed',
+  'rule_order',
+  'default_result_changed',
+  'event_added',
+  'event_removed',
+  'event_changed',
+  'privacy_changed',
+  'config_changed',
+] as const;
+export type ChangeKind = (typeof CHANGE_KINDS)[number];
 
-export interface ConfigChange {
-  readonly kind: ChangeKind;
-  readonly variant?: VariantKey;
+/** Also the wire shape of the diff endpoint (6.1). */
+export const ConfigChangeSchema = z.object({
+  kind: z.enum(CHANGE_KINDS),
+  variant: z.enum(VARIANTS).optional(),
   /** Step, result, event or rule the change is about. */
-  readonly subject: string;
-  readonly message: string;
-}
+  subject: z.string(),
+  message: z.string(),
+});
+export type ConfigChange = z.infer<typeof ConfigChangeSchema>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

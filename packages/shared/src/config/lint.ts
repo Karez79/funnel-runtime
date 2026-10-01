@@ -2,6 +2,7 @@
 // config or the versions already stored. Errors block publishing; warnings are shown in
 // the admin before publishing but do not block. Per-variant checks run on the resolved
 // funnel, so a `visibleWhen` added or changed by a step override is checked as well.
+import { z } from 'zod';
 import { DomainError } from '../api/errors.ts';
 import { conditionLeaves } from '../engine/conditions.ts';
 import { resolveFunnel, type ResolvedFunnel } from '../engine/resolve.ts';
@@ -19,37 +20,43 @@ import {
   type Step,
 } from './schema.ts';
 
-export type LintErrorCode =
-  | 'schema_version'
-  | 'funnel_id'
-  | 'version_order'
-  | 'missing_step'
-  | 'duplicate_step'
-  | 'result_position'
-  | 'step_id_mismatch'
-  | 'result_id_mismatch'
-  | 'duplicate_answer_key'
-  | 'condition_order'
-  | 'unknown_operator'
-  | 'unknown_result'
-  | 'unknown_override'
-  | 'invalid_override'
-  | 'variant_weight'
-  | 'missing_base_event'
-  | 'privacy';
+const LINT_ERROR_CODES = [
+  'schema_version',
+  'funnel_id',
+  'version_order',
+  'missing_step',
+  'duplicate_step',
+  'result_position',
+  'step_id_mismatch',
+  'result_id_mismatch',
+  'duplicate_answer_key',
+  'condition_order',
+  'unknown_operator',
+  'unknown_result',
+  'unknown_override',
+  'invalid_override',
+  'variant_weight',
+  'missing_base_event',
+  'privacy',
+] as const;
+export type LintErrorCode = (typeof LINT_ERROR_CODES)[number];
 
-export type LintWarningCode =
-  'unknown_step_type' | 'unused_step' | 'unknown_answer' | 'operator_type' | 'config_change';
+const LINT_WARNING_CODES = [
+  'unknown_step_type',
+  'unused_step',
+  'unknown_answer',
+  'operator_type',
+  'config_change',
+] as const;
+export type LintWarningCode = (typeof LINT_WARNING_CODES)[number];
 
-export interface LintIssue<C extends string> {
-  readonly code: C;
-  readonly message: string;
-}
-
-export interface LintReport {
-  readonly errors: LintIssue<LintErrorCode>[];
-  readonly warnings: LintIssue<LintWarningCode>[];
-}
+/** Also the wire shape returned by upload and diff (6.1). */
+export const LintReportSchema = z.object({
+  errors: z.array(z.object({ code: z.enum(LINT_ERROR_CODES), message: z.string() })),
+  warnings: z.array(z.object({ code: z.enum(LINT_WARNING_CODES), message: z.string() })),
+});
+export type LintReport = z.infer<typeof LintReportSchema>;
+type LintIssue<C extends string> = { code: C; message: string };
 
 export interface LintContext {
   /**

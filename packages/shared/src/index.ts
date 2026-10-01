@@ -52,13 +52,7 @@ export type { CompletionResult, ValidationCode, ValidationResult } from './engin
 export { computeResult } from './engine/result.ts';
 
 export { lintConfig } from './config/lint.ts';
-export type {
-  LintContext,
-  LintErrorCode,
-  LintIssue,
-  LintReport,
-  LintWarningCode,
-} from './config/lint.ts';
+export type { LintContext, LintErrorCode, LintReport, LintWarningCode } from './config/lint.ts';
 
 export { diffConfigs } from './config/diff.ts';
 export type { ChangeKind, ConfigChange } from './config/diff.ts';
@@ -73,3 +67,27 @@ export {
 export type { ClientEvent, EventProperties } from './events/schema.ts';
 export { BASE_EVENTS, catalogEvent, filterProperties, isServerOnly } from './events/catalog.ts';
 export { answerKind } from './events/answerKind.ts';
+
+export {
+  GENERATOR_KEY_HEADER,
+  LIVE_STREAM,
+  LiveEntrySchema,
+  SessionStateSchema,
+  StateConflictDetailsSchema,
+} from './api/contract.ts';
+export type { LiveEntry, SessionResponse, SessionState, VersionSummary } from './api/contract.ts';
+export {
+  AnalyticsFiltersSchema,
+  AnalyticsSummarySchema,
+  VariantFilterSchema,
+} from './analytics/summary.ts';
+export type { AnalyticsFilters, AnalyticsSummary } from './analytics/summary.ts';
+export { ConfigChangeSchema } from './config/diff.ts';
+export { LintReportSchema } from './config/lint.ts';
+
+export {
+  ACTIVATION_ACTIONS,
+  TRAFFIC_TYPES,
+  VARIANT_SOURCES,
+  VERSION_STATES,
+} from './api/domain.ts';
