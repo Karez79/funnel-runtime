@@ -7,15 +7,18 @@ import { expect, test } from './fixtures.ts';
 
 test('after the generator the dashboard matches its ground truth', async ({ page }) => {
   test.setTimeout(120_000);
-  // A page of an earlier spec may still flush its outbox with sendBeacon when it closes;
-  // ingest rows carry no session, so such a straggler inside the run's window would be
-  // counted in Data quality. Let it land before the window opens.
+  // The window opens at the run's first session, so earlier specs' traffic is outside it,
+  // unless a page they closed is still delivering its outbox (sendBeacon) when the run
+  // starts: ingest rows carry no session, so its duplicates would count in Data quality.
+  // The pause lets such stragglers land before the run.
   await new Promise((resolve) => setTimeout(resolve, 1500));
   const run = await generateTraffic({
     baseUrl: E2E_BASE_URL,
     sessions: 100,
     seed: 7,
-    publishNext: true,
+    // admin.spec has already published v2 and rolled back, so there is no draft left;
+    // --publish-next is covered by scripts/verify.test.ts.
+    publishNext: false,
     generatorKey: E2E_GENERATOR_KEY,
     admin: { user: E2E_ADMIN.username, password: E2E_ADMIN.password },
   });

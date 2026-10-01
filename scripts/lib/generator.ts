@@ -9,14 +9,12 @@
 // items it broke on purpose), not to anything the server reports, so `verify` compares
 // two independent computations of the same definition. Every check is limited to the
 // run's time window on the server's own clock: it opens at the exact creation time of
-// the first session (its `expiresAt` minus the version's TTL, millisecond precision) and
-// closes one second after the last Date header, so traffic just before or after the run
-// is not counted.
+// the first session (`createdAt` of the session response) and closes one second after
+// the last Date header, so traffic just before or after the run is not counted.
 import {
   aggregate,
   AnalyticsFiltersSchema,
   coversSessions,
-  parseConfig,
   VARIANTS,
   type AnalyticsEvent,
   type AnalyticsSession,
@@ -73,7 +71,6 @@ const BATCH_SIZE = 20;
 const RESEND_SHARE = 0.1;
 /** The window closes one second past the last Date header (second precision). */
 const SECOND = 1000;
-const HOUR = 3_600_000;
 /** The campaign the campaign-filtered check uses. */
 const CHECK_CAMPAIGN = 'spring_launch';
 
@@ -128,15 +125,6 @@ export async function generateTraffic(options: GenerateOptions) {
   const onDate = (date: Date) => {
     window.last = Math.max(window.last, date.getTime());
   };
-  // Session TTL per version, to read the exact creation time back from `expiresAt`.
-  const ttlHours = new Map<number, number>();
-  const learnTtl = async () => {
-    const { data } = await call('activeVersion');
-    const parsed = parseConfig(data.config);
-    if (!parsed.ok) throw new Error(`active config does not parse: ${parsed.issues.join('; ')}`);
-    ttlHours.set(data.version.version, parsed.config.session.ttlHours);
-    return data.version;
-  };
   const runRng = mulberry32(options.seed);
   const delivery = createDelivery(call, {
     batchSize: BATCH_SIZE,
@@ -144,7 +132,7 @@ export async function generateTraffic(options: GenerateOptions) {
     onDate,
   });
 
-  const active = await learnTtl();
+  const active = (await call('activeVersion')).data.version;
   const funnelId = active.funnelId;
   const { versions } = (await call('listVersions')).data;
   const draft = options.publishNext
@@ -158,17 +146,7 @@ export async function generateTraffic(options: GenerateOptions) {
     );
   }
 
-  const ctx: Context = {
-    call,
-    delivery,
-    funnelId,
-    onDate,
-    ttlMs: (version) => {
-      const hours = ttlHours.get(version);
-      if (hours === undefined) throw new Error(`no TTL known for v${String(version)}`);
-      return hours * HOUR;
-    },
-  };
+  const ctx: Context = { call, delivery, funnelId, onDate };
   const visitors: Visitor[] = [];
   const { before, after } = plans(options, draft !== undefined);
   const concurrency = options.concurrency ?? 4;
@@ -187,7 +165,6 @@ export async function generateTraffic(options: GenerateOptions) {
       body: { note: 'pnpm generate --publish-next' },
     });
     published = draft.version;
-    await learnTtl();
     log(`Published v${String(draft.version)}; ${String(after.length)} new sessions start on it.`);
   }
   const paused = visitors.filter((v) => v.outcome === 'paused');

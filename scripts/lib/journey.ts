@@ -108,7 +108,7 @@ export interface Visitor {
   readonly experimentId: string;
   readonly variant: VariantKey;
   readonly funnelId: string;
-  /** Server time of creation, exact to the millisecond (from `expiresAt`). */
+  /** Server time of creation (the session response's `createdAt`). */
   readonly createdAt: string;
   funnel: ResolvedFunnel;
   state: SessionState;
@@ -131,8 +131,6 @@ export interface Context {
   readonly delivery: Delivery;
   readonly funnelId: string;
   readonly onDate: (date: Date) => void;
-  /** Session TTL of a version in ms: creation time = `expiresAt` − TTL. */
-  readonly ttlMs: (version: number) => number;
 }
 
 function answerFor(step: InteractiveStep, persona: Persona, rng: Rng): AnswerValue {
@@ -256,9 +254,7 @@ export async function startVisitor(ctx: Context, plan: Plan): Promise<Visitor> {
     experimentId: session.experimentId,
     variant: session.variant,
     funnelId: funnel.meta.funnelId,
-    createdAt: new Date(
-      Date.parse(session.expiresAt) - ctx.ttlMs(session.funnelVersion),
-    ).toISOString(),
+    createdAt: session.createdAt,
     funnel,
     state: session.state,
     rev: session.stateRev,
