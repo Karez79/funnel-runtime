@@ -82,6 +82,7 @@ test('the command palette opens with Control+K and navigates', async ({ page }) 
   const palette = page.getByRole('dialog', { name: 'Search and commands' });
   await expect(palette).toBeVisible();
   await page.keyboard.type('versions');
+  await expect(palette.getByRole('option', { name: 'Live events' })).toBeHidden();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Versions', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/admin\/versions$/);
@@ -120,4 +121,9 @@ test('Live events shows a resent batch as ignored duplicates', async ({ page, re
   await page.getByPlaceholder('Filter by session id').fill(full.id);
   await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Ignored duplicate', exact: true })).toBeVisible();
+
+  // The status filter lives in the URL (the bell and Data quality link here).
+  await page.goto(`/admin/live?status=duplicate&session=${full.id}`);
+  await expect(page.getByRole('cell', { name: 'Ignored duplicate', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeHidden();
 });

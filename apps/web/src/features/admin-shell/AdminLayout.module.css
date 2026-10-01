@@ -162,12 +162,6 @@
   min-width: 0;
 }
 
-@media (width <= 860px) {
-  .live {
-    display: none;
-  }
-}
-
 @media (width <= 720px) {
   .app {
     grid-template-columns: minmax(0, 1fr);

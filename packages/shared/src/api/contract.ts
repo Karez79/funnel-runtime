@@ -134,6 +134,12 @@ const ActivationResponse = z.object({ activation: Activation });
 
 /** One line of the Live events stream (`GET /api/live`, server-sent events). */
 export const LiveEntrySchema = z.object({
+  /**
+   * Increases with every entry the server publishes, also across restarts: the client's
+   * row identity. One batch can hold the same event several times with one receive time,
+   * so nothing else in the entry tells two results apart.
+   */
+  seq: z.number().int().positive(),
   receivedAt: Timestamp,
   eventId: z.string().nullable(),
   sessionId: z.string().nullable(),
@@ -145,6 +151,8 @@ export const LiveEntrySchema = z.object({
   reason: z.enum(REJECT_REASONS).nullable(),
 });
 export type LiveEntry = z.infer<typeof LiveEntrySchema>;
+/** An entry before the live bus numbers it. */
+export type LiveEntryDraft = Omit<LiveEntry, 'seq'>;
 
 export const contract = {
   health: {

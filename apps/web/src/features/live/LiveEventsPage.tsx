@@ -2,6 +2,7 @@
 // its status: stored, ignored duplicate or rejected with the reason. Seeing a resent
 // batch come back as "duplicate" here is the quickest proof that deduplication works.
 // Filters (status, session id) live in the URL, so the bell and the palette link here.
+import type { LiveEntry } from '@funnel/shared';
 import { useSearchParams } from 'react-router';
 import { formatTime } from '../../lib/format.ts';
 import { Card } from '../../ui/Card.tsx';
@@ -10,7 +11,7 @@ import { PageHeader } from '../../ui/PageHeader.tsx';
 import { Pill } from '../../ui/Pill.tsx';
 import { Mono, Table, Td, Th, VariantText } from '../../ui/Table.tsx';
 import styles from './LiveEventsPage.module.css';
-import { useLiveStream, type LiveRow } from './useLiveStream.ts';
+import { useLiveStream } from './useLiveStream.ts';
 
 const STATUS_FILTERS = [
   { value: null, label: 'All' },
@@ -19,7 +20,7 @@ const STATUS_FILTERS = [
   { value: 'rejected', label: 'Rejected' },
 ] as const;
 
-function Status({ row }: { row: LiveRow }) {
+function Status({ row }: { row: LiveEntry }) {
   if (row.status === 'accepted') return <Pill tone="blue">Stored</Pill>;
   if (row.status === 'duplicate') return <Pill tone="outline">Ignored duplicate</Pill>;
   return <Pill tone="coral">Rejected: {(row.reason ?? 'invalid').replaceAll('_', ' ')}</Pill>;
@@ -41,7 +42,7 @@ export function LiveEventsPage() {
   const shown = live.rows.filter(
     (r) =>
       (status === null || r.status === status) &&
-      (session === '' || (r.sessionId ?? '').toLowerCase().startsWith(session)),
+      (session === '' || (r.sessionId ?? '').toLowerCase().includes(session)),
   );
 
   const subtitle = live.paused
@@ -112,7 +113,7 @@ export function LiveEventsPage() {
             </thead>
             <tbody className={styles.stream}>
               {shown.map((r) => (
-                <tr key={r.key}>
+                <tr key={r.seq}>
                   <Td>
                     <Mono>{formatTime(r.receivedAt)}</Mono>
                   </Td>

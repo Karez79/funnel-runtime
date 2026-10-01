@@ -3,13 +3,29 @@
 // stream is open but quiet and "Offline" when it is not. The pulse is the one ambient
 // animation the design allows; reduced motion stops it.
 import { LIVE_STREAM, LiveEntrySchema } from '@funnel/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router';
 import styles from './AdminLayout.module.css';
 
 const RECENT_MS = 60_000;
+/** Below this width the top bar has no room for the indicator (reference: ≤860px). */
+const NARROW = '(width <= 860px)';
 
+function subscribeNarrow(onChange: () => void) {
+  const query = window.matchMedia(NARROW);
+  query.addEventListener('change', onChange);
+  return () => {
+    query.removeEventListener('change', onChange);
+  };
+}
+
+/** Not even mounted on narrow screens, so no stream is held open for a hidden label. */
 export function LiveIndicator() {
+  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches);
+  return narrow ? null : <Indicator />;
+}
+
+function Indicator() {
   const [open, setOpen] = useState(false);
   const [lastAt, setLastAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());

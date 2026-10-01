@@ -163,6 +163,7 @@ describe('response schemas encode the remaining shapes', () => {
       encodes(contract.listVersions.response, { versions: [version], activations: [activation] }),
     ).toBe(true);
     const live = {
+      seq: 1_759_312_800_000_000,
       receivedAt: version.createdAt,
       eventId: 'e',
       sessionId: 's',
@@ -174,6 +175,8 @@ describe('response schemas encode the remaining shapes', () => {
       reason: null,
     };
     expect(encodes(LiveEntrySchema, live)).toBe(true);
+    // Without seq a row has no identity on the Live page.
+    expect(encodes(LiveEntrySchema, { ...live, seq: undefined })).toBe(false);
     const batch = {
       results: [
         { event_id: 'e', status: 'accepted' },

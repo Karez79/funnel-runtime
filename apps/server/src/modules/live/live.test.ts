@@ -2,7 +2,7 @@ import { connect } from 'node:net';
 import Fastify from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it } from 'vitest';
-import { contract, LiveEntrySchema, type LiveEntry } from '@funnel/shared';
+import { contract, LiveEntrySchema, type LiveEntry, type LiveEntryDraft } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { sseStreams } from '../../plugins/sse.ts';
 import { adminAuth, createTestApp, type TestApp } from '../../test/harness.ts';
@@ -14,7 +14,7 @@ afterEach(async () => {
   t = undefined;
 });
 
-function entry(n: number): LiveEntry {
+function entry(n: number): LiveEntryDraft {
   return {
     receivedAt: '2026-10-01T12:00:00.000Z',
     eventId: `e-${String(n)}`,
@@ -76,6 +76,20 @@ describe('live bus', () => {
     const bus = createLiveBus(3);
     bus.publish([1, 2, 3, 4, 5].map(entry));
     expect(bus.recent().map((e) => e.eventId)).toEqual(['e-3', 'e-4', 'e-5']);
+  });
+
+  it('numbers entries with a seq that only grows, also across restarts', () => {
+    let clock = 1_000;
+    const bus = createLiveBus(10, () => clock);
+    // The same event three times in one batch: three entries, three numbers.
+    bus.publish([entry(1), entry(1), entry(1)]);
+    const first = bus.recent().map((e) => e.seq);
+    expect(first).toEqual([1_000_000, 1_000_001, 1_000_002]);
+    // A restarted server (a new bus) a moment later continues above the old numbers.
+    clock = 1_001;
+    const restarted = createLiveBus(10, () => clock);
+    restarted.publish([entry(2)]);
+    expect(restarted.recent()[0]?.seq).toBeGreaterThan(Math.max(...first));
   });
 
   it('delivers new entries to subscribers until they unsubscribe', () => {
@@ -165,6 +179,20 @@ describe('GET /api/live', () => {
     expect(t.services.live.subscribers()).toBe(1);
     controller.abort();
     await eventually(() => t?.services.live.subscribers() === 0);
+  });
+
+  it('gives every result of a batch its own entry, even for the same event', async () => {
+    t = await createTestApp();
+    const id = uuidv7();
+    const item = { event_id: id, name: 'nope' };
+    await t.app.inject({
+      method: 'POST',
+      url: '/api/events/batch',
+      payload: { events: [item, item, item] },
+    });
+    const entries = t.services.live.recent();
+    expect(entries.map((e) => e.eventId)).toEqual([id, id, id]);
+    expect(new Set(entries.map((e) => e.seq)).size).toBe(3);
   });
 
   it('cuts untrusted strings of rejected items short', async () => {
