@@ -30,3 +30,6 @@ export type {
   Step,
   VariantKey,
 } from './config/schema.ts';
+
+export { AnswerValueSchema, conditionAnswers, evaluateCondition } from './engine/conditions.ts';
+export type { Answers, AnswerValue, EvaluateOptions } from './engine/conditions.ts';
