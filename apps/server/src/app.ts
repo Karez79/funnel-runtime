@@ -32,6 +32,7 @@ export type AppEnv = Pick<
   | 'logLevel'
   | 'rateLimits'
   | 'webDist'
+  | 'clientIpHeader'
 >;
 
 const MINUTE_MS = 60_000;
@@ -49,16 +50,18 @@ export function createSharedServices(db: Db, clock: Clock = systemClock): Shared
   return { versions: createVersionsService(createVersionsRepo(db), clock) };
 }
 
+/** `shared` is required so a second versions service with its own cache cannot slip in. */
 export async function buildApp(
   env: AppEnv,
   db: Db,
+  shared: SharedServices,
   clock: Clock = systemClock,
-  shared: SharedServices = createSharedServices(db, clock),
 ): Promise<App> {
   const app = Fastify({
     logger: { level: env.logLevel },
-    // Railway terminates TLS in front of us; client IPs (rate limits) come from the proxy.
-    trustProxy: true,
+    // X-Forwarded-For is client-controlled on its left side; the client IP for rate
+    // limits comes from the header the edge sets itself (env CLIENT_IP_HEADER).
+    trustProxy: false,
     // The largest allowed body (an event batch, CLAUDE.md 6.0); routes may lower it.
     bodyLimit: 256 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
@@ -66,7 +69,7 @@ export async function buildApp(
   app.setSerializerCompiler(serializerCompiler);
   errorsPlugin(app);
 
-  await securityPlugin(app, env.generatorKey);
+  await securityPlugin(app, env.generatorKey, env.clientIpHeader);
   app.decorate('adminGuard', basicAuth(env.adminUser, env.adminPassword));
 
   healthRoutes(app, createHealthService(createHealthRepo(db), env.buildVersion));

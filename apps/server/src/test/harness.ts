@@ -16,6 +16,7 @@ export const TEST_ENV: AppEnv = {
   generatorKey: 'generator-secret',
   // High enough that only the rate-limit tests themselves ever hit it.
   rateLimits: { sessions: 1000 },
+  clientIpHeader: null,
   buildVersion: 'test',
   logLevel: 'silent',
   // No web build in API tests: unknown paths must answer with the JSON 404.
@@ -58,7 +59,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   runMigrations(handle.db);
   if (seed) seedIfEmpty(handle.db, clock);
   const services = createSharedServices(handle.db, clock);
-  const app = await buildApp({ ...TEST_ENV, ...env }, handle.db, clock, services);
+  const app = await buildApp({ ...TEST_ENV, ...env }, handle.db, services, clock);
   return {
     app,
     handle,

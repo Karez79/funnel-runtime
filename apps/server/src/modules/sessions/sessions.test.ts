@@ -68,8 +68,19 @@ describe('test 2: variant stability', () => {
   });
 
   it('splits 10 000 uuid v7 ids 50±2%', () => {
+    // Fixed time and seeded random bytes: the same 10 000 ids on every run.
+    let seed = 42;
+    const nextByte = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31;
+      return seed % 256;
+    };
+    const start = Date.parse('2026-10-01T00:00:00Z');
     let a = 0;
-    for (let i = 0; i < 10_000; i++) if (assignVariant(uuidv7(), EXPERIMENT_V1, HALF) === 'A') a++;
+    for (let i = 0; i < 10_000; i++) {
+      const random = Uint8Array.from({ length: 16 }, nextByte);
+      const id = uuidv7({ msecs: start + i, random });
+      if (assignVariant(id, EXPERIMENT_V1, HALF) === 'A') a++;
+    }
     expect(a / 10_000).toBeGreaterThanOrEqual(0.48);
     expect(a / 10_000).toBeLessThanOrEqual(0.52);
   });
@@ -233,9 +244,21 @@ describe('POST /api/sessions', () => {
     expect(limited.statusCode).toBe(429);
     expect(limited.json()).toMatchObject({ error: { code: 'rate_limited' } });
     expect((await create(a, {}, generatorHeaders)).statusCode).toBe(201);
+    // A forged X-Forwarded-For is not a new client.
+    const forged = await create(a, {}, { 'x-forwarded-for': '203.0.113.9' });
+    expect(forged.statusCode).toBe(429);
     // Reads are not limited.
     const res = await a.app.inject({ method: 'GET', url: `/api/funnel/${FUNNEL}/active` });
     expect(res.statusCode).toBe(200);
+  });
+
+  it('keys the limit by the edge client-IP header when configured', async () => {
+    const a = await app({ env: { rateLimits: { sessions: 1 }, clientIpHeader: 'x-real-ip' } });
+    const from = (ip: string, xff = '198.51.100.1') =>
+      create(a, {}, { 'x-real-ip': ip, 'x-forwarded-for': xff });
+    expect((await from('192.0.2.1')).statusCode).toBe(201);
+    expect((await from('192.0.2.1', '203.0.113.7')).statusCode).toBe(429);
+    expect((await from('192.0.2.2')).statusCode).toBe(201);
   });
 });
 
