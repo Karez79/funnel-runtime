@@ -1,6 +1,7 @@
-// Funnel e2e (CLAUDE.md 12) against the production build on configs/funnel-v1.json, the
-// only version seeded before Phase 7. `?variant=` pins the variant (QA override), so
-// step orders are known. Each test runs in a fresh browser context, so a new session.
+// Funnel e2e (CLAUDE.md 12) against the production build. The seed publishes
+// configs/funnel-v1.json (active) and loads funnel-v2.json as a draft; live sessions run
+// on v1, the preview test uses the v2 draft. `?variant=` pins the variant (QA override),
+// so step orders are known. Each test runs in a fresh browser context: a new session.
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 
@@ -72,7 +73,10 @@ test('the result follows the answers after Back and a changed answer', async ({ 
   await expect(heading(page)).toHaveText('Async-native');
 });
 
-test('rapid Enter presses move one step at a time and stay consistent', async ({ page }) => {
+test('rapid Enter presses move one step at a time and stay consistent', async ({
+  page,
+  request,
+}) => {
   await start(page, 'A');
   await number(page, 7, /work_mode/);
   await choose(page, 'Fully remote', /priorities/);
@@ -94,10 +98,35 @@ test('rapid Enter presses move one step at a time and stay consistent', async ({
   await page.waitForLoadState('networkidle');
   const reached = /\/s\/([a-z_]+)/.exec(page.url())?.[1];
   const shown = await heading(page).textContent();
+  // The server has the step that is on screen.
+  const id: unknown = JSON.parse(
+    (await page.evaluate(() => localStorage.getItem('funnel:workstyle-planner:session'))) ?? 'null',
+  );
+  expect(typeof id).toBe('string');
+  const stored: unknown = await (await request.get(`/api/sessions/${String(id)}`)).json();
+  expect(stored).toMatchObject({ session: { state: { currentStepId: reached } } });
   await page.reload();
-  // The step on screen before the reload is the step in the URL and on the server.
   await expect(page).toHaveURL(new RegExp(`/s/${reached ?? 'missing'}`));
   await expect(heading(page)).toHaveText(shown ?? 'missing');
+});
+
+test('after a click on Back, a digit and Enter change the answer and continue', async ({
+  page,
+}) => {
+  await start(page, 'A');
+  await number(page, 9, /work_mode/);
+  await choose(page, 'Hybrid', /priorities/);
+  await page.getByRole('button', { name: 'Back' }).click();
+  await expect(heading(page)).toHaveText('Where does the team work most of the time?');
+  await page.keyboard.press('3');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/priorities/);
+  await expect(progress(page)).toHaveAttribute('aria-valuetext', '3 of 7');
+  await page.getByRole('button', { name: 'Back' }).click();
+  await expect(page.getByRole('radio', { name: 'Mostly in the office' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 });
 
 test('a refresh in the middle keeps the step and the answers', async ({ page }) => {
@@ -169,15 +198,39 @@ test('progress counts only visible questions: remote has fewer than hybrid', asy
 
 test('an invalid answer shows the config message and is not saved', async ({ page }) => {
   await start(page, 'A');
-  const save = page.waitForRequest((r) => r.method() === 'PUT');
-  await save;
+  await expect(page).toHaveURL(/team_size/);
+  await page.waitForLoadState('networkidle');
+  const saves: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'PUT') saves.push(r.postData() ?? '');
+  });
   await page.getByRole('spinbutton').fill('500');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert')).toHaveText('For this demo, enter a value up to 200.');
   await expect(page).toHaveURL(/team_size/);
   await page.getByRole('spinbutton').fill('20');
   await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(saves).toEqual([]);
 });
+
+/** Answers whatever step is shown (first option, the lowest number) until the result. */
+async function walkToResult(page: Page) {
+  for (let i = 0; i < 15; i += 1) {
+    const title = await heading(page).textContent();
+    if (await page.getByRole('button', { name: /action list|changes/ }).count()) return;
+    if (await page.getByRole('spinbutton').count()) {
+      const min = await page.getByRole('spinbutton').getAttribute('min');
+      await page.getByRole('spinbutton').fill(min === null || min === '0' ? '1' : min);
+    } else if (await page.getByRole('radio').count()) {
+      await page.getByRole('radio').first().click();
+    } else if (await page.getByRole('checkbox').count()) {
+      await page.getByRole('checkbox').first().click();
+    }
+    await page.getByRole('button').last().click();
+    await expect(heading(page)).not.toHaveText(title ?? '');
+  }
+  throw new Error('the result was not reached');
+}
 
 test('preview runs a version in memory: no session, no events', async ({ page, request }) => {
   const before = await request.get('/api/admin/versions');
@@ -191,14 +244,18 @@ test('preview runs a version in memory: no session, no events', async ({ page, r
     if (r.method() !== 'GET') writes.push(`${r.method()} ${r.url()}`);
   });
 
-  await page.goto('/admin/preview/1?variant=B');
+  // The draft v2: preview works on a version that is not active.
+  await page.goto('/admin/preview/2?variant=B');
   await expect(page.getByText('Preview, not tracked')).toBeVisible();
-  await page.getByRole('button', { name: 'Show me' }).click();
-  await choose(page, 'Fully remote', /preview/);
-  await expect(heading(page)).toHaveText('How far apart are your working hours?');
-  await page.getByRole('radio', { name: 'More than 6 hours apart' }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(heading(page)).toHaveText('How many people are on the team?');
+  await expect(page.getByText('Version 2, variant B')).toBeVisible();
+  // v2 variant B texts, straight from the config.
+  await expect(heading(page)).toHaveText('Is your team losing time to the way it works?');
+  await page.getByRole('button', { name: 'Check our setup' }).click();
+  await expect(heading(page)).toHaveText('Where does the team work most of the time?');
+  await walkToResult(page);
+  const cta = page.getByRole('button', { name: /action list|changes/ });
+  await cta.click();
+  await expect(cta).toHaveAttribute('aria-expanded', 'true');
 
   const after = await request.get('/api/admin/versions');
   expect(total(await after.json())).toBe(sessionsBefore);

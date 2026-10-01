@@ -7,6 +7,7 @@
 // computed from the step the user is leaving. Actions arriving meanwhile are dropped, and
 // the transition commits exactly the state that was saved and tracked (`set`), so the
 // screen, the saved state, the URL and the events always describe the same step.
+import type { SessionState } from '@funnel/shared';
 import { useReducer, useRef } from 'react';
 import { withViewTransition } from '../../lib/viewTransition.ts';
 import {
@@ -34,6 +35,8 @@ interface MachineOptions {
 export function useFunnelMachine(init: () => FunnelState, { track, onMove }: MachineOptions) {
   const [state, dispatch] = useReducer(funnelReducer, undefined, init);
   const moving = useRef(false);
+  /** Bumped when the server's state is adopted: a move computed before it is dropped. */
+  const epoch = useRef(0);
 
   function act(action: FunnelAction, options: MoveOptions = {}) {
     if (moving.current) return;
@@ -44,14 +47,16 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
       return;
     }
     moving.current = true;
+    const startedAt = epoch.current;
     for (const event of transitionEvents(state, next, action)) {
       track(event.name, event.stepId, event.properties);
     }
     withViewTransition(
       () => {
+        moving.current = false;
+        if (startedAt !== epoch.current) return;
         dispatch({ type: 'set', state: next });
         onMove?.(next, options);
-        moving.current = false;
       },
       { back: action.type === 'back' },
     );
@@ -60,5 +65,11 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
   /** A move is being rendered; callers that start moves another way wait for it. */
   const isMoving = () => moving.current;
 
-  return { state, act, dispatch, isMoving };
+  /** Show the server's state (409), cancelling a move that is still rendering. */
+  const adopt = (saved: SessionState) => {
+    epoch.current += 1;
+    dispatch({ type: 'adopt', state: saved });
+  };
+
+  return { state, act, adopt, isMoving };
 }

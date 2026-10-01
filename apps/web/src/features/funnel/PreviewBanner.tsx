@@ -1,3 +1,4 @@
+import type { VariantKey } from '@funnel/shared';
 import type { ReactNode } from 'react';
 import styles from './PreviewBanner.module.css';
 
@@ -8,7 +9,7 @@ export function PreviewBanner({
   children,
 }: {
   version: number;
-  variant: string;
+  variant: VariantKey;
   children: ReactNode;
 }) {
   return (
