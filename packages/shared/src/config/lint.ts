@@ -126,14 +126,14 @@ function lintDefinitions(config: FunnelConfig, out: Collector): void {
     if (result.id !== key) out.error('result_id_mismatch', `result "${key}" has id "${result.id}"`);
   }
   for (const [i, rule] of config.resultRules.entries()) {
-    if (!(rule.resultId in config.results)) {
+    if (!Object.hasOwn(config.results, rule.resultId)) {
       out.error(
         'unknown_result',
         `resultRules[${String(i)}] points to unknown result "${rule.resultId}"`,
       );
     }
   }
-  if (!(config.defaultResultId in config.results)) {
+  if (!Object.hasOwn(config.results, config.defaultResultId)) {
     out.error('unknown_result', `defaultResultId "${config.defaultResultId}" does not exist`);
   }
   if (config.events.privacy.storeRawAnswers) {
@@ -158,12 +158,12 @@ function lintSequence(config: FunnelConfig, variant: (typeof VARIANTS)[number], 
     config.experiment.variants[variant];
   if (!(weight > 0)) out.error('variant_weight', `variant ${variant} has weight ${String(weight)}`);
   for (const key of Object.keys(stepOverrides)) {
-    if (!(key in config.steps)) {
+    if (!Object.hasOwn(config.steps, key)) {
       out.error('unknown_override', `variant ${variant} overrides unknown step "${key}"`);
     }
   }
   for (const key of Object.keys(resultOverrides)) {
-    if (!(key in config.results)) {
+    if (!Object.hasOwn(config.results, key)) {
       out.error('unknown_override', `variant ${variant} overrides unknown result "${key}"`);
     }
   }
@@ -171,7 +171,7 @@ function lintSequence(config: FunnelConfig, variant: (typeof VARIANTS)[number], 
   for (const id of stepSequence) {
     if (seen.has(id)) out.error('duplicate_step', `variant ${variant} lists "${id}" twice`);
     seen.add(id);
-    if (!(id in config.steps)) {
+    if (!Object.hasOwn(config.steps, id)) {
       out.error('missing_step', `variant ${variant} uses unknown step "${id}"`);
     }
   }

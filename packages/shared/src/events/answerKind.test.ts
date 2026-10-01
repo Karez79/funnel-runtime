@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { v1 } from '../../test/fixtures.ts';
 import type { Step } from '../config/schema.ts';
-import { answerKind } from './answerKind.ts';
+import { answerKind, isAnswerKind } from './answerKind.ts';
 
 const steps = v1().steps;
 const step = (id: string): Step => {
@@ -24,5 +24,16 @@ describe('answerKind', () => {
 
   it('counts zero for a non-array multi-select value', () => {
     expect(answerKind(step('priorities'), 'speed')).toBe('multi_select:0');
+  });
+});
+
+describe('isAnswerKind', () => {
+  it('accepts exactly what answerKind produces', () => {
+    for (const id of ['work_mode', 'priorities', 'team_size']) {
+      expect(isAnswerKind(answerKind(step(id), ['a', 'b']))).toBe(true);
+    }
+    for (const value of ['remote', 'multi_select:', 'multi_select:x', 'number ', 3, null]) {
+      expect(isAnswerKind(value)).toBe(false);
+    }
   });
 });

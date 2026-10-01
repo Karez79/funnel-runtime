@@ -2,6 +2,7 @@
 // each version; the seven base events are the floor every version must keep, because
 // the analytics (11.2) is defined in terms of them.
 import type { EventDefinition, FunnelConfig } from '../config/schema.ts';
+import { isAnswerKind } from './answerKind.ts';
 import type { EventProperties } from './schema.ts';
 
 export const BASE_EVENTS = [
@@ -35,8 +36,8 @@ type Privacy = FunnelConfig['events']['privacy'];
  * Property values with a known format. `answer_kind` is the one property derived from an
  * answer, so anything but a kind (a raw value sent under that key) is dropped.
  */
-const PROPERTY_FORMATS: Readonly<Record<string, RegExp>> = {
-  answer_kind: /^(single_select|multi_select:\d+|number)$/,
+const PROPERTY_CHECKS: Readonly<Record<string, (value: unknown) => boolean>> = {
+  answer_kind: isAnswerKind,
 };
 
 const isScalar = (value: unknown): value is EventProperties[string] =>
@@ -58,8 +59,8 @@ export function filterProperties(
   const kept: EventProperties = {};
   const dropped: string[] = [];
   for (const [key, value] of Object.entries(properties)) {
-    const format = Object.hasOwn(PROPERTY_FORMATS, key) ? PROPERTY_FORMATS[key] : undefined;
-    const valid = isScalar(value) && (!format || (typeof value === 'string' && format.test(value)));
+    const check = Object.hasOwn(PROPERTY_CHECKS, key) ? PROPERTY_CHECKS[key] : undefined;
+    const valid = isScalar(value) && (!check || check(value));
     if (allowed.has(key) && valid) kept[key] = value;
     else dropped.push(key);
   }

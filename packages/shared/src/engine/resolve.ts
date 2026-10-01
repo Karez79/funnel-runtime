@@ -63,7 +63,7 @@ export function resolveFunnel(config: FunnelConfig, variant: VariantKey): Resolv
 
   const steps: Record<string, Step> = {};
   for (const id of stepSequence) {
-    const base = config.steps[id];
+    const base = Object.hasOwn(config.steps, id) ? config.steps[id] : undefined;
     if (!base) {
       throw new DomainError('unprocessable', `step "${id}" of variant ${variant} does not exist`);
     }

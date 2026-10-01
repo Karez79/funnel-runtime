@@ -30,7 +30,8 @@ function walk(resolved: ResolvedFunnel, answers: Answers, options: EvaluateOptio
     path.push(id);
     if (!isInteractive(step)) continue;
     const key = answerKey(step);
-    const value = answers[key];
+    // Own keys only: an answer key like `constructor` must not read Object.prototype.
+    const value = Object.hasOwn(answers, key) ? answers[key] : undefined;
     if (value !== undefined) visible[key] = value;
   }
   return { path, answers: visible };
