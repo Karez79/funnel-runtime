@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { v1 } from '../../test/fixtures.ts';
 import { isKnownStep, type Step } from '../config/schema.ts';
 import type { Answers } from './conditions.ts';
@@ -176,6 +176,18 @@ describe('validateCompletion', () => {
 
   it('ignores a hidden step and its stale answer', () => {
     expect(validateCompletion(a, { ...complete, office_days: 99 })).toEqual({ ok: true });
+  });
+
+  it('passes the warn callback to visibility conditions', () => {
+    const config = v1();
+    const office = config.steps['office_days'];
+    if (!office) throw new Error('fixture');
+    office.visibleWhen = { answer: 'work_mode', operator: 'matches', value: 'x' };
+    const warn = vi.fn();
+    expect(validateCompletion(resolveFunnel(config, 'A'), complete, { warn })).toEqual({
+      ok: true,
+    });
+    expect(warn).toHaveBeenCalled();
   });
 
   it('names the first visible step that is missing or invalid', () => {
