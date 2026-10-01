@@ -8,11 +8,15 @@
 // what it did (sessions it created, events it delivered first, copies it sent again,
 // items it broke on purpose), not to anything the server reports, so `verify` compares
 // two independent computations of the same definition. Every check is limited to the
-// run's time window, taken from the server's own clock (Date headers).
+// run's time window on the server's own clock: it opens at the exact creation time of
+// the first session (its `expiresAt` minus the version's TTL, millisecond precision) and
+// closes one second after the last Date header, so traffic just before or after the run
+// is not counted.
 import {
   aggregate,
   AnalyticsFiltersSchema,
   coversSessions,
+  parseConfig,
   VARIANTS,
   type AnalyticsEvent,
   type AnalyticsSession,
@@ -67,8 +71,9 @@ const BACK_SHARE = 0.2;
 const MISMATCH_EVERY = 40;
 const BATCH_SIZE = 20;
 const RESEND_SHARE = 0.1;
-/** The ground truth window reaches one second past the Date headers (second precision). */
+/** The window closes one second past the last Date header (second precision). */
 const SECOND = 1000;
+const HOUR = 3_600_000;
 /** The campaign the campaign-filtered check uses. */
 const CHECK_CAMPAIGN = 'spring_launch';
 
@@ -119,10 +124,18 @@ export async function generateTraffic(options: GenerateOptions) {
   }
   const log = options.log ?? (() => undefined);
   const call = createClient(options);
-  const window = { first: Number.POSITIVE_INFINITY, last: 0 };
+  const window = { last: 0 };
   const onDate = (date: Date) => {
-    window.first = Math.min(window.first, date.getTime());
     window.last = Math.max(window.last, date.getTime());
+  };
+  // Session TTL per version, to read the exact creation time back from `expiresAt`.
+  const ttlHours = new Map<number, number>();
+  const learnTtl = async () => {
+    const { data } = await call('activeVersion');
+    const parsed = parseConfig(data.config);
+    if (!parsed.ok) throw new Error(`active config does not parse: ${parsed.issues.join('; ')}`);
+    ttlHours.set(data.version.version, parsed.config.session.ttlHours);
+    return data.version;
   };
   const runRng = mulberry32(options.seed);
   const delivery = createDelivery(call, {
@@ -131,7 +144,7 @@ export async function generateTraffic(options: GenerateOptions) {
     onDate,
   });
 
-  const active = (await call('activeVersion')).data.version;
+  const active = await learnTtl();
   const funnelId = active.funnelId;
   const { versions } = (await call('listVersions')).data;
   const draft = options.publishNext
@@ -145,7 +158,17 @@ export async function generateTraffic(options: GenerateOptions) {
     );
   }
 
-  const ctx: Context = { call, delivery, funnelId, onDate };
+  const ctx: Context = {
+    call,
+    delivery,
+    funnelId,
+    onDate,
+    ttlMs: (version) => {
+      const hours = ttlHours.get(version);
+      if (hours === undefined) throw new Error(`no TTL known for v${String(version)}`);
+      return hours * HOUR;
+    },
+  };
   const visitors: Visitor[] = [];
   const { before, after } = plans(options, draft !== undefined);
   const concurrency = options.concurrency ?? 4;
@@ -164,6 +187,7 @@ export async function generateTraffic(options: GenerateOptions) {
       body: { note: 'pnpm generate --publish-next' },
     });
     published = draft.version;
+    await learnTtl();
     log(`Published v${String(draft.version)}; ${String(after.length)} new sessions start on it.`);
   }
   const paused = visitors.filter((v) => v.outcome === 'paused');
@@ -217,7 +241,7 @@ async function groundTruth(
   call: ReturnType<typeof createClient>,
   visitors: readonly Visitor[],
   report: Report,
-  window: { first: number; last: number },
+  window: { last: number },
 ): Promise<{ truth: GroundTruth; skipped: string[] }> {
   const listed = (await call('listVersions')).data.versions.filter((v) => v.state === 'published');
   const versions: AnalyticsVersion[] = [];
@@ -267,7 +291,7 @@ async function groundTruth(
     })),
   ];
 
-  const from = new Date(window.first - SECOND).toISOString();
+  const from = visitors.map((v) => v.createdAt).sort()[0] ?? new Date(window.last).toISOString();
   const to = new Date(window.last + SECOND).toISOString();
   const touched = [...new Set(visitors.map((v) => v.version))].sort((a, b) => a - b);
   const checks = touched.flatMap((version) => {
