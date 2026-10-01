@@ -17,9 +17,9 @@
 3. **Back.** Кнопка Back, `Esc` или браузерная «назад» возвращают на предыдущий видимый шаг; выберите `remote` в вопросе о формате работы, и шаг `office_days` исчезнет из пути, а «N of M» в прогрессе уменьшится.
 4. **Вариант B.** Откройте [`/?variant=B`](https://app-production-183d.up.railway.app/?variant=B): порядок вопросов и тексты варианта B. Override действует только при создании сессии и помечает её как QA.
 5. **Debug.** Добавьте [`?debug=1`](https://app-production-183d.up.railway.app/?debug=1) (или Shift+D): id сессии, версия, вариант и его источник, видимый путь, `stateRev`, длина outbox, кнопка «Reset session».
-6. **Публикация и откат.** В [Versions](https://app-production-183d.up.railway.app/admin/versions) откройте «Review changes» у черновика (diff и линт относительно активной), нажмите «Publish version N», затем «Roll back to version N». Новые сессии стартуют на активной версии, начатые остаются на своей.
+6. **Публикация и откат.** В [Versions](https://app-production-183d.up.railway.app/admin/versions): прогон генератора на проде уже опубликовал v2, поэтому нажмите «Roll back to version 1» (в подтверждении видно, сколько сессий останется на v2), затем «Activate version 2». Новые сессии стартуют на активной версии, начатые остаются на своей. Черновик с «Review changes» (diff и линт относительно активной) и «Publish version N» появится, когда загружен новый конфиг: так публикуется v3 во второй итерации.
 7. **Live events.** Откройте [Live events](https://app-production-183d.up.railway.app/admin/live) и пройдите воронку в соседней вкладке: строки `accepted` появляются в реальном времени, повторно отправленные события — `duplicate`, отклонённые — `rejected` с причиной.
-8. **Сверка с генератором.** Запустите генератор против прода (см. [ниже](#генератор-против-публичного-url)); в [Dashboard](https://app-production-183d.up.railway.app/admin) в панели Data quality появится строка «Matches generator ground truth: Yes».
+8. **Сверка с генератором.** В [Dashboard](https://app-production-183d.up.railway.app/admin) в панели Data quality строка «Matches generator ground truth (last run, any filter)» показывает **Yes**: сервер пересчитал проверки последнего прогона генератора на проде и сравнил с его ground truth. Повторить локально: `pnpm dev`, затем `pnpm generate --publish-next` и `pnpm verify` (см. [ниже](#локальный-запуск)).
 
 ## Соответствие заданию
 
@@ -72,7 +72,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant B as Браузер
-  participant API as POST /api/sessions
+  participant API as sessions API
   participant V as versions service
   participant DB as SQLite
   B->>B: localStorage: id сессии есть?
@@ -147,7 +147,7 @@ sequenceDiagram
 
 ## Локальный запуск
 
-Нужны Node 24.2+ (`.nvmrc`) и pnpm из `packageManager` (`corepack enable`).
+Нужны Node 24 (не ниже 24.2, см. `engines` в `package.json`) и pnpm из `packageManager` (`corepack enable`).
 
 ```sh
 pnpm i
@@ -241,16 +241,16 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | 0 — каркас, ворота, деплой          | 2026-10-01 16:16   | 2026-10-01 17:48   | монорепо, ворота качества, CI, Docker, Railway, прод `/api/health`              |
 | 1 — shared-движок                   | 2026-10-01 19:09   | 2026-10-01 20:45   | конфиг, условия, resolve, навигация, валидация, результат, линт, diff, контракт |
 | 2 — сервер: версии и сессии         | 2026-10-01 22:18   | 2026-10-01 23:47   | версии и журнал активаций, сессии с закреплением, тесты 1, 2, 4                 |
-| 3 — воронка на фронте               | 2026-10-02 00:03   | 2026-10-02 02:10 ¹ | все типы шагов, URL и Back, прогресс, результат, debug-оверлей, предпросмотр    |
+| 3 — воронка на фронте               | 2026-10-02 00:03   | 2026-10-02 02:15 ¹ | все типы шагов, URL и Back, прогресс, результат, debug-оверлей, предпросмотр    |
 | 4 — события                         | 2026-10-02 00:05   | 2026-10-02 00:49 ¹ | ingest с каталогом и whitelist, клиентская очередь, SSE `/api/live`, тест 3     |
 | 5 — аналитика и админка             | 2026-10-02 00:03   | 2026-10-02 01:55 ¹ | агрегатор и статистика (тест 5), Dashboard, Versions, Live events               |
-| 6 — генератор, verify, документация | 2026-10-02 02:06 ² | в работе           |                                                                                 |
+| 6 — генератор, verify, документация | 2026-10-02 02:02 ² | в работе           |                                                                                 |
 | 7 — вторая итерация (v3)            | —                  | в работе           |                                                                                 |
 | 8 — полировка                       | —                  | в работе           |                                                                                 |
 
 ¹ Фазы 3–5 шли параллельно. Конец — слияние последнего PR задачи в ветку фазы; для Фазы 4 начало — создание milestone.
 
-² Создание milestone Фазы 6.
+² Начало работы над Фазой 6 (рабочая копия ветки фазы); milestone создан в 02:06.
 
 ## Работа с агентами
 
