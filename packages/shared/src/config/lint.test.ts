@@ -65,6 +65,24 @@ describe('lintConfig: errors', () => {
     expect(codes(config)).toContain('duplicate_answer_key');
   });
 
+  it('two steps of one variant writing the same key through an override', () => {
+    const config = v1();
+    config.experiment.variants.B.stepOverrides['tool_count'] = { input: { name: 'team_size' } };
+    const { errors } = lintConfig(config);
+    expect(errors.map((e) => e.code)).toEqual(['duplicate_answer_key']);
+    expect(errors[0]?.message).toMatch(/^variant B:/);
+  });
+
+  it('allows the same answer key on steps of different variants', () => {
+    const config = v1();
+    const tools = config.steps['tool_count'];
+    if (!tools || !isInteractive(tools)) throw new Error('fixture');
+    config.steps['tool_count_b'] = { ...tools, id: 'tool_count_b' };
+    const seqB = config.experiment.variants.B.stepSequence;
+    seqB[seqB.indexOf('tool_count')] = 'tool_count_b';
+    expect(lintConfig(config).errors).toEqual([]);
+  });
+
   it('a visibleWhen that depends on a later step in some variant', () => {
     const config = v1();
     const priorities = config.steps['priorities'];
@@ -196,5 +214,22 @@ describe('lintConfig: warnings', () => {
       { resultId: 'balanced', when: { answer: 'priorities', operator: 'contains', value: [] } },
     );
     expect(warningCodes(config)).toEqual(Array(4).fill('operator_type'));
+  });
+
+  it('a compared value that is not an option, or of the wrong kind', () => {
+    const config = v1();
+    const rules = [
+      { answer: 'work_mode', operator: 'eq', value: 'hybird' },
+      { answer: 'work_mode', operator: 'in', value: 'hybrid' },
+      { answer: 'priorities', operator: 'contains', value: ['speed', 'sped'] },
+      { answer: 'team_size', operator: 'eq', value: '12' },
+    ];
+    for (const when of rules) config.resultRules.push({ resultId: 'balanced', when });
+    expect(lintConfig(config).warnings.map((w) => w.message)).toEqual([
+      'resultRules[3]: "hybird" is not an option ("work_mode")',
+      'resultRules[4]: in needs a list of values ("work_mode")',
+      'resultRules[5]: "sped" is not an option ("priorities")',
+      'resultRules[6]: compares a number with a non-number ("team_size")',
+    ]);
   });
 });

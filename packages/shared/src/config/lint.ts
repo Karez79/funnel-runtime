@@ -51,8 +51,9 @@ export interface LintReport {
 
 export interface LintContext {
   /**
-   * Versions already stored, without the one being linted. The server passes all
-   * versions on upload, so a new version must be numbered above every existing one.
+   * Versions already stored. Passed on upload only: a new version must be numbered above
+   * every stored one. On publish the draft was already checked on upload, and drafts
+   * uploaded after it must not block it, so the server lints without `existing` there.
    */
   readonly existing?: readonly { readonly funnelId: string; readonly version: number }[];
 }
@@ -93,21 +94,11 @@ function lintVersioning(config: FunnelConfig, context: LintContext, out: Collect
 }
 
 function lintDefinitions(config: FunnelConfig, out: Collector): void {
-  const answerOwners = new Map<string, string>();
   for (const [key, step] of Object.entries(config.steps)) {
     if (step.id !== key) out.error('step_id_mismatch', `step "${key}" has id "${step.id}"`);
     if (!isKnownStep(step)) {
       out.warn('unknown_step_type', `step "${key}" has unknown type "${step.type}"`);
     }
-    if (!isInteractive(step)) continue;
-    const owner = answerOwners.get(answerKey(step));
-    if (owner !== undefined) {
-      out.error(
-        'duplicate_answer_key',
-        `steps "${owner}" and "${key}" both store the answer "${answerKey(step)}"`,
-      );
-    }
-    answerOwners.set(answerKey(step), key);
   }
   for (const [key, result] of Object.entries(config.results)) {
     if (result.id !== key) out.error('result_id_mismatch', `result "${key}" has id "${result.id}"`);
@@ -166,9 +157,26 @@ function lintSequence(config: FunnelConfig, variant: (typeof VARIANTS)[number], 
   }
 }
 
-/** Every answer a step's `visibleWhen` reads must be given by an earlier step of the variant. */
-function lintConditionOrder(resolved: ResolvedFunnel, out: Collector): void {
-  const answered = new Set<string>();
+/** Steps of a resolved variant that store answers, by answer key. */
+function answerSteps(resolved: ResolvedFunnel): Map<string, Step> {
+  const byAnswer = new Map<string, Step>();
+  for (const id of resolved.sequence) {
+    const step = resolved.steps[id];
+    if (step && isInteractive(step) && !byAnswer.has(answerKey(step))) {
+      byAnswer.set(answerKey(step), step);
+    }
+  }
+  return byAnswer;
+}
+
+/**
+ * Per resolved variant (overrides included; a session only ever sees one variant):
+ * every answer a `visibleWhen` reads is given by an earlier step, and no two steps
+ * store the same answer key, which would silently overwrite one answer with another.
+ */
+function lintVariantAnswers(resolved: ResolvedFunnel, out: Collector): void {
+  const variant = resolved.meta.variant;
+  const answered = new Map<string, string>();
   for (const id of resolved.sequence) {
     const step = resolved.steps[id];
     if (!step) continue;
@@ -176,25 +184,36 @@ function lintConditionOrder(resolved: ResolvedFunnel, out: Collector): void {
       if (!answered.has(leaf.answer)) {
         out.error(
           'condition_order',
-          `variant ${resolved.meta.variant}: step "${id}" shows on "${leaf.answer}", which is not answered before it`,
+          `variant ${variant}: step "${id}" shows on "${leaf.answer}", which is not answered before it`,
         );
       }
     }
-    if (isInteractive(step)) answered.add(answerKey(step));
+    if (!isInteractive(step)) continue;
+    const key = answerKey(step);
+    const owner = answered.get(key);
+    if (owner !== undefined) {
+      out.error(
+        'duplicate_answer_key',
+        `variant ${variant}: steps "${owner}" and "${id}" both store the answer "${key}"`,
+      );
+    }
+    answered.set(key, id);
   }
 }
 
+/** Values a leaf compares the answer with (`in` lists are spread). */
+function comparedValues(leaf: ConditionLeaf): unknown[] {
+  return Array.isArray(leaf.value) ? leaf.value : [leaf.value];
+}
+
 function leafTypeProblem(leaf: ConditionLeaf, step: Step): string | null {
-  const multi = step.type === 'multi-select';
+  if (!isInteractive(step)) return null;
+  const values = comparedValues(leaf);
   switch (leaf.operator) {
-    case 'contains': {
-      const values: unknown[] = Array.isArray(leaf.value) ? leaf.value : [leaf.value];
-      if (!multi) return 'contains needs a multi-select answer';
-      if (values.length === 0 || values.some((v) => typeof v !== 'string')) {
-        return 'contains needs a non-empty list of option values';
-      }
-      return null;
-    }
+    case 'contains':
+      if (step.type !== 'multi-select') return 'contains needs a multi-select answer';
+      if (values.length === 0) return 'contains needs at least one option value';
+      break;
     case 'gt':
     case 'gte':
     case 'lt':
@@ -206,27 +225,53 @@ function leafTypeProblem(leaf: ConditionLeaf, step: Step): string | null {
     case 'ne':
     case 'in':
     case 'not_in':
-      return multi ? `${leaf.operator} never matches a multi-select answer, use contains` : null;
+      if (step.type === 'multi-select') {
+        return `${leaf.operator} never matches a multi-select answer, use contains`;
+      }
+      if ((leaf.operator === 'in' || leaf.operator === 'not_in') && !Array.isArray(leaf.value)) {
+        return `${leaf.operator} needs a list of values`;
+      }
+      break;
     default:
       return null;
   }
+  if (step.type === 'number') {
+    return values.every((v) => typeof v === 'number')
+      ? null
+      : 'compares a number with a non-number';
+  }
+  const options = new Set(step.input.options.map((o) => o.value));
+  const unknown = values.filter((v) => typeof v !== 'string' || !options.has(v));
+  return unknown.length === 0
+    ? null
+    : `${unknown.map((v) => JSON.stringify(v)).join(', ')} is not an option`;
 }
 
 function lintConditions(config: FunnelConfig, resolved: readonly ResolvedFunnel[], out: Collector) {
-  const byAnswer = new Map<string, Step>();
-  for (const step of Object.values(config.steps)) {
-    if (isInteractive(step)) byAnswer.set(answerKey(step), step);
-  }
-  const conditions: { where: string; condition: Condition }[] = [];
+  // Visibility conditions are checked against their own variant; result rules against any
+  // variant that asks the answer (a rule may simply never match in the other one).
+  const anyVariant = new Map<string, Step>();
+  const conditions: { where: string; condition: Condition; byAnswer: Map<string, Step> }[] = [];
   for (const r of resolved) {
+    const byAnswer = answerSteps(r);
+    for (const [key, step] of byAnswer) if (!anyVariant.has(key)) anyVariant.set(key, step);
     for (const id of r.sequence) {
       const when = r.steps[id]?.visibleWhen;
-      if (when)
-        conditions.push({ where: `step "${id}" (variant ${r.meta.variant})`, condition: when });
+      if (when) {
+        conditions.push({
+          where: `step "${id}" (variant ${r.meta.variant})`,
+          condition: when,
+          byAnswer,
+        });
+      }
     }
   }
   for (const [i, rule] of config.resultRules.entries()) {
-    conditions.push({ where: `resultRules[${String(i)}]`, condition: rule.when });
+    conditions.push({
+      where: `resultRules[${String(i)}]`,
+      condition: rule.when,
+      byAnswer: anyVariant,
+    });
   }
 
   const operators: readonly string[] = KNOWN_OPERATORS;
@@ -236,7 +281,7 @@ function lintConditions(config: FunnelConfig, resolved: readonly ResolvedFunnel[
     reported.add(message);
     report();
   };
-  for (const { where, condition } of conditions) {
+  for (const { where, condition, byAnswer } of conditions) {
     for (const leaf of conditionLeaves(condition)) {
       if (!operators.includes(leaf.operator)) {
         const message = `${where} uses unknown operator "${leaf.operator}"`;
@@ -283,7 +328,7 @@ export function lintConfig(config: FunnelConfig, context: LintContext = {}): Lin
       out.error('invalid_override', `variant ${variant}: ${error.message}`);
     }
   }
-  for (const r of resolved) lintConditionOrder(r, out);
+  for (const r of resolved) lintVariantAnswers(r, out);
   lintConditions(config, resolved, out);
   return { errors: out.errors, warnings: out.warnings };
 }
