@@ -556,12 +556,50 @@ describe('outboxes of other sessions', () => {
     expect(server.send).not.toHaveBeenCalled();
   });
 
-  it('drops old events the server refuses for good, with a warning', async () => {
-    leaveBehind(OLD, 2);
-    server.replies.push(() => ({ status: 400, json: null }));
+  it('halves a refused old batch and drops only the event refused alone', async () => {
+    const [first, second] = leaveBehind(OLD, 2);
+    const refused = () => ({ status: 400, json: null });
+    server.replies.push(refused, refused);
     makeQueue();
     await vi.advanceTimersByTimeAsync(0);
-    expect(storage.data.has(`funnel:events:${OLD}`)).toBe(false);
-    expect(warn).toHaveBeenCalledWith('2 old events dropped');
+    expect(server.requests.map((r) => r.length)).toEqual([2, 1]);
+    expect(storedEvents(storage.data.get(`funnel:events:${OLD}`)).map((e) => e.event_id)).toEqual([
+      second,
+    ]);
+    expect(warn).toHaveBeenCalledWith(`Old event ${String(first)} dropped`);
+  });
+
+  it('sends at most 100 old events per queue and keeps the rest', async () => {
+    const ids = leaveBehind(OLD, 150);
+    makeQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sentIds(0)).toEqual(ids.slice(0, 100));
+    expect(storedEvents(storage.data.get(`funnel:events:${OLD}`)).map((e) => e.event_id)).toEqual(
+      ids.slice(100),
+    );
+  });
+
+  it('a drain still running at dispose leaves storage alone and sends nothing more', async () => {
+    const oldIds = leaveBehind(OLD, 2);
+    const olderIds = leaveBehind(OLDER, 2);
+    let answer: (() => void) | undefined;
+    server.replies.push((events) => ack(events, () => 'accepted'));
+    const send = vi.fn((body: BatchBody) => {
+      const reply = server.send(body);
+      return new Promise<Response>((resolve) => {
+        answer = () => {
+          void reply.then(resolve);
+        };
+      });
+    });
+    const queue = makeQueue({ send });
+    queue.dispose();
+    answer?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send).toHaveBeenCalledTimes(1);
+    const left = (id: string) =>
+      storedEvents(storage.data.get(`funnel:events:${id}`)).map((e) => e.event_id);
+    expect(left(OLD)).toEqual(oldIds);
+    expect(left(OLDER)).toEqual(olderIds);
   });
 });

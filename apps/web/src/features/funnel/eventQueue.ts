@@ -381,24 +381,31 @@ export function createEventQueue(
    * reset): their events are sent once, and the keys go when nothing is left to send. A
    * failure leaves them for the next queue. One orphan request at a time.
    */
+  const isDisposed = (): boolean => disposed;
+
   async function drainOtherSessions(): Promise<void> {
     for (const id of otherSessions(deps.storage, sessionId)) {
-      const events = loadOutbox(deps.storage, id).slice(0, MAX_BATCH_EVENTS);
+      if (disposed) return;
+      let events = loadOutbox(deps.storage, id).slice(0, MAX_BATCH_EVENTS);
       let outcome: Outcome = { kind: 'acked', results: new Map() };
-      if (events.length > 0) {
+      // Like the queue's own batches: a refused batch (400/413) is halved until the
+      // refused event is alone, and only that one is dropped.
+      while (events.length > 0) {
         try {
           const response = await deps.send({ events });
           outcome = classify(response.status, response.json);
         } catch {
-          continue;
+          outcome = { kind: 'retry' };
         }
+        if (outcome.kind !== 'poison' || events.length === 1) break;
+        events = events.slice(0, Math.ceil(events.length / 2));
       }
-      if (outcome.kind === 'retry' || disposed) continue;
-      // Acked or refused for good (400/413): either way the server answered for them.
-      if (outcome.kind === 'poison') deps.warn(`${String(events.length)} old events dropped`);
+      // Read through a call: `disposed` may have flipped while the request was out.
+      if (outcome.kind === 'retry' || isDisposed()) continue;
       const answered = new Set(
         outcome.kind === 'acked' ? [...outcome.results.keys()] : events.map((e) => e.event_id),
       );
+      if (outcome.kind === 'poison') deps.warn(`Old event ${[...answered].join()} dropped`);
       const left = loadOutbox(deps.storage, id).filter((e) => !answered.has(e.event_id));
       try {
         if (left.length === 0) {
