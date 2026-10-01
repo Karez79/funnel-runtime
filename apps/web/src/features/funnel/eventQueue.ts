@@ -15,12 +15,14 @@
 import {
   ClientEventSchema,
   contract,
+  DomainError,
   MAX_BATCH_EVENTS,
   type ClientEvent,
   type EventProperties,
   type VariantKey,
 } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
+import { call } from '../../lib/api.ts';
 
 /** Flush when this many events wait, without waiting for the timer. */
 const FLUSH_SIZE = 10;
@@ -163,14 +165,16 @@ function browserStorage(): StorageLike | null {
 const route = contract.eventsBatch;
 
 const defaultDeps = (): EventQueueDeps => ({
+  // Through the app's one typed client (lib/api.ts); a refusal comes back as its status,
+  // which is all `classify` needs.
   async send(body) {
-    const response = await fetch(route.path, {
-      method: route.method,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json: unknown = await response.json().catch(() => null);
-    return { status: response.status, json };
+    try {
+      const json = await call('eventsBatch', { body: { events: [...body.events] } });
+      return { status: 200, json };
+    } catch (error) {
+      if (error instanceof DomainError) return { status: error.status, json: null };
+      throw error;
+    }
   },
   beacon: (body) =>
     navigator.sendBeacon(
