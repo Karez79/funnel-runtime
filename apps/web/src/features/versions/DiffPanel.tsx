@@ -28,6 +28,8 @@ export function DiffPanel({
   const diff = useQuery({
     ...apiQuery('versionDiff', { params: { v: version ?? 0 }, query: { against: 'active' } }),
     enabled: version !== null,
+    // A 422 (a draft that cannot be resolved) is deterministic: asking again only delays it.
+    retry: false,
   });
 
   if (version === null) {

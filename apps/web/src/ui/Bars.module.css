@@ -1,0 +1,41 @@
+.bars {
+  display: grid;
+  gap: 3px;
+}
+
+.bars div {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--soft);
+}
+
+.bars i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  transform-origin: left;
+  animation: grow 0.9s var(--ease-out) both 0.15s;
+}
+
+.a {
+  background: var(--a);
+}
+
+.b {
+  background: var(--b);
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}

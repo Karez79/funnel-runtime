@@ -1,0 +1,33 @@
+.pop {
+  margin: 0;
+  border: 0;
+  padding: 16px;
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  width: 280px;
+  color: var(--ink);
+  position-anchor: --popover-anchor;
+  position-area: bottom span-right;
+  position-try-fallbacks: flip-block, flip-inline;
+  margin-top: 8px;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.18s,
+    transform 0.25s var(--spring),
+    overlay 0.2s allow-discrete,
+    display 0.2s allow-discrete;
+}
+
+@starting-style {
+  .pop:popover-open {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+.pop:not(:popover-open) {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}

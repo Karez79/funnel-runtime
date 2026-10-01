@@ -111,11 +111,15 @@ describe('unknown routes and static web', () => {
         '/admin/versions',
         '/Admin',
         '//admin',
+        '/%61dmin',
       ]) {
         const res = await t.app.inject({ method: 'GET', url });
         expect(res.statusCode).toBe(401);
         expect(res.headers['www-authenticate']).toContain('Basic');
       }
+      // A malformed escape never reaches the page: Fastify rejects the URL first.
+      const malformed = await t.app.inject({ method: 'GET', url: '/admin/%E0%A4%A' });
+      expect(malformed.statusCode).toBe(400);
       const page = await t.app.inject({
         method: 'GET',
         url: '/admin',

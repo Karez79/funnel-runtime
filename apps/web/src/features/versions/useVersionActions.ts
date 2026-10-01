@@ -29,12 +29,15 @@ export function useVersionActions({ onRollbackRequest, onPublished, onUploaded }
     toastSeq += 1;
     setToast({ id: toastSeq, text, ...(action ? { action } : {}) });
   };
-  const done = () => queryClient.invalidateQueries();
+  // The toast does not wait for the refetch: the tables update when it lands.
+  const done = () => {
+    void queryClient.invalidateQueries();
+  };
 
   const rollback = useMutation({
     mutationFn: () => call('rollback', { body: {} }),
-    onSuccess: async ({ activation }) => {
-      await done();
+    onSuccess: ({ activation }) => {
+      done();
       say(`Rolled back to version ${String(activation.version)}`);
     },
     onError: (error) => {
@@ -44,8 +47,8 @@ export function useVersionActions({ onRollbackRequest, onPublished, onUploaded }
 
   const publish = useMutation({
     mutationFn: (version: number) => call('publishVersion', { params: { v: version }, body: {} }),
-    onSuccess: async ({ activation }) => {
-      await done();
+    onSuccess: ({ activation }) => {
+      done();
       onPublished();
       say(`Published version ${String(activation.version)}`, {
         label: 'Roll back',
@@ -60,8 +63,8 @@ export function useVersionActions({ onRollbackRequest, onPublished, onUploaded }
 
   const activate = useMutation({
     mutationFn: (version: number) => call('activateVersion', { params: { v: version }, body: {} }),
-    onSuccess: async ({ activation }) => {
-      await done();
+    onSuccess: ({ activation }) => {
+      done();
       say(`Activated version ${String(activation.version)}`);
     },
     onError: (error) => {
@@ -79,8 +82,8 @@ export function useVersionActions({ onRollbackRequest, onPublished, onUploaded }
       }
       return call('uploadVersion', { body: config, query: {} });
     },
-    onSuccess: async ({ version, created }) => {
-      await done();
+    onSuccess: ({ version, created }) => {
+      done();
       onUploaded(version.version);
       const v = String(version.version);
       say(created ? `Uploaded version ${v} as a draft` : `Version ${v} is already stored`);

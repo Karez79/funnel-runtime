@@ -1,0 +1,161 @@
+.ph {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  min-height: 34px;
+}
+
+.ph h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  margin: 0;
+}
+
+.phEnd {
+  margin-left: auto;
+}
+
+.journeyPanel {
+  padding-top: 30px;
+}
+
+.stale {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.empty {
+  color: var(--ink-2);
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+
+.notice {
+  background: var(--card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 0 0 16px;
+}
+
+.notice a {
+  color: var(--ink);
+}
+
+/* KPI cards with container queries */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.kpi {
+  container-type: inline-size;
+  background: color-mix(in oklch, var(--card) 85%, transparent);
+  border-radius: var(--r-tile);
+  padding: 16px 18px 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.kpiLabel {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kpiRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kpiValue {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0 10px;
+}
+
+.delta {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: color-mix(in oklch, var(--ok) 85%, var(--ink));
+  margin-bottom: 16px;
+  white-space: nowrap;
+}
+
+.down {
+  color: var(--b-ink);
+}
+
+.spark {
+  margin-bottom: 10px;
+}
+
+@container (width <= 250px) {
+  .spark {
+    display: none;
+  }
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* A/B */
+.gauges {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ci {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict {
+  background: var(--card);
+  border-radius: var(--r-card);
+  padding: 13px 16px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  box-shadow: var(--shadow-sm);
+}
+
+.badge {
+  flex: none;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  background: var(--warn-soft);
+  color: color-mix(in oklch, var(--warn) 70%, var(--ink));
+}
+
+.badgeOk {
+  background: var(--ok-soft);
+  color: color-mix(in oklch, var(--ok) 70%, var(--ink));
+}
+
+@media (width <= 720px) {
+  .journeyPanel {
+    padding-top: 22px;
+  }
+}

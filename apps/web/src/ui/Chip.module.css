@@ -1,0 +1,66 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: var(--r-pill);
+  background: color-mix(in oklch, var(--card) 70%, transparent);
+  border: 1px solid color-mix(in oklch, var(--line) 70%, var(--card));
+  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.25s var(--spring);
+}
+
+.chip:hover {
+  background: var(--card);
+  color: var(--ink);
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.chip:has(.select:focus-visible) {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+}
+
+.on:hover {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+}
+
+.select {
+  appearance: none;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  max-width: 160px;
+  text-overflow: ellipsis;
+}
+
+.select:focus-visible {
+  outline: none;
+}
