@@ -36,3 +36,12 @@ export type { Answers, AnswerValue, EvaluateOptions } from './engine/conditions.
 
 export { ResolvedFunnelSchema, resolveFunnel } from './engine/resolve.ts';
 export type { ResolvedFunnel } from './engine/resolve.ts';
+
+export {
+  effectiveAnswers,
+  nextStep,
+  progress,
+  stepBack,
+  visiblePath,
+} from './engine/navigation.ts';
+export type { Progress } from './engine/navigation.ts';
