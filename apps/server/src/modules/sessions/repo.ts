@@ -3,7 +3,7 @@
 // a session or count one that failed to be stored. better-sqlite3 is synchronous and
 // the server is one process, so a read-check-write in a service cannot interleave with
 // another request: the optimistic lock on `state_rev` is checked in the service.
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { events, sessions } from '../../db/schema.ts';
 
@@ -24,9 +24,17 @@ export function createSessionsRepo(db: Db) {
       return db.select().from(sessions).where(eq(sessions.id, id)).get();
     },
 
-    /** Writes a new state and bumps `state_rev`; the caller has checked the base revision. */
-    saveState(id: string, stateJson: string, stateRev: number, updatedAt: string): void {
-      db.update(sessions).set({ stateJson, stateRev, updatedAt }).where(eq(sessions.id, id)).run();
+    /**
+     * Writes a new state only if `state_rev` is still `baseRev` (the lock holds in SQL
+     * too, not only in the service); returns false when another write got there first.
+     */
+    saveState(id: string, stateJson: string, baseRev: number, updatedAt: string): boolean {
+      const { changes } = db
+        .update(sessions)
+        .set({ stateJson, stateRev: baseRev + 1, updatedAt })
+        .where(and(eq(sessions.id, id), eq(sessions.stateRev, baseRev)))
+        .run();
+      return changes === 1;
     },
 
     setResult(id: string, resultId: string, updatedAt: string): void {

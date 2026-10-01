@@ -1,10 +1,16 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
-import { contract, ErrorBody, type SessionResponse } from '@funnel/shared';
+import {
+  contract,
+  ErrorBody,
+  SessionUnprocessableDetailsSchema,
+  type SessionResponse,
+} from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { events, sessions } from '../../db/schema.ts';
 import { createTestApp, generatorHeaders, testClock, type TestApp } from '../../test/harness.ts';
 import { assignVariant, fnv1a32 } from './assignment.ts';
+import { createSessionsRepo } from './repo.ts';
 
 const FUNNEL = 'workstyle-planner';
 const EXPERIMENT_V1 = 'question-order-and-result-framing-v1';
@@ -446,6 +452,18 @@ describe('PUT /api/sessions/:id/state', () => {
   });
 });
 
+describe('optimistic lock in SQL', () => {
+  it('refuses a write whose base revision is no longer current', async () => {
+    const a = await app();
+    const { session } = await created(a);
+    const repo = createSessionsRepo(a.handle.db);
+    const now = '2026-10-01T12:00:00.000Z';
+    expect(repo.saveState(session.id, '{}', 0, now)).toBe(true);
+    expect(repo.saveState(session.id, '{}', 0, now)).toBe(false);
+    expect(row(a, session.id)?.stateRev).toBe(1);
+  });
+});
+
 describe('POST /api/sessions/:id/complete', () => {
   it('stores the computed result and returns it with the variant overrides', async () => {
     const a = await app();
@@ -483,19 +501,29 @@ describe('POST /api/sessions/:id/complete', () => {
     expect(row(a, session.id)?.resultId).toBeNull();
   });
 
-  it('ignores answers of steps that became hidden', async () => {
+  it('does not require answers of steps that became hidden', async () => {
     const a = await app();
     // office_days was answered for hybrid, then work_mode changed to remote: the step is
-    // hidden, so its answer is neither required nor used.
+    // hidden and its stale answer is kept but not required. No v1 rule reads office_days,
+    // so "not used for the result" is covered by computeResult's tests in shared.
     const { session } = await created(a, { variantOverride: 'A' });
     await save(a, session.id, { ...HYBRID, office_days: 4 }, 0);
     await save(a, session.id, { ...HYBRID, work_mode: 'remote', office_days: 4 }, 1);
     expect((await complete(a, session.id)).json()).toMatchObject({ resultId: 'balanced' });
 
     const other = await created(a, { variantOverride: 'A' });
-    const remote = { ...HYBRID, work_mode: 'remote' };
-    await save(a, other.session.id, without(remote, 'office_days'), 0);
-    expect((await complete(a, other.session.id)).json()).toMatchObject({ resultId: 'balanced' });
+    const remote = without({ ...HYBRID, work_mode: 'remote' }, 'office_days');
+    await save(a, other.session.id, remote, 0);
+    const done = await complete(a, other.session.id);
+    expect(done.statusCode).toBe(200);
+    // With hybrid the same answers miss office_days, which is then required.
+    const third = await created(a, { variantOverride: 'A' });
+    await save(a, third.session.id, without(HYBRID, 'office_days'), 0);
+    const missing = await complete(a, third.session.id);
+    expect(missing.statusCode).toBe(422);
+    expect(
+      SessionUnprocessableDetailsSchema.parse(ErrorBody.parse(missing.json()).error.details),
+    ).toEqual({ stepId: 'office_days', code: 'required' });
   });
 
   it('answers 404 for an unknown session', async () => {

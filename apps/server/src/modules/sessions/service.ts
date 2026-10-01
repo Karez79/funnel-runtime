@@ -205,17 +205,18 @@ export function createSessionsService(
 
     /** Optimistic lock on `state_rev`: a stale `baseRev` gets 409 with the server's state. */
     saveState(id: string, state: SessionState, baseRev: number): { stateRev: number } {
-      const row = live(id);
-      if (baseRev !== row.stateRev) {
-        throw new DomainError('conflict', 'Session state has changed', {
-          state: parseState(row),
-          stateRev: row.stateRev,
+      const conflict = (current: SessionRow) =>
+        new DomainError('conflict', 'Session state has changed', {
+          state: parseState(current),
+          stateRev: current.stateRev,
         });
-      }
+      const row = live(id);
+      if (baseRev !== row.stateRev) throw conflict(row);
       checkState(resolved(row.funnelId, row.funnelVersion, row.variant), state);
-      const stateRev = row.stateRev + 1;
-      repo.saveState(id, JSON.stringify(state), stateRev, clock.now().toISOString());
-      return { stateRev };
+      if (!repo.saveState(id, JSON.stringify(state), baseRev, clock.now().toISOString())) {
+        throw conflict(live(id));
+      }
+      return { stateRev: baseRev + 1 };
     },
 
     /**
