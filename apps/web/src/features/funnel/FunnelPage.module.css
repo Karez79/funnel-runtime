@@ -47,6 +47,11 @@
   view-transition-name: funnel-body;
 }
 
+/* Focused by script after a move (FunnelView); it is not a control, so no ring. */
+.body:focus {
+  outline: none;
+}
+
 .actions {
   display: flex;
   align-items: center;

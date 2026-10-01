@@ -63,7 +63,7 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     sessionId: session.id,
     stateRev: session.stateRev,
     onConflict: (state) => {
-      machine.dispatch({ type: 'adopt', state });
+      machine.adopt(state);
       toStep(state.currentStepId, true);
     },
     onRejected: onReload,

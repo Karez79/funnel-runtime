@@ -4,7 +4,7 @@
 // Keyboard: Enter continues, Esc or Alt+← goes back, digits are handled by choice steps.
 import { isInteractive } from '@funnel/shared';
 import type { ReactNode } from 'react';
-import { useEffect, useEffectEvent } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
 import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import { IconButton } from '../../ui/IconButton.tsx';
@@ -70,6 +70,16 @@ export function FunnelView({ state, act, track, result, onBack }: FunnelViewProp
     onView();
   }, [state.currentStepId]);
 
+  // After a move, focus goes to the new step before the next key can arrive (layout
+  // effect): screen readers start at its title, and a focused Back button would
+  // otherwise take Enter for itself instead of Continue.
+  const body = useRef<HTMLDivElement>(null);
+  const firstStep = useRef(true);
+  useLayoutEffect(() => {
+    if (!firstStep.current) body.current?.focus({ preventScroll: true });
+    firstStep.current = false;
+  }, [state.currentStepId]);
+
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     const { target } = event;
     if (event.key === 'Escape' || (event.altKey && event.key === 'ArrowLeft')) {
@@ -103,7 +113,7 @@ export function FunnelView({ state, act, track, result, onBack }: FunnelViewProp
         <IconButton icon="back" aria-label="Back" disabled={!canGoBack} onClick={back} />
         <Progress value={progressOf(state)} done={isResult} />
       </div>
-      <div className={styles.body} key={state.currentStepId}>
+      <div className={styles.body} key={state.currentStepId} ref={body} tabIndex={-1}>
         {isResult ? (
           result
         ) : (
