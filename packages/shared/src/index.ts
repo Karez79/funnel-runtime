@@ -50,3 +50,12 @@ export { validateAnswer, validateCompletion } from './engine/validation.ts';
 export type { CompletionResult, ValidationCode, ValidationResult } from './engine/validation.ts';
 
 export { computeResult } from './engine/result.ts';
+
+export { lintConfig } from './config/lint.ts';
+export type {
+  LintContext,
+  LintErrorCode,
+  LintIssue,
+  LintReport,
+  LintWarningCode,
+} from './config/lint.ts';

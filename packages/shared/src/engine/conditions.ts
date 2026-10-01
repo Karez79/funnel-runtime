@@ -86,15 +86,15 @@ export function evaluateCondition(
   return evaluateLeaf(condition, answers, options);
 }
 
+/** Leaves of a condition tree in document order (lint checks operators and types). */
+export function conditionLeaves(condition: Condition): ConditionLeaf[] {
+  if ('all' in condition) return condition.all.flatMap(conditionLeaves);
+  if ('any' in condition) return condition.any.flatMap(conditionLeaves);
+  if ('not' in condition) return conditionLeaves(condition.not);
+  return [condition];
+}
+
 /** Answer keys a condition depends on, deduplicated in first-seen order (lint, branch split). */
 export function conditionAnswers(condition: Condition): string[] {
-  const keys = new Set<string>();
-  const walk = (c: Condition): void => {
-    if ('all' in c) c.all.forEach(walk);
-    else if ('any' in c) c.any.forEach(walk);
-    else if ('not' in c) walk(c.not);
-    else keys.add(c.answer);
-  };
-  walk(condition);
-  return [...keys];
+  return [...new Set(conditionLeaves(condition).map((leaf) => leaf.answer))];
 }
