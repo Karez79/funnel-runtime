@@ -73,7 +73,7 @@ describe('unknown routes and static web', () => {
     const dist = mkdtempSync(join(process.cwd(), '.tmp-web-'));
     writeFileSync(join(dist, 'index.html'), '<!doctype html><title>rel</title>');
     try {
-      t = await createTestApp({ webDist: relative(process.cwd(), dist) });
+      t = await createTestApp({ env: { webDist: relative(process.cwd(), dist) } });
       const res = await t.app.inject({ method: 'GET', url: '/' });
       expect(res.body).toContain('<title>rel</title>');
     } finally {
@@ -85,7 +85,7 @@ describe('unknown routes and static web', () => {
     const dist = mkdtempSync(join(tmpdir(), 'funnel-web-'));
     writeFileSync(join(dist, 'index.html'), '<!doctype html><title>funnel</title>');
     try {
-      t = await createTestApp({ webDist: dist });
+      t = await createTestApp({ env: { webDist: dist } });
       const res = await t.app.inject({ method: 'GET', url: '/s/team_size' });
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('<title>funnel</title>');
