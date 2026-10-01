@@ -2,10 +2,11 @@
 // another step is wrapped in a view transition (left on Continue, right on Back) and its
 // events and side effects (save, URL) run with the new state. Live and preview funnels
 // share this; they differ only in `track` and `onMove`.
-// One move at a time: the transition renders the new step asynchronously, and a second
-// Continue or Back before that (key repeat, a double press) would be computed from the
-// step the user is leaving. Moves arriving meanwhile are dropped, so the screen, the
-// saved state, the URL and the events always describe the same step.
+// One move at a time: the transition renders the new step asynchronously, and any action
+// before that (key repeat, a digit right after Enter, a click on an option) would be
+// computed from the step the user is leaving. Actions arriving meanwhile are dropped, and
+// the transition commits exactly the state that was saved and tracked (`set`), so the
+// screen, the saved state, the URL and the events always describe the same step.
 import { useReducer, useRef } from 'react';
 import { withViewTransition } from '../../lib/viewTransition.ts';
 import {
@@ -35,7 +36,7 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
   const moving = useRef(false);
 
   function act(action: FunnelAction, options: MoveOptions = {}) {
-    if (moving.current && action.type !== 'change') return;
+    if (moving.current) return;
     const next = funnelReducer(state, action);
     if (next === state) return;
     if (next.currentStepId === state.currentStepId) {
@@ -48,7 +49,7 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
     }
     withViewTransition(
       () => {
-        dispatch(action);
+        dispatch({ type: 'set', state: next });
         onMove?.(next, options);
         moving.current = false;
       },
@@ -56,5 +57,8 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
     );
   }
 
-  return { state, act, dispatch };
+  /** A move is being rendered; callers that start moves another way wait for it. */
+  const isMoving = () => moving.current;
+
+  return { state, act, dispatch, isMoving };
 }

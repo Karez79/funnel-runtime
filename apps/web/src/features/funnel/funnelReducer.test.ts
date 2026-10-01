@@ -112,6 +112,11 @@ describe('funnelReducer', () => {
     expect(visiblePathOf(s)).not.toContain('office_days');
   });
 
+  it('set commits a precomputed state as is', () => {
+    const next = run(start(), { type: 'continue' });
+    expect(funnelReducer(start(), { type: 'set', state: next })).toBe(next);
+  });
+
   it('does not move past the last step', () => {
     const s = initialState(funnel(), { answers: {}, history: [], currentStepId: 'result' });
     expect(run(s, { type: 'continue' })).toBe(s);

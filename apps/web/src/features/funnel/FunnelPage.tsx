@@ -3,6 +3,7 @@
 // entries, so the browser's Back goes to the previous step and counts as `back_clicked`;
 // a URL the state does not lead to is replaced by the current step.
 import { initialState, sessionState } from './funnelReducer.ts';
+import { stepBack } from '@funnel/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
@@ -44,8 +45,13 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
   const [sink] = useState(() => createEventSink(loaded.response));
   const track = createTracker(sink, funnel.eventCatalog);
 
-  const toStep = (stepId: string, replace: boolean) => {
-    void navigate({ pathname: `/s/${stepId}`, search: location.search }, { replace });
+  // Each entry remembers the step it was entered from, so the card Back knows whether the
+  // previous browser entry is the step it goes back to (and not, say, the admin).
+  const toStep = (stepId: string, replace: boolean, from?: string) => {
+    void navigate(
+      { pathname: `/s/${stepId}`, search: location.search },
+      { replace, state: from === undefined ? null : { from } },
+    );
   };
 
   const save = useStateSaver({
@@ -66,7 +72,8 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
       const there = window.location.pathname === `/s/${next.currentStepId}`;
       // After a browser Back the URL is normally there already; if the user moved through
       // history again meanwhile (the transition is async), the URL follows the state.
-      if (url !== 'none' || !there) toStep(next.currentStepId, url === 'replace' || url === 'none');
+      if (url === 'push') toStep(next.currentStepId, false, state.currentStepId);
+      else if (url === 'replace' || !there) toStep(next.currentStepId, true);
     },
   });
   const { state } = machine;
@@ -79,13 +86,16 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     saveUnsaved();
   }, []);
 
-  // Back in the card is the browser's Back when there is an entry to go back to, so the
-  // funnel's history and the browser's stay one stack; the POP below does the move.
+  // Back in the card is the browser's Back when the previous entry is the step it goes
+  // back to, so the funnel's history and the browser's stay one stack; the POP below does
+  // the move. Otherwise (tab opened on a step, entry replaced) it replaces the entry.
+  // Nothing starts while a move is rendering.
   const expectBack = useRef(false);
   const goBack = () => {
-    const entry: unknown = window.history.state;
-    const index = typeof entry === 'object' && entry !== null && 'idx' in entry ? entry.idx : 0;
-    if (typeof index === 'number' && index > 0) {
+    if (machine.isMoving() || expectBack.current) return;
+    const entry: unknown = location.state;
+    const from = typeof entry === 'object' && entry !== null && 'from' in entry ? entry.from : null;
+    if (from !== null && from === stepBack(state.history)?.stepId) {
       expectBack.current = true;
       void navigate(-1);
     } else {
