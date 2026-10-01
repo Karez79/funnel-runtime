@@ -248,29 +248,29 @@ function leafTypeProblem(leaf: ConditionLeaf, step: Step): string | null {
 }
 
 function lintConditions(config: FunnelConfig, resolved: readonly ResolvedFunnel[], out: Collector) {
-  // Visibility conditions are checked against their own variant; result rules against any
-  // variant that asks the answer (a rule may simply never match in the other one).
-  const anyVariant = new Map<string, Step>();
-  const conditions: { where: string; condition: Condition; byAnswer: Map<string, Step> }[] = [];
-  for (const r of resolved) {
-    const byAnswer = answerSteps(r);
-    for (const [key, step] of byAnswer) if (!anyVariant.has(key)) anyVariant.set(key, step);
+  // A visibility condition is checked against its own variant. A result rule runs in every
+  // variant, so it is checked against each variant that asks the answer and flagged only
+  // when it cannot match in any of them (B may add an option that A does not have).
+  const perVariant = resolved.map(answerSteps);
+  const conditions: { where: string; condition: Condition; sources: Map<string, Step>[] }[] = [];
+  resolved.forEach((r, i) => {
+    const sources = perVariant.slice(i, i + 1);
     for (const id of r.sequence) {
       const when = r.steps[id]?.visibleWhen;
       if (when) {
         conditions.push({
           where: `step "${id}" (variant ${r.meta.variant})`,
           condition: when,
-          byAnswer,
+          sources,
         });
       }
     }
-  }
+  });
   for (const [i, rule] of config.resultRules.entries()) {
     conditions.push({
       where: `resultRules[${String(i)}]`,
       condition: rule.when,
-      byAnswer: anyVariant,
+      sources: perVariant,
     });
   }
 
@@ -281,7 +281,7 @@ function lintConditions(config: FunnelConfig, resolved: readonly ResolvedFunnel[
     reported.add(message);
     report();
   };
-  for (const { where, condition, byAnswer } of conditions) {
+  for (const { where, condition, sources } of conditions) {
     for (const leaf of conditionLeaves(condition)) {
       if (!operators.includes(leaf.operator)) {
         const message = `${where} uses unknown operator "${leaf.operator}"`;
@@ -290,18 +290,20 @@ function lintConditions(config: FunnelConfig, resolved: readonly ResolvedFunnel[
         });
         continue;
       }
-      const step = byAnswer.get(leaf.answer);
-      if (!step) {
+      const steps = sources.flatMap((byAnswer) => byAnswer.get(leaf.answer) ?? []);
+      if (steps.length === 0) {
         const message = `${where} reads "${leaf.answer}", which no step asks`;
         // Visibility conditions are already errors (condition_order); rules only warn.
-        if (where.startsWith('resultRules'))
+        if (where.startsWith('resultRules')) {
           once(message, () => {
             out.warn('unknown_answer', message);
           });
+        }
         continue;
       }
-      const problem = leafTypeProblem(leaf, step);
-      if (problem) {
+      const problems = steps.map((step) => leafTypeProblem(leaf, step));
+      const [problem] = problems;
+      if (problem && problems.every((p) => p !== null)) {
         const message = `${where}: ${problem} ("${leaf.answer}")`;
         once(message, () => {
           out.warn('operator_type', message);

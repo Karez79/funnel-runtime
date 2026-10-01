@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { v1, v2 } from '../../test/fixtures.ts';
 import { lintConfig, type LintContext } from './lint.ts';
-import { isInteractive, type FunnelConfig } from './schema.ts';
+import { isInteractive, isKnownStep, type FunnelConfig } from './schema.ts';
 
 const codes = (config: FunnelConfig, context?: LintContext) =>
   lintConfig(config, context).errors.map((e) => e.code);
@@ -214,6 +214,22 @@ describe('lintConfig: warnings', () => {
       { resultId: 'balanced', when: { answer: 'priorities', operator: 'contains', value: [] } },
     );
     expect(warningCodes(config)).toEqual(Array(4).fill('operator_type'));
+  });
+
+  it('no warning for a rule on an option that only one variant has', () => {
+    const config = v1();
+    const workMode = config.steps['work_mode'];
+    if (!workMode || !isKnownStep(workMode) || workMode.type !== 'single-select') {
+      throw new Error('fixture');
+    }
+    config.experiment.variants.B.stepOverrides['work_mode'] = {
+      input: { options: [...workMode.input.options, { value: 'async_first', label: 'Async' }] },
+    };
+    config.resultRules.push({
+      resultId: 'balanced',
+      when: { answer: 'work_mode', operator: 'eq', value: 'async_first' },
+    });
+    expect(lintConfig(config).warnings).toEqual([]);
   });
 
   it('a compared value that is not an option, or of the wrong kind', () => {
