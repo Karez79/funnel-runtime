@@ -6,11 +6,17 @@
 // failure leaves the mirror dirty, so the next save or the next visit sends it again.
 import { DomainError, type SessionState } from '@funnel/shared';
 import { useMutation } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { call, errorDetails } from '../../lib/api.ts';
 import { clearMirror, writeMirror } from './session.ts';
 
 const NETWORK_RETRIES = 2;
+
+/**
+ * Mutations of one session's state run in this scope one at a time; completing the
+ * session joins it, so the result is computed from the last saved state.
+ */
+export const sessionScope = (sessionId: string) => ({ id: `session-state:${sessionId}` });
 
 interface SaverOptions {
   readonly funnelId: string;
@@ -33,9 +39,11 @@ export function useStateSaver({
   /** Bumped by a conflict: queued saves of an older epoch are dropped. */
   const epoch = useRef(0);
   const latest = useRef<SessionState | null>(null);
+  /** The acknowledged revision, for display (debug overlay). */
+  const [savedRev, setSavedRev] = useState(stateRev);
 
   const mutation = useMutation({
-    scope: { id: `session-state:${sessionId}` },
+    scope: sessionScope(sessionId),
     retry: (count, error) =>
       count < NETWORK_RETRIES && error instanceof DomainError && error.code === 'unavailable',
     mutationFn: ({ state, at }: { state: SessionState; at: number }) =>
@@ -45,6 +53,7 @@ export function useStateSaver({
     onSuccess: (saved, { state }) => {
       if (!saved || !latest.current) return;
       rev.current = saved.stateRev;
+      setSavedRev(saved.stateRev);
       // A newer state may already be queued behind this one: it stays dirty until saved.
       writeMirror(funnelId, {
         sessionId,
@@ -58,6 +67,7 @@ export function useStateSaver({
       if (conflict) {
         epoch.current += 1;
         rev.current = conflict.stateRev;
+        setSavedRev(conflict.stateRev);
         latest.current = conflict.state;
         writeMirror(funnelId, {
           sessionId,
@@ -82,5 +92,5 @@ export function useStateSaver({
     mutation.mutate({ state, at: epoch.current });
   }
 
-  return save;
+  return { save, savedRev };
 }

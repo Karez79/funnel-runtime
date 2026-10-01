@@ -1,0 +1,49 @@
+.overlay {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  width: min(340px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-pop);
+  font-size: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.list dt {
+  color: color-mix(in oklch, var(--on-ink) 65%, var(--ink));
+}
+
+.list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+}
+
+.current {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* On a phone a fixed panel would cover Continue: it flows under the card instead. */
+@media (width <= 720px) {
+  .overlay {
+    position: static;
+    width: 100%;
+    max-width: 560px;
+  }
+}

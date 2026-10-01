@@ -545,16 +545,24 @@ describe('POST /api/sessions/:id/complete', () => {
     expect(row(a, session.id)?.resultId).toBe('async_native');
   });
 
-  it('is idempotent: a stored result is returned even after the answers change', async () => {
-    const a = await app();
+  it('is idempotent for the same state and recomputes after the answers change', async () => {
+    const clock = testClock();
+    const a = await app({ clock });
     const { session } = await created(a, { variantOverride: 'A' });
     await save(a, session.id, HYBRID, 0);
     const first: unknown = (await complete(a, session.id)).json();
+    const updatedAt = row(a, session.id)?.updatedAt;
+    clock.advance(1000);
+    // The same state again: same result, the row is not rewritten.
+    expect((await complete(a, session.id)).json()).toEqual(first);
+    expect(row(a, session.id)?.updatedAt).toBe(updatedAt);
+
+    // Back from the result, a different work mode, Continue to the result again.
     await save(a, session.id, { ...HYBRID, work_mode: 'office' }, 1);
     const again = await complete(a, session.id);
     expect(again.statusCode).toBe(200);
-    expect(again.json()).toEqual(first);
-    expect(row(a, session.id)?.resultId).toBe('hybrid_structured');
+    expect(again.json()).toMatchObject({ resultId: 'office_core' });
+    expect(row(a, session.id)?.resultId).toBe('office_core');
   });
 
   it('answers 422 naming the first unanswered visible step', async () => {
