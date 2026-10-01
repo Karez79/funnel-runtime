@@ -3,6 +3,7 @@
 // all three agree on one definition. Every count is a number of unique sessions.
 import { z } from 'zod';
 import { VARIANTS } from '../config/schema.ts';
+import { REJECT_REASONS } from '../events/schema.ts';
 
 const count = z.number().int().nonnegative();
 /** A share in 0..1; `null` when the denominator is 0. */
@@ -59,7 +60,10 @@ export const AnalyticsSummarySchema = z.object({
   version: z.number().int().positive(),
   experimentId: z.string(),
   kpis: ByVariant(Kpis),
-  /** Step order of each variant; steps of the selected variant are listed in `steps`. */
+  /**
+   * Step order of each variant. `steps` follows the selected variant's sequence; for
+   * `variant=all` it is A's sequence followed by steps only B has, in B's order.
+   */
   sequences: z.object({ A: z.array(z.string()), B: z.array(z.string()) }),
   steps: z.array(
     z.object({
@@ -97,7 +101,7 @@ export const AnalyticsSummarySchema = z.object({
     duplicates: count,
     outOfOrder: count,
     contextMismatch: count,
-    rejected: z.array(z.object({ reason: z.string(), count })),
+    rejected: z.array(z.object({ reason: z.enum(REJECT_REASONS), count })),
   }),
   daily: z.array(z.object({ date: z.iso.date(), started: count })),
   sources: z.array(z.object({ source: z.string().nullable(), sessions: count })),

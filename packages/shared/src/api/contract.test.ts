@@ -4,7 +4,8 @@ import { v1, v2 } from '../../test/fixtures.ts';
 import { diffConfigs } from '../config/diff.ts';
 import { lintConfig } from '../config/lint.ts';
 import { resolveFunnel } from '../engine/resolve.ts';
-import { contract, LIVE_STREAM, type RouteDef } from './contract.ts';
+import { AnalyticsSummarySchema } from '../analytics/summary.ts';
+import { contract, LiveEntrySchema, LIVE_STREAM, type RouteDef } from './contract.ts';
 
 const routes: [string, RouteDef][] = Object.entries(contract);
 
@@ -40,6 +41,7 @@ describe('response schemas encode real values', () => {
         funnelVersion: 1,
         experimentId: funnel.meta.experimentId,
         variant,
+        variantSource: 'hash',
         state: {
           answers: { team_size: 4, priorities: ['speed'] },
           history: [],
@@ -72,7 +74,137 @@ describe('response schemas encode real values', () => {
   });
 });
 
+describe('response schemas encode the remaining shapes', () => {
+  const kpis = {
+    started: 10,
+    reachedResult: 6,
+    clickedCta: 3,
+    inProgress: 1,
+    resultRate: 0.6,
+    ctaCtr: 0.5,
+    startedToCta: 0.3,
+    backUsage: null,
+  };
+  const step = { reached: 10, completed: 9, passRate: 0.9, droppedHere: 1, cameBack: 2 };
+  const proportion = { sessions: 5, conversions: 2, rate: 0.4, ci: [0.12, 0.77] };
+
+  it('analytics summary', () => {
+    const summary = {
+      funnelId: 'workstyle-planner',
+      version: 2,
+      experimentId: 'e',
+      kpis: { A: kpis, B: null, all: kpis },
+      sequences: { A: ['intro', 'result'], B: ['intro', 'result'] },
+      steps: [
+        {
+          stepId: 'office_days',
+          type: 'number',
+          condition: 'if work_mode in hybrid, office',
+          metrics: { A: step, B: step, all: step },
+        },
+      ],
+      results: [{ resultId: 'balanced', sessions: { A: 1, B: 2, all: 3 } }],
+      branches: [
+        {
+          stepId: 'office_days',
+          parentStepId: 'work_mode',
+          seen: 4,
+          parentReached: 9,
+          share: 0.44,
+        },
+      ],
+      experiment: {
+        metric: 'started_to_cta',
+        A: proportion,
+        B: proportion,
+        diffPoints: 0,
+        pValue: 1,
+        requiredPerVariant: null,
+        verdict: 'No difference yet.',
+      },
+      versions: [{ version: 2, active: true, kpis }],
+      otherEvents: [{ name: 'plan_opened', sessions: 1, shareOfCta: 0.33 }],
+      dataQuality: {
+        duplicates: 3,
+        outOfOrder: 2,
+        contextMismatch: 0,
+        rejected: [{ reason: 'unknown_event', count: 1 }],
+      },
+      daily: [{ date: '2026-10-01', started: 10 }],
+      sources: [{ source: null, sessions: 1 }],
+      groundTruthMatches: true,
+    };
+    expect(encodes(AnalyticsSummarySchema, summary)).toBe(true);
+    expect(encodes(contract.analyticsSummary.response, summary)).toBe(true);
+  });
+
+  it('versions list, live entry, batch response', () => {
+    const version = {
+      funnelId: 'workstyle-planner',
+      version: 1,
+      title: 't',
+      state: 'published',
+      releaseNote: null,
+      createdAt: '2026-10-01T10:00:00.000Z',
+      activatedAt: '2026-10-01T10:00:00.000Z',
+      active: true,
+      activeSessions: 2,
+      totalSessions: 5,
+    };
+    const activation = {
+      id: 1,
+      version: 1,
+      action: 'publish',
+      fromVersion: null,
+      note: null,
+      createdAt: version.createdAt,
+    };
+    expect(
+      encodes(contract.listVersions.response, { versions: [version], activations: [activation] }),
+    ).toBe(true);
+    const live = {
+      receivedAt: version.createdAt,
+      eventId: 'e',
+      sessionId: 's',
+      name: 'step_viewed',
+      stepId: 'intro',
+      version: 1,
+      variant: 'A',
+      status: 'duplicate',
+      reason: null,
+    };
+    expect(encodes(LiveEntrySchema, live)).toBe(true);
+    const batch = {
+      results: [
+        { event_id: 'e', status: 'accepted' },
+        { event_id: null, status: 'rejected', reason: 'invalid_event' },
+      ],
+      accepted: 1,
+      duplicates: 0,
+      rejected: 1,
+    };
+    expect(encodes(contract.eventsBatch.response, batch)).toBe(true);
+  });
+});
+
+describe('error details', () => {
+  it('saveState conflict carries the server state; publish carries the lint report', () => {
+    const details = { state: { answers: {}, history: [], currentStepId: 'intro' }, stateRev: 4 };
+    expect(contract.saveState.errorDetails.conflict.safeParse(details).success).toBe(true);
+    const lint = lintConfig(v1());
+    expect(contract.publishVersion.errorDetails.unprocessable.safeParse(lint).success).toBe(true);
+  });
+});
+
 describe('request schemas', () => {
+  it('activation note is optional and the body may be absent', () => {
+    expect(contract.rollback.body.parse(undefined)).toEqual({});
+    expect(contract.publishVersion.body.parse({ note: 'Ship it' })).toEqual({ note: 'Ship it' });
+    expect(contract.uploadVersion.query.parse({ releaseNote: 'Adds meetings' })).toEqual({
+      releaseNote: 'Adds meetings',
+    });
+  });
+
   it('session creation defaults utm and accepts only synthetic as traffic type', () => {
     const body = contract.createSession.body;
     expect(body.parse({ funnelId: 'workstyle-planner' })).toEqual({

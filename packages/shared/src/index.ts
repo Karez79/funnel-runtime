@@ -73,6 +73,7 @@ export {
   LIVE_STREAM,
   LiveEntrySchema,
   SessionStateSchema,
+  StateConflictDetailsSchema,
 } from './api/contract.ts';
 export type { LiveEntry, SessionResponse, SessionState, VersionSummary } from './api/contract.ts';
 export {
@@ -83,3 +84,10 @@ export {
 export type { AnalyticsFilters, AnalyticsSummary } from './analytics/summary.ts';
 export { ConfigChangeSchema } from './config/diff.ts';
 export { LintReportSchema } from './config/lint.ts';
+
+export {
+  ACTIVATION_ACTIONS,
+  TRAFFIC_TYPES,
+  VARIANT_SOURCES,
+  VERSION_STATES,
+} from './api/domain.ts';

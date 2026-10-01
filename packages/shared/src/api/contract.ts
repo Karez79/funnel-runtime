@@ -4,6 +4,8 @@
 // Success has exactly one status and schema per route; every failure is a
 // DomainError rendered as the shared ErrorBody envelope (see errors.ts).
 import { z } from 'zod';
+import type { ErrorCode } from './errors.ts';
+import { ACTIVATION_ACTIONS, VARIANT_SOURCES, VERSION_STATES } from './domain.ts';
 import { AnalyticsFiltersSchema, AnalyticsSummarySchema } from '../analytics/summary.ts';
 import { ConfigChangeSchema } from '../config/diff.ts';
 import { LintReportSchema } from '../config/lint.ts';
@@ -25,6 +27,8 @@ export interface RouteDef {
   /** Max request body in bytes; falls back to the server default. */
   readonly bodyLimit?: number;
   readonly response: z.ZodType;
+  /** Shape of `error.details` for failures that carry data the client acts on. */
+  readonly errorDetails?: Partial<Record<ErrorCode, z.ZodType>>;
 }
 
 /** Synthetic traffic is accepted only with this header carrying `GENERATOR_KEY` (6.2). */
@@ -65,6 +69,8 @@ const SessionSchema = z.object({
   funnelVersion: z.number().int().positive(),
   experimentId: z.string(),
   variant: Variant,
+  /** Shown by the debug overlay (8.5). */
+  variantSource: z.enum(VARIANT_SOURCES),
   state: SessionStateSchema,
   stateRev: z.number().int().nonnegative(),
   resultId: z.string().nullable(),
@@ -76,13 +82,19 @@ export type SessionResponse = z.infer<typeof SessionResponse>;
 
 const SessionParams = z.object({ id: z.string().min(1).max(100) });
 
+/** `error.details` of a 409 on saveState: the server's state, which the client adopts. */
+export const StateConflictDetailsSchema = z.object({
+  state: SessionStateSchema,
+  stateRev: z.number().int().nonnegative(),
+});
+
 // ---------- versions (6.1) ----------
 
 const VersionSummary = z.object({
   funnelId: z.string(),
   version: z.number().int().positive(),
   title: z.string(),
-  state: z.enum(['draft', 'published']),
+  state: z.enum(VERSION_STATES),
   releaseNote: z.string().nullable(),
   createdAt: Timestamp,
   /** When it last became the active version; null if never. */
@@ -97,13 +109,15 @@ export type VersionSummary = z.infer<typeof VersionSummary>;
 const Activation = z.object({
   id: z.number().int().positive(),
   version: z.number().int().positive(),
-  action: z.enum(['publish', 'rollback', 'activate']),
+  action: z.enum(ACTIVATION_ACTIONS),
   fromVersion: z.number().int().positive().nullable(),
   note: z.string().nullable(),
   createdAt: Timestamp,
 });
 
 const VersionParams = z.object({ v: Version });
+/** Optional note stored in the activation journal (5). */
+const ActivationBody = z.object({ note: z.string().max(500).optional() }).default({});
 const ActivationResponse = z.object({ activation: Activation });
 
 // ---------- live (11.1) ----------
@@ -170,6 +184,7 @@ export const contract = {
     params: SessionParams,
     body: z.object({ state: SessionStateSchema, baseRev: z.number().int().nonnegative() }),
     response: z.object({ stateRev: z.number().int().positive() }),
+    errorDetails: { conflict: StateConflictDetailsSchema },
   },
   completeSession: {
     method: 'POST',
@@ -201,14 +216,20 @@ export const contract = {
     // The stored config as uploaded (status in the JSON is ignored, 4.1).
     response: z.object({ version: VersionSummary, config: z.record(z.string(), z.unknown()) }),
   },
-  /** Body is the raw config JSON; schema problems are 422 with the issues in `details`. */
+  /**
+   * Body is the raw config JSON; schema problems are 422 with the issues in `details`.
+   * Always 201: a re-upload of the same config hash answers with the stored version and
+   * `created: false`, so the client handles both cases the same way.
+   */
   uploadVersion: {
     method: 'POST',
     path: '/api/admin/versions',
     auth: 'admin',
     status: 201,
     bodyLimit: 512 * KB,
+    query: z.object({ releaseNote: z.string().max(500).optional() }),
     body: z.unknown(),
+    errorDetails: { unprocessable: z.object({ issues: z.array(z.string()) }) },
     response: z.object({
       version: VersionSummary,
       lint: LintReportSchema,
@@ -235,13 +256,16 @@ export const contract = {
     path: '/api/admin/versions/:v/publish',
     auth: 'admin',
     params: VersionParams,
+    body: ActivationBody,
     response: ActivationResponse,
+    errorDetails: { unprocessable: LintReportSchema },
   },
   activateVersion: {
     method: 'POST',
     path: '/api/admin/versions/:v/activate',
     auth: 'admin',
     params: VersionParams,
+    body: ActivationBody,
     response: ActivationResponse,
   },
   /** 409 `conflict` when there is no previous active version. */
@@ -249,6 +273,7 @@ export const contract = {
     method: 'POST',
     path: '/api/admin/rollback',
     auth: 'admin',
+    body: ActivationBody,
     response: ActivationResponse,
   },
   /** Resolved funnel for in-memory preview: creates no session and no events (11.1). */
