@@ -4,6 +4,7 @@
 // change a text in B only). Lint turns the risky kinds of change into warnings, so the
 // list of changes is defined here once.
 import { conditionAnswers } from '../engine/conditions.ts';
+import type { ResultRule } from './schema.ts';
 import { resolveFunnel, type ResolvedFunnel } from '../engine/resolve.ts';
 import { VARIANTS, type FunnelConfig, type VariantKey } from './schema.ts';
 
@@ -20,11 +21,14 @@ export type ChangeKind =
   | 'result_changed'
   | 'rule_added'
   | 'rule_removed'
+  | 'rule_changed'
   | 'rule_order'
   | 'default_result_changed'
   | 'event_added'
   | 'event_removed'
-  | 'event_changed';
+  | 'event_changed'
+  | 'privacy_changed'
+  | 'config_changed';
 
 export interface ConfigChange {
   readonly kind: ChangeKind;
@@ -50,8 +54,8 @@ function changedPaths(a: unknown, b: unknown, depth: number, prefix = ''): strin
   );
 }
 
-function withoutCondition(step: object): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(step).filter(([key]) => key !== 'visibleWhen'));
+function omit(value: object, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
 }
 
 function diffVariant(a: ResolvedFunnel, b: ResolvedFunnel, out: ConfigChange[]): void {
@@ -77,7 +81,7 @@ function diffVariant(a: ResolvedFunnel, b: ResolvedFunnel, out: ConfigChange[]):
     const stepA = a.steps[id];
     const stepB = b.steps[id];
     if (!stepA || !stepB) continue;
-    const paths = changedPaths(withoutCondition(stepA), withoutCondition(stepB), 2);
+    const paths = changedPaths(omit(stepA, ['visibleWhen']), omit(stepB, ['visibleWhen']), 2);
     if (paths.length > 0) push('step_changed', id, `step "${id}": ${paths.join(', ')} changed`);
     if (!same(stepA.visibleWhen, stepB.visibleWhen)) {
       const on = stepB.visibleWhen ? conditionAnswers(stepB.visibleWhen) : [];
@@ -94,27 +98,42 @@ function diffVariant(a: ResolvedFunnel, b: ResolvedFunnel, out: ConfigChange[]):
   }
 }
 
+const dependsOn = (rule: ResultRule) => conditionAnswers(rule.when).join(', ') || 'nothing';
+
 function diffRules(a: FunnelConfig, b: FunnelConfig, out: ConfigChange[]): void {
   const keysA = a.resultRules.map((r) => JSON.stringify(r));
   const keysB = b.resultRules.map((r) => JSON.stringify(r));
-  b.resultRules.forEach((rule, i) => {
-    if (!keysA.includes(keysB[i] ?? '')) {
+  const added = b.resultRules.flatMap((rule, i) =>
+    keysA.includes(keysB[i] ?? '') ? [] : [{ rule, number: i + 1 }],
+  );
+  const removed = a.resultRules.flatMap((rule, i) =>
+    keysB.includes(keysA[i] ?? '') ? [] : [{ rule, number: i + 1 }],
+  );
+  // A rule for the same result that left and came back is an edit, not two unrelated lines.
+  for (const { rule, number } of added) {
+    const before = removed.findIndex((r) => r.rule.resultId === rule.resultId);
+    if (before !== -1) {
+      removed.splice(before, 1);
+      out.push({
+        kind: 'rule_changed',
+        subject: rule.resultId,
+        message: `Result rule #${String(number)} for "${rule.resultId}" changed, now depends on ${dependsOn(rule)}`,
+      });
+    } else {
       out.push({
         kind: 'rule_added',
         subject: rule.resultId,
-        message: `Result rule #${String(i + 1)} for "${rule.resultId}" added`,
+        message: `Result rule #${String(number)} for "${rule.resultId}" added, depends on ${dependsOn(rule)}`,
       });
     }
-  });
-  a.resultRules.forEach((rule, i) => {
-    if (!keysB.includes(keysA[i] ?? '')) {
-      out.push({
-        kind: 'rule_removed',
-        subject: rule.resultId,
-        message: `Result rule for "${rule.resultId}" removed`,
-      });
-    }
-  });
+  }
+  for (const { rule, number } of removed) {
+    out.push({
+      kind: 'rule_removed',
+      subject: rule.resultId,
+      message: `Result rule #${String(number)} for "${rule.resultId}" removed`,
+    });
+  }
   const kept = (from: string[], other: string[]) => from.filter((k) => other.includes(k));
   if (!same(kept(keysA, keysB), kept(keysB, keysA))) {
     out.push({ kind: 'rule_order', subject: 'resultRules', message: 'Result rule order changed' });
@@ -135,18 +154,59 @@ function diffEvents(a: FunnelConfig, b: FunnelConfig, out: ConfigChange[]): void
     const before = eventsA.get(name);
     if (!before) {
       out.push({ kind: 'event_added', subject: name, message: `Event "${name}" added` });
-    } else if (!same(before.properties, event.properties)) {
-      out.push({
-        kind: 'event_changed',
-        subject: name,
-        message: `Event "${name}": properties changed to ${event.properties.join(', ') || 'none'}`,
-      });
+    } else {
+      const plus = event.properties.filter((p) => !before.properties.includes(p));
+      const minus = before.properties.filter((p) => !event.properties.includes(p));
+      const parts = [
+        ...(plus.length > 0 ? [`added ${plus.join(', ')}`] : []),
+        ...(minus.length > 0 ? [`removed ${minus.join(', ')}`] : []),
+      ];
+      if (parts.length > 0) {
+        out.push({
+          kind: 'event_changed',
+          subject: name,
+          message: `Event "${name}": properties ${parts.join('; ')}`,
+        });
+      }
     }
   }
   for (const name of eventsA.keys()) {
     if (!eventsB.has(name)) {
       out.push({ kind: 'event_removed', subject: name, message: `Event "${name}" removed` });
     }
+  }
+}
+
+/**
+ * Everything not compared above (title, session TTL, progress, privacy, schemaVersion,
+ * fields unknown to this engine), so no change is ever silently missing from the list.
+ */
+function rest(config: FunnelConfig): Record<string, unknown> {
+  // Release notes describe each version and differ by design.
+  const top = [
+    'version',
+    'status',
+    'releaseNote',
+    'steps',
+    'results',
+    'resultRules',
+    'defaultResultId',
+  ];
+  return {
+    ...omit(config, [...top, 'experiment', 'events']),
+    experiment: omit(config.experiment, ['id', 'variants']),
+    events: omit(config.events, ['allowed']),
+  };
+}
+
+function diffRest(a: FunnelConfig, b: FunnelConfig, out: ConfigChange[]): void {
+  for (const path of changedPaths(rest(a), rest(b), 3)) {
+    const privacy = path.startsWith('events.privacy');
+    out.push({
+      kind: privacy ? 'privacy_changed' : 'config_changed',
+      subject: path,
+      message: `${privacy ? 'Privacy setting' : 'Setting'} "${path}" changed`,
+    });
   }
 }
 
@@ -187,6 +247,7 @@ export function diffConfigs(a: FunnelConfig, b: FunnelConfig): ConfigChange[] {
   }
   diffRules(a, b, out);
   diffEvents(a, b, out);
+  diffRest(a, b, out);
   for (const variant of VARIANTS) {
     diffVariant(resolveFunnel(a, variant), resolveFunnel(b, variant), out);
   }

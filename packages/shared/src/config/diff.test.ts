@@ -98,4 +98,61 @@ describe('diffConfigs', () => {
       'step_changed:B:work_mode',
     ]);
   });
+
+  it('reports a removed condition, an edited base result and an edited rule', () => {
+    const a = v1();
+    const b = v1();
+    const office = b.steps['office_days'];
+    const balanced = b.results['balanced'];
+    const rule = b.resultRules[1];
+    if (!office || !balanced || !rule) throw new Error('fixture');
+    delete office.visibleWhen;
+    balanced.summary = 'Shorter summary.';
+    rule.when = { answer: 'office_days', operator: 'gte', value: 2 };
+    const changes = diffConfigs(a, b);
+    expect(summary(changes)).toEqual([
+      'rule_changed:-:hybrid_structured',
+      'condition_changed:A:office_days',
+      'result_changed:A:balanced',
+      'condition_changed:B:office_days',
+      'result_changed:B:balanced',
+    ]);
+    expect(changes.map((c) => c.message)).toEqual(
+      expect.arrayContaining([
+        'Result rule #2 for "hybrid_structured" changed, now depends on office_days',
+        'Variant A: step "office_days": visibility condition changed, now always shown',
+        'Variant A: result "balanced": summary changed',
+      ]),
+    );
+  });
+
+  it('reports event properties added and removed, ignoring their order', () => {
+    const a = v1();
+    const b = v1();
+    const cta = b.events.allowed.find((e) => e.name === 'cta_clicked');
+    const viewed = b.events.allowed.find((e) => e.name === 'step_viewed');
+    if (!cta || !viewed) throw new Error('fixture');
+    cta.properties = ['action', 'source'];
+    viewed.properties = [...viewed.properties].reverse();
+    expect(diffConfigs(a, b).map((c) => c.message)).toEqual([
+      'Event "cta_clicked": properties added source; removed result_id',
+    ]);
+  });
+
+  it('reports settings outside steps and results, privacy separately', () => {
+    const a = v1();
+    const b = v1();
+    b.session.ttlHours = 1;
+    b.progress.excludeTypes = ['result'];
+    b.title = 'New title';
+    b.events.privacy.storeRawAnswers = true;
+    b['futureFlag'] = true;
+    expect(summary(diffConfigs(a, b))).toEqual([
+      'config_changed:-:title',
+      'config_changed:-:session.ttlHours',
+      'config_changed:-:progress.excludeTypes',
+      'privacy_changed:-:events.privacy.storeRawAnswers',
+      'config_changed:-:futureFlag',
+    ]);
+  });
 });

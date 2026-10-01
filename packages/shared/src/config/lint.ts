@@ -35,7 +35,8 @@ export type LintErrorCode =
   | 'unknown_override'
   | 'invalid_override'
   | 'variant_weight'
-  | 'missing_base_event';
+  | 'missing_base_event'
+  | 'privacy';
 
 export type LintWarningCode =
   'unknown_step_type' | 'unused_step' | 'unknown_answer' | 'operator_type' | 'config_change';
@@ -68,6 +69,8 @@ const WARN_ON_CHANGE: ReadonlySet<ChangeKind> = new Set([
   'result_removed',
   'event_added',
   'event_removed',
+  'event_changed',
+  'privacy_changed',
 ]);
 
 const SUPPORTED_SCHEMA_MAJOR = '1';
@@ -125,6 +128,12 @@ function lintDefinitions(config: FunnelConfig, out: Collector): void {
   }
   if (!(config.defaultResultId in config.results)) {
     out.error('unknown_result', `defaultResultId "${config.defaultResultId}" does not exist`);
+  }
+  if (config.events.privacy.storeRawAnswers) {
+    out.error(
+      'privacy',
+      'events.privacy.storeRawAnswers must be false: raw answers never go into events',
+    );
   }
   const catalog = new Set(config.events.allowed.map((e) => e.name));
   const missing = BASE_EVENTS.filter((name) => !catalog.has(name));

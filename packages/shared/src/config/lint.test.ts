@@ -154,6 +154,12 @@ describe('lintConfig: errors', () => {
     expect(errors[0]?.message).toContain('back_clicked');
   });
 
+  it('raw answers stored in events', () => {
+    const config = v1();
+    config.events.privacy.storeRawAnswers = true;
+    expect(codes(config)).toEqual(['privacy']);
+  });
+
   it('an unknown major schema version', () => {
     const config = v1();
     config.schemaVersion = '2.0';
@@ -273,6 +279,16 @@ describe('lintConfig: changes against the active version', () => {
       'Event "plan_opened" added',
       'Event "old_event" removed',
       'Variant B: step "tool_count" removed',
+    ]);
+  });
+
+  it('warns when an event loses a whitelisted property', () => {
+    const next = v2();
+    const cta = next.events.allowed.find((e) => e.name === 'cta_clicked');
+    if (!cta) throw new Error('fixture');
+    cta.properties = ['result_id'];
+    expect(lintConfig(next, { previous: v2() }).warnings.map((w) => w.message)).toEqual([
+      'Event "cta_clicked": properties removed action',
     ]);
   });
 
