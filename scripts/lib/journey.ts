@@ -54,11 +54,15 @@ export const PERSONAS: readonly Persona[] = [
       meeting_hours: 6,
     },
   },
-  { name: 'hybrid', weight: 2, answers: { work_mode: 'hybrid', meeting_hours: 10 } },
+  {
+    name: 'hybrid',
+    weight: 2,
+    answers: { work_mode: 'hybrid', async_maturity: 'medium', meeting_hours: 10 },
+  },
   {
     name: 'office',
     weight: 1.5,
-    answers: { work_mode: 'office', timezone_span: 'same', meeting_hours: 8 },
+    answers: { work_mode: 'office', async_maturity: 'medium', meeting_hours: 8 },
   },
   { name: 'high async maturity', weight: 1.5, answers: { async_maturity: 'high' } },
   { name: 'meeting heavy', weight: 1, answers: { meeting_hours: 25 } },
