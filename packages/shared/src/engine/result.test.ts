@@ -30,6 +30,14 @@ describe('computeResult', () => {
     expect(computeResult(a, answers)).toBe(expected);
   });
 
+  it('gives the same result id in variant B, whose order and result texts differ', () => {
+    const b = resolveFunnel(v1(), 'B');
+    const hybrid = { ...base, work_mode: 'hybrid', office_days: 2 };
+    expect(computeResult(b, hybrid)).toBe(computeResult(a, hybrid));
+    expect(computeResult(b, hybrid)).toBe('hybrid_structured');
+    expect(b.results['hybrid_structured']?.title).not.toBe(a.results['hybrid_structured']?.title);
+  });
+
   it('takes the first matching rule in order', () => {
     const resolved = resolveFunnel(v2(), 'A');
     const answers = { ...base, work_mode: 'hybrid', office_days: 2, meeting_hours: 20 };
