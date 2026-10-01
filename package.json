@@ -24,7 +24,8 @@
     "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @funnel/server dev\" \"pnpm --filter @funnel/web dev\"",
     "e2e": "pnpm --filter @funnel/web build && playwright test",
     "review:stats": "node scripts/review-stats.ts",
-    "generate": "node --env-file-if-exists=.env scripts/generate-traffic.ts"
+    "generate": "node --env-file-if-exists=.env scripts/generate-traffic.ts",
+    "verify": "node --env-file-if-exists=.env scripts/verify.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
