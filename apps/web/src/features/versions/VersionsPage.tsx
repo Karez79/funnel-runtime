@@ -20,10 +20,8 @@ import { useVersionActions } from './useVersionActions.ts';
 import styles from './VersionsPage.module.css';
 import { VersionsTable } from './VersionsTable.tsx';
 
-type Pending =
-  | { kind: 'publish'; version: number }
-  | { kind: 'rollback'; version: number }
-  | { kind: 'activate'; version: number };
+/** A rollback always targets the journal's previous version at the time it is shown. */
+type Pending = { kind: 'publish' | 'activate'; version: number } | { kind: 'rollback' };
 
 const sessions = (n: number) => `${String(n)} ${n === 1 ? 'session' : 'sessions'}`;
 
@@ -39,10 +37,18 @@ function stayingText(active: VersionSummary | undefined, target: number): string
 
 export function VersionsPage() {
   const list = useQuery(apiQuery('listVersions', {}));
-  const actions = useVersionActions();
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  const actions = useVersionActions({
+    onRollbackRequest: () => {
+      setPending({ kind: 'rollback' });
+    },
+    onPublished: () => {
+      setSelected(null);
+    },
+    onUploaded: setSelected,
+  });
   const fileInput = useRef<HTMLInputElement>(null);
 
   const versions = list.data?.versions ?? [];
@@ -53,15 +59,19 @@ export function VersionsPage() {
   // Commands from the palette arrive as `?publish=N` / `?rollback=1` (admin-shell) and
   // open the same confirmation as the buttons; closing it clears the URL.
   const publishParam = Number(params.get('publish'));
-  const fromUrl: Pending | null =
-    publishParam > 0
-      ? { kind: 'publish', version: publishParam }
-      : params.has('rollback') && previous !== null
-        ? { kind: 'rollback', version: previous }
-        : null;
+  const publishable = drafts.some((d) => d.version === publishParam);
+  const fromUrl: Pending | null = publishable
+    ? { kind: 'publish', version: publishParam }
+    : params.has('rollback')
+      ? { kind: 'rollback' }
+      : null;
   const reviewed =
-    selected ?? (publishParam > 0 ? publishParam : null) ?? drafts.at(-1)?.version ?? null;
-  const shown = list.data ? (pending ?? fromUrl) : null;
+    selected ?? (publishable ? publishParam : null) ?? drafts.at(-1)?.version ?? null;
+  const candidate = list.data ? (pending ?? fromUrl) : null;
+  // The version a confirmation would switch to; a rollback without a previous one has none.
+  const target =
+    candidate === null ? null : candidate.kind === 'rollback' ? previous : candidate.version;
+  const shown = candidate !== null && target !== null ? { kind: candidate.kind, target } : null;
   const close = () => {
     setPending(null);
     if (fromUrl) setParams({}, { replace: true });
@@ -69,22 +79,21 @@ export function VersionsPage() {
 
   const confirm = () => {
     if (!shown) return;
-    if (shown.kind === 'publish') actions.publish.mutate(shown.version);
+    if (shown.kind === 'publish') actions.publish.mutate(shown.target);
     if (shown.kind === 'rollback') actions.rollback.mutate();
-    if (shown.kind === 'activate') actions.activate.mutate(shown.version);
+    if (shown.kind === 'activate') actions.activate.mutate(shown.target);
     close();
   };
 
   const uploadIssues =
     errorDetails('uploadVersion', 'unprocessable', actions.upload.error)?.issues ?? [];
 
-  const title = (p: Pending) => {
-    const v = String(p.version);
-    if (p.kind === 'publish') return [`Publish version ${v}?`, `Publish version ${v}`];
-    if (p.kind === 'rollback') return [`Roll back to version ${v}?`, `Roll back to version ${v}`];
-    return [`Activate version ${v}?`, `Activate version ${v}`];
+  const verb = {
+    publish: 'Publish version',
+    rollback: 'Roll back to version',
+    activate: 'Activate version',
   };
-  const [dialogTitle, dialogLabel] = shown ? title(shown) : ['', ''];
+  const dialogLabel = shown ? `${verb[shown.kind]} ${String(shown.target)}` : '';
 
   return (
     <>
@@ -141,8 +150,8 @@ export function VersionsPage() {
               previous={previous}
               reviewed={reviewed}
               onReview={setSelected}
-              onRollback={(version) => {
-                setPending({ kind: 'rollback', version });
+              onRollback={() => {
+                setPending({ kind: 'rollback' });
               }}
               onActivate={(version) => {
                 setPending({ kind: 'activate', version });
@@ -167,13 +176,13 @@ export function VersionsPage() {
 
       <ConfirmDialog
         open={shown !== null}
-        title={dialogTitle ?? ''}
-        confirmLabel={dialogLabel ?? ''}
+        title={`${dialogLabel}?`}
+        confirmLabel={dialogLabel}
         onConfirm={confirm}
         onCancel={close}
       >
         <p>
-          {shown ? stayingText(active, shown.version) : ''}
+          {shown ? stayingText(active, shown.target) : ''}
           {shown?.kind === 'publish' ? ' You can roll back at any time.' : ''}
         </p>
       </ConfirmDialog>

@@ -35,6 +35,10 @@
   background: color-mix(in oklch, var(--card) 50%, transparent);
 }
 
+.tbl tr[aria-current='true'] {
+  background: color-mix(in oklch, var(--card) 60%, transparent);
+}
+
 .tbl .n {
   text-align: right;
 }

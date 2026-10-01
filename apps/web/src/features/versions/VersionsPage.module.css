@@ -72,10 +72,6 @@
   color: var(--ink-2);
 }
 
-tr[aria-current='true'] {
-  background: color-mix(in oklch, var(--card) 60%, transparent);
-}
-
 .rowActions {
   display: inline-flex;
   gap: 6px;

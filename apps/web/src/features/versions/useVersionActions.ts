@@ -14,7 +14,14 @@ function errorText(error: unknown): string {
   return error instanceof DomainError ? error.message : 'Something went wrong, try again';
 }
 
-export function useVersionActions() {
+interface Callbacks {
+  /** "Roll back" in the publish toast: the page asks for confirmation first. */
+  readonly onRollbackRequest: () => void;
+  readonly onPublished: () => void;
+  readonly onUploaded: (version: number) => void;
+}
+
+export function useVersionActions({ onRollbackRequest, onPublished, onUploaded }: Callbacks) {
   const queryClient = useQueryClient();
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
@@ -39,12 +46,11 @@ export function useVersionActions() {
     mutationFn: (version: number) => call('publishVersion', { params: { v: version }, body: {} }),
     onSuccess: async ({ activation }) => {
       await done();
+      onPublished();
       say(`Published version ${String(activation.version)}`, {
         label: 'Roll back',
         icon: 'undo',
-        onClick: () => {
-          rollback.mutate();
-        },
+        onClick: onRollbackRequest,
       });
     },
     onError: (error) => {
@@ -75,6 +81,7 @@ export function useVersionActions() {
     },
     onSuccess: async ({ version, created }) => {
       await done();
+      onUploaded(version.version);
       const v = String(version.version);
       say(created ? `Uploaded version ${v} as a draft` : `Version ${v} is already stored`);
     },

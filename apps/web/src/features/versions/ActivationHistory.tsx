@@ -21,9 +21,7 @@ export function ActivationHistory({ activations }: { activations: readonly Activ
         <li key={a.id}>
           <span>
             {describe(a)}
-            {a.note && a.note !== 'seed' ? (
-              <span className={styles.histNote}> · {a.note}</span>
-            ) : null}
+            {a.note ? <span className={styles.histNote}> · {a.note}</span> : null}
           </span>
           <time dateTime={a.createdAt}>{formatDateTime(a.createdAt)}</time>
         </li>

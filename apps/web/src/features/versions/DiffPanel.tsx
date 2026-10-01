@@ -57,7 +57,11 @@ export function DiffPanel({
         )}
       </div>
       {diff.isPending && <p className={styles.note}>Comparing…</p>}
-      {diff.isError && <p className={styles.note}>The diff could not be loaded.</p>}
+      {diff.isError && (
+        <p className={styles.note} role="alert">
+          This version cannot be compared or published: {diff.error.message}
+        </p>
+      )}
       {diff.data && (
         <>
           {changes.length === 0 ? (

@@ -26,7 +26,7 @@ export function VersionsTable({
   previous: number | null;
   reviewed: number | null;
   onReview: (version: number) => void;
-  onRollback: (version: number) => void;
+  onRollback: () => void;
   onActivate: (version: number) => void;
 }) {
   const newestFirst = [...versions].sort((a, b) => b.version - a.version);
@@ -55,7 +55,7 @@ export function VersionsTable({
               <Status version={v} />
             </Td>
             <Td>
-              <span className={styles.noteCell}>{v.releaseNote ?? v.title}</span>
+              <span className={styles.noteCell}>{v.releaseNote ?? '–'}</span>
             </Td>
             <Td>
               <Mono>{v.activatedAt ? formatDateTime(v.activatedAt) : '–'}</Mono>
@@ -76,13 +76,7 @@ export function VersionsTable({
                   </Button>
                 )}
                 {!v.active && v.state === 'published' && v.version === previous && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      onRollback(v.version);
-                    }}
-                  >
+                  <Button size="sm" variant="ghost" onClick={onRollback}>
                     Roll back to version {v.version}
                   </Button>
                 )}
