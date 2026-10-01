@@ -25,7 +25,7 @@ export function createTracker(sink: EventSink, catalog: readonly EventDefinition
 }
 
 /** Drops every event: preview mode (11.1) and, until the queue lands, live sessions. */
-const NOOP_SINK: EventSink = {
+export const NOOP_SINK: EventSink = {
   push: () => undefined,
   pending: () => 0,
 };
