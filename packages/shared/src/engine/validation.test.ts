@@ -129,11 +129,27 @@ describe('validateAnswer: defaults and non-interactive steps', () => {
     });
   });
 
-  it('accepts no answer for an optional step', () => {
+  it('accepts no answer only when the step opts out with required: false', () => {
     const optional = { ...workMode, validation: { required: false } };
     expect(validateAnswer(optional, undefined)).toEqual({ ok: true });
-    const optionalMulti = { ...priorities, validation: {} };
+    const optionalMulti = { ...priorities, validation: { required: false, minSelections: 1 } };
     expect(validateAnswer(optionalMulti, [])).toEqual({ ok: true });
+    expect(validateAnswer(optionalMulti, undefined)).toEqual({ ok: true });
+  });
+
+  it('treats a step without a validation block as required', () => {
+    const bareNumber: Step = { id: 'n', type: 'number', content: {}, input: { name: 'n' } };
+    expect(validateAnswer(bareNumber, undefined)).toMatchObject({ ok: false, code: 'required' });
+    const bareMulti = { ...priorities, validation: {} };
+    expect(validateAnswer(bareMulti, [])).toMatchObject({ ok: false, code: 'required' });
+  });
+
+  it('an empty array is a wrong shape for number and single-select, required or not', () => {
+    for (const s of [teamSize, workMode]) {
+      expect(validateAnswer(s, [])).toMatchObject({ ok: false, code: 'invalidType' });
+      const optional = { ...s, validation: { required: false } };
+      expect(validateAnswer(optional, [])).toMatchObject({ ok: false, code: 'invalidType' });
+    }
   });
 
   it('accepts anything for info, result and unknown steps', () => {

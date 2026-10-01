@@ -79,13 +79,18 @@ function validateMulti(step: InteractiveStep & { type: 'multi-select' }, value: 
 
 export function validateAnswer(step: Step, value: unknown): ValidationResult {
   if (!isInteractive(step)) return OK;
-  const empty = value === undefined || (Array.isArray(value) && value.length === 0);
+  // `[]` is "nothing selected" only for multi-select; elsewhere it is a wrong shape.
+  const empty =
+    value === undefined ||
+    (step.type === 'multi-select' && Array.isArray(value) && value.length === 0);
   if (empty) {
+    // A question is required unless the config opts out explicitly (DECISIONS.md).
+    if (step.validation?.required === false) return OK;
     const minSelections = step.type === 'multi-select' ? (step.validation?.minSelections ?? 0) : 0;
     if (minSelections > 0) {
       return fail(step, 'minSelections', `Choose at least ${String(minSelections)}.`);
     }
-    return step.validation?.required ? fail(step, 'required') : OK;
+    return fail(step, 'required');
   }
   switch (step.type) {
     case 'number':
