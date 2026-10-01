@@ -2,7 +2,12 @@
 // knows `EventSink`; Phase 4's eventQueue implements it. `track` sends an event only if its name
 // is in the catalog of the CURRENT session's version, so a session on an older version
 // never sends an event its version does not know.
-import { catalogEvent, type EventDefinition, type EventProperties } from '@funnel/shared';
+import {
+  catalogEvent,
+  type EventDefinition,
+  type EventProperties,
+  type SessionResponse,
+} from '@funnel/shared';
 
 /** Where the funnel hands events; Phase 4's eventQueue implements it. */
 export interface EventSink {
@@ -18,3 +23,12 @@ export function createTracker(sink: EventSink, catalog: readonly EventDefinition
     if (catalogEvent(catalog, name)) sink.push(name, stepId, properties);
   };
 }
+
+/** Drops every event: preview mode (11.1) and, until the queue lands, live sessions. */
+const NOOP_SINK: EventSink = {
+  push: () => undefined,
+  pending: () => 0,
+};
+
+/** The one place that decides a live session's sink; Phase 4 returns the event queue here. */
+export const createEventSink: (session: SessionResponse) => EventSink = () => NOOP_SINK;
