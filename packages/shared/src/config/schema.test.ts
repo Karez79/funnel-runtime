@@ -73,6 +73,16 @@ describe('parseConfig', () => {
     expect(parseConfig({ ...raw, steps }).ok).toBe(false);
   });
 
+  it('explains a malformed top-level condition node', () => {
+    const raw = rawV1Clone();
+    const visibleWhen = { all: [], any: [] };
+    const steps = { ...v1().steps, office_days: { ...v1().steps['office_days'], visibleWhen } };
+    const res = parseConfig({ ...raw, steps });
+    expect(!res.ok && res.issues).toEqual([
+      expect.stringMatching(/^steps\.office_days\.visibleWhen: expected a condition/),
+    ]);
+  });
+
   it('parses an unknown operator (lint rejects it) and an exists leaf without value', () => {
     const raw = rawV1Clone();
     const steps = {

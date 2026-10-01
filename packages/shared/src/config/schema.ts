@@ -30,24 +30,30 @@ const ConditionLeafSchema = z.strictObject({
 });
 export type ConditionLeaf = z.infer<typeof ConditionLeafSchema>;
 
-const ConditionSchema = z.union([
-  ConditionLeafSchema,
-  z.strictObject({
-    get all() {
-      return z.array(ConditionSchema);
-    },
-  }),
-  z.strictObject({
-    get any() {
-      return z.array(ConditionSchema);
-    },
-  }),
-  z.strictObject({
-    get not() {
-      return ConditionSchema;
-    },
-  }),
-]);
+const ConditionSchema = z.union(
+  [
+    ConditionLeafSchema,
+    z.strictObject({
+      get all() {
+        return z.array(ConditionSchema);
+      },
+    }),
+    z.strictObject({
+      get any() {
+        return z.array(ConditionSchema);
+      },
+    }),
+    z.strictObject({
+      get not() {
+        return ConditionSchema;
+      },
+    }),
+  ],
+  {
+    error:
+      'expected a condition: { answer, operator, value? } or exactly one of { all }, { any }, { not }',
+  },
+);
 export type Condition = z.infer<typeof ConditionSchema>;
 
 // ---------- steps ----------
@@ -156,7 +162,7 @@ export type MultiSelectStep = z.infer<typeof MultiSelectStep>;
 export type NumberStep = z.infer<typeof NumberStep>;
 export type InteractiveStep = SingleSelectStep | MultiSelectStep | NumberStep;
 
-/** Parsing guarantees a known `type` matched its own schema (see UnknownStep). */
+/** Parsing guarantees a known `type` matched its own schema (see StepSchema). */
 export function isKnownStep(step: Step): step is KnownStep {
   return isKnownType(step.type);
 }
@@ -197,7 +203,7 @@ export type VariantKey = (typeof VARIANTS)[number];
 
 const Experiment = z.looseObject({
   id: z.string().min(1),
-  variants: z.strictObject({ A: Variant, B: Variant }),
+  variants: z.strictObject({ A: Variant, B: Variant } satisfies Record<VariantKey, typeof Variant>),
 });
 
 const EventDefinition = z.looseObject({
