@@ -8,12 +8,19 @@
 import { createHash } from 'node:crypto';
 import {
   DomainError,
+  diffConfigs,
   lintConfig,
   parseConfig,
+  resolveFunnel,
+  type ConfigChange,
   type FunnelConfig,
   type LintErrorCode,
   type LintReport,
+  type ResolvedFunnel,
+  type VariantKey,
+  type VersionSummary,
 } from '@funnel/shared';
+import { z } from 'zod';
 import type { Clock } from '../../clock.ts';
 import type { ActivationRow, VersionRow, VersionsRepo } from './repo.ts';
 
@@ -30,6 +37,8 @@ export interface ActiveVersion {
   version: number;
   config: FunnelConfig;
 }
+
+const StoredJson = z.record(z.string(), z.unknown());
 
 function hashConfig(json: string): string {
   return createHash('sha256').update(json).digest('hex');
@@ -124,26 +133,167 @@ export function createVersionsService(repo: VersionsRepo, clock: Clock) {
     if (lint.errors.length > 0) {
       throw new DomainError('unprocessable', `Version ${String(version)} has lint errors`, lint);
     }
-    const activation = repo.transaction(() => {
+    return switchTo(funnelId, version, 'publish', note, () => {
       repo.markPublished(funnelId, version);
-      return repo.appendActivation({
-        funnelId,
-        version,
-        action: 'publish',
-        fromVersion: previous?.version ?? null,
-        note: note ?? null,
-        createdAt: clock.now().toISOString(),
-      });
     });
-    activeVersions.delete(funnelId);
-    return activation;
   }
+
+  /** One journal row (plus `before` in the same transaction); drops the active cache. */
+  function switchTo(
+    funnelId: string,
+    version: number,
+    action: ActivationRow['action'],
+    note: string | undefined,
+    before: () => void = () => undefined,
+  ): ActivationRow {
+    try {
+      return repo.transaction(() => {
+        before();
+        return repo.appendActivation({
+          funnelId,
+          version,
+          action,
+          fromVersion: findActive(funnelId)?.version ?? null,
+          note: note ?? null,
+          createdAt: clock.now().toISOString(),
+        });
+      });
+    } finally {
+      activeVersions.delete(funnelId);
+    }
+  }
+
+  // ---- admin API (6.1). One funnel per database: upload lint refuses another funnelId.
+
+  function soleFunnelId(): string {
+    const first = repo.list()[0];
+    if (!first) throw new DomainError('not_found', 'No versions stored');
+    return first.funnelId;
+  }
+
+  function publishedVersion(funnelId: string, version: number): VersionRow {
+    const row = repo.get(funnelId, version);
+    if (!row) throw notFound(version);
+    if (row.state !== 'published') {
+      throw new DomainError('conflict', `Version ${String(version)} is a draft: publish it first`);
+    }
+    return row;
+  }
+
+  function summaries(funnelId: string): VersionSummary[] {
+    const activeNow = findActive(funnelId)?.version;
+    const activations = repo.activations(funnelId);
+    const counts = new Map(
+      repo.sessionCounts(funnelId, clock.now().toISOString()).map((c) => [c.version, c]),
+    );
+    return repo.list().map((row) => ({
+      funnelId: row.funnelId,
+      version: row.version,
+      title: config(row.funnelId, row.version).title,
+      state: row.state,
+      releaseNote: row.releaseNote,
+      createdAt: row.createdAt,
+      // Newest first, so the first match is the latest time it became active.
+      activatedAt: activations.find((a) => a.version === row.version)?.createdAt ?? null,
+      active: row.version === activeNow,
+      activeSessions: counts.get(row.version)?.active ?? 0,
+      totalSessions: counts.get(row.version)?.total ?? 0,
+    }));
+  }
+
+  function summary(funnelId: string, version: number): VersionSummary {
+    const found = summaries(funnelId).find((s) => s.version === version);
+    if (!found) throw notFound(version);
+    return found;
+  }
+
+  const toActivation = (row: ActivationRow) => ({
+    id: row.id,
+    version: row.version,
+    action: row.action,
+    fromVersion: row.fromVersion,
+    note: row.note,
+    createdAt: row.createdAt,
+  });
+
+  const admin = {
+    list() {
+      const funnelId = soleFunnelId();
+      return {
+        versions: summaries(funnelId),
+        activations: repo.activations(funnelId).map(toActivation),
+      };
+    },
+
+    activeDetails() {
+      const funnelId = soleFunnelId();
+      const active = findActive(funnelId);
+      if (!active) throw new DomainError('not_found', 'No active version');
+      const row = repo.get(funnelId, active.version);
+      if (!row) throw notFound(active.version);
+      // The config as uploaded, including fields the schema ignores (4.1).
+      const raw = StoredJson.parse(JSON.parse(row.configJson));
+      return { version: summary(funnelId, active.version), config: raw };
+    },
+
+    uploadVersion(raw: unknown, releaseNote?: string) {
+      const { row, lint, created } = upload(raw, releaseNote);
+      return { version: summary(row.funnelId, row.version), lint, created };
+    },
+
+    /** Changes from `against` (default: the active version) to `version`, and its lint. */
+    diff(version: number, against: number | 'active') {
+      const funnelId = soleFunnelId();
+      const target = config(funnelId, version);
+      const base =
+        against === 'active'
+          ? findActive(funnelId)
+          : { version: against, config: config(funnelId, against) };
+      const changes: ConfigChange[] = base ? diffConfigs(base.config, target) : [];
+      const lint = lintConfig(target, base ? { previous: base.config } : {});
+      return { version, against: base?.version ?? null, changes, lint };
+    },
+
+    publishVersion(version: number, note?: string) {
+      return { activation: toActivation(publish(soleFunnelId(), version, note)) };
+    },
+
+    /** Makes any published version active again (journal action `activate`). */
+    activateVersion(version: number, note?: string) {
+      const funnelId = soleFunnelId();
+      publishedVersion(funnelId, version);
+      if (findActive(funnelId)?.version === version) {
+        throw new DomainError('conflict', `Version ${String(version)} is already active`);
+      }
+      return { activation: toActivation(switchTo(funnelId, version, 'activate', note)) };
+    },
+
+    /**
+     * Back to the version that was active before the current one: the `fromVersion` of
+     * the newest journal row. Only new sessions are affected; pinned ones keep theirs.
+     */
+    rollback(note?: string) {
+      const funnelId = soleFunnelId();
+      const target = repo.latestActivation(funnelId)?.fromVersion ?? null;
+      if (target === null) {
+        throw new DomainError('conflict', 'There is no previous version to roll back to');
+      }
+      publishedVersion(funnelId, target);
+      return { activation: toActivation(switchTo(funnelId, target, 'rollback', note)) };
+    },
+
+    /** Resolved funnel of any stored version for in-memory preview: no session, no events. */
+    preview(version: number, variant: VariantKey): { funnel: ResolvedFunnel } {
+      return { funnel: resolveFunnel(config(soleFunnelId(), version), variant) };
+    },
+  };
 
   return {
     config,
     findActive,
     upload,
     publish,
+    admin,
 
     /** The active version; 404 when the funnel has never been published. */
     active(funnelId: string): ActiveVersion {

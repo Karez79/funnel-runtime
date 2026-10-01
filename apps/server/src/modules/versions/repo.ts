@@ -1,13 +1,20 @@
 // Storage of config versions and the append-only activation journal (CLAUDE.md 5, 6.1).
 // Versions are never updated except draft -> published, and journal rows are never
 // changed: the active version is simply the newest journal row.
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { funnelActivations, funnelVersions } from '../../db/schema.ts';
+import { funnelActivations, funnelVersions, sessions } from '../../db/schema.ts';
 
 export type VersionRow = typeof funnelVersions.$inferSelect;
 export type ActivationRow = typeof funnelActivations.$inferSelect;
 type NewActivation = Omit<typeof funnelActivations.$inferInsert, 'id'>;
+
+export interface SessionCounts {
+  version: number;
+  /** Not expired and without a result. */
+  active: number;
+  total: number;
+}
 
 export function createVersionsRepo(db: Db) {
   return {
@@ -55,6 +62,30 @@ export function createVersionsRepo(db: Db) {
 
     appendActivation(row: NewActivation): ActivationRow {
       return db.insert(funnelActivations).values(row).returning().get();
+    },
+
+    /** Newest first; the first row is the active version. */
+    activations(funnelId: string): ActivationRow[] {
+      return db
+        .select()
+        .from(funnelActivations)
+        .where(eq(funnelActivations.funnelId, funnelId))
+        .orderBy(desc(funnelActivations.id))
+        .all();
+    },
+
+    sessionCounts(funnelId: string, nowIso: string): SessionCounts[] {
+      const inProgress = and(gt(sessions.expiresAt, nowIso), isNull(sessions.resultId));
+      return db
+        .select({
+          version: sessions.funnelVersion,
+          active: sql<number>`coalesce(sum(case when ${inProgress} then 1 else 0 end), 0)`,
+          total: count(),
+        })
+        .from(sessions)
+        .where(eq(sessions.funnelId, funnelId))
+        .groupBy(sessions.funnelVersion)
+        .all();
     },
 
     latestActivation(funnelId: string): ActivationRow | undefined {
