@@ -65,6 +65,24 @@ describe('evaluateCondition: operators', () => {
     expect(evalLeaf('work_mode', 'exists', false)).toBe(false);
   });
 
+  it('an empty multi-select is no answer', () => {
+    const empty: Answers = { priorities: [] };
+    expect(evaluateCondition(leaf('priorities', 'exists'), empty)).toBe(false);
+    expect(evaluateCondition(leaf('priorities', 'exists', false), empty)).toBe(true);
+    expect(evaluateCondition({ not: leaf('priorities', 'contains', 'speed') }, empty)).toBe(true);
+  });
+
+  it('single-value operators never match a multi-select answer', () => {
+    for (const [op, value] of [
+      ['eq', 'speed'],
+      ['ne', 'speed'],
+      ['in', ['speed']],
+      ['not_in', ['cost']],
+    ] as const) {
+      expect(evalLeaf('priorities', op, value)).toBe(false);
+    }
+  });
+
   it('a missing answer makes every other operator false', () => {
     for (const op of ['eq', 'ne', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte', 'contains']) {
       expect(evalLeaf('missing', op, op.endsWith('in') ? ['x'] : 1)).toBe(false);
@@ -76,6 +94,21 @@ describe('evaluateCondition: operators', () => {
     const cond = leaf('work_mode', 'matches', 'hy.*');
     expect(evaluateCondition(cond, answers, { warn })).toBe(false);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('matches'));
+  });
+
+  it.each(['toString', 'constructor', 'valueOf', 'hasOwnProperty', '__proto__'])(
+    'an inherited name like %s is an unknown operator',
+    (operator) => {
+      const warn = vi.fn();
+      expect(evaluateCondition(leaf('work_mode', operator, 'x'), answers, { warn })).toBe(false);
+      expect(warn).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('an inherited name is never an answer', () => {
+    expect(evalLeaf('constructor', 'exists')).toBe(false);
+    expect(evalLeaf('constructor', 'ne', 'x')).toBe(false);
+    expect(evalLeaf('toString', 'exists', false)).toBe(true);
   });
 
   it('an unknown operator without a warn callback is still false', () => {
