@@ -3,12 +3,20 @@
 // here (hash or an explicit QA override), UTM is stored once, and all of it is pinned
 // to the row. Reading a session resolves its PINNED version, never the active one, so
 // publishing or rolling back never changes a session that is already running.
+// State and completion are validated against that pinned funnel. Error messages and
+// details name steps and validation codes, never answer values (CLAUDE.md 5, 7.2).
 import type { contract } from '@funnel/shared';
 import {
+  answerKey,
+  computeResult,
   DomainError,
+  isInteractive,
   resolveFunnel,
   SessionStateSchema,
+  validateAnswer,
+  validateCompletion,
   type ResolvedFunnel,
+  type Result,
   type SessionResponse,
   type SessionState,
   type VariantKey,
@@ -142,11 +150,95 @@ export function createSessionsService(
     return toResponse(row);
   }
 
+  /** Every step id is in the pinned sequence; every answer belongs to one of its questions and is valid. */
+  function checkState(funnel: ResolvedFunnel, state: SessionState): void {
+    const sequence = new Set(funnel.sequence);
+    for (const stepId of [state.currentStepId, ...state.history]) {
+      if (!sequence.has(stepId)) {
+        throw new DomainError('unprocessable', `Step "${stepId}" is not part of this session`, {
+          stepId,
+        });
+      }
+    }
+    const questions = new Map(
+      Object.values(funnel.steps)
+        .filter(isInteractive)
+        .map((step) => [answerKey(step), step]),
+    );
+    for (const [key, value] of Object.entries(state.answers)) {
+      const step = questions.get(key);
+      if (!step) {
+        throw new DomainError('unprocessable', `"${key}" is not a question of this session`, {
+          answer: key,
+        });
+      }
+      const check = validateAnswer(step, value);
+      if (!check.ok) {
+        throw new DomainError(
+          'unprocessable',
+          `Answer to "${step.id}" is invalid: ${check.message}`,
+          {
+            stepId: step.id,
+            code: check.code,
+          },
+        );
+      }
+    }
+  }
+
+  function resultOf(
+    funnel: ResolvedFunnel,
+    resultId: string,
+  ): { resultId: string; result: Result } {
+    const result = funnel.results[resultId];
+    // Lint checks that every rule and the default point at an existing result.
+    if (!result) throw new DomainError('internal', `Result "${resultId}" does not exist`);
+    return { resultId, result };
+  }
+
   return {
     create,
 
     get(id: string): SessionResponse {
       return toResponse(live(id));
+    },
+
+    /** Optimistic lock on `state_rev`: a stale `baseRev` gets 409 with the server's state. */
+    saveState(id: string, state: SessionState, baseRev: number): { stateRev: number } {
+      const conflict = (current: SessionRow) =>
+        new DomainError('conflict', 'Session state has changed', {
+          state: parseState(current),
+          stateRev: current.stateRev,
+        });
+      const row = live(id);
+      if (baseRev !== row.stateRev) throw conflict(row);
+      checkState(resolved(row.funnelId, row.funnelVersion, row.variant), state);
+      if (!repo.saveState(id, JSON.stringify(state), baseRev, clock.now().toISOString())) {
+        throw conflict(live(id));
+      }
+      return { stateRev: baseRev + 1 };
+    },
+
+    /**
+     * The server computes and stores the result (6.3). Idempotent: once a result is
+     * stored it is returned as is, even if the state changed afterwards.
+     */
+    complete(id: string): { resultId: string; result: Result } {
+      const row = live(id);
+      const funnel = resolved(row.funnelId, row.funnelVersion, row.variant);
+      if (row.resultId !== null) return resultOf(funnel, row.resultId);
+      const { answers } = parseState(row);
+      const completion = validateCompletion(funnel, answers);
+      if (!completion.ok) {
+        throw new DomainError(
+          'unprocessable',
+          `Step "${completion.stepId}" is not answered: ${completion.message}`,
+          { stepId: completion.stepId, code: completion.code },
+        );
+      }
+      const outcome = resultOf(funnel, computeResult(funnel, answers));
+      repo.setResult(id, outcome.resultId, clock.now().toISOString());
+      return outcome;
     },
   };
 }

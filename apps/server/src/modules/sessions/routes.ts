@@ -21,4 +21,8 @@ export function sessionsRoutes(
     createOptions,
   );
   route(app, contract.getSession, (req) => service.get(req.params.id));
+  route(app, contract.saveState, (req) =>
+    service.saveState(req.params.id, req.body.state, req.body.baseRev),
+  );
+  route(app, contract.completeSession, (req) => service.complete(req.params.id));
 }

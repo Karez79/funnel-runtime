@@ -1,10 +1,16 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
-import { contract, type SessionResponse } from '@funnel/shared';
+import {
+  contract,
+  ErrorBody,
+  SessionUnprocessableDetailsSchema,
+  type SessionResponse,
+} from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { events, sessions } from '../../db/schema.ts';
 import { createTestApp, generatorHeaders, testClock, type TestApp } from '../../test/harness.ts';
 import { assignVariant, fnv1a32 } from './assignment.ts';
+import { createSessionsRepo } from './repo.ts';
 
 const FUNNEL = 'workstyle-planner';
 const EXPERIMENT_V1 = 'question-order-and-result-framing-v1';
@@ -298,5 +304,230 @@ describe('GET /api/sessions/:id', () => {
     const res = await read(a, session.id);
     expect(res.statusCode).toBe(410);
     expect(res.json()).toMatchObject({ error: { code: 'gone' } });
+  });
+});
+
+const HYBRID = {
+  team_size: 12,
+  work_mode: 'hybrid',
+  priorities: ['focus', 'speed'],
+  timezone_span: 'same',
+  office_days: 2,
+  async_maturity: 'medium',
+  tool_count: 8,
+};
+const without = (answers: Record<string, unknown>, key: string) =>
+  Object.fromEntries(Object.entries(answers).filter(([k]) => k !== key));
+const V1_A_PATH = ['intro', 'team_size', 'work_mode', 'priorities', 'timezone_span', 'office_days'];
+
+async function save(
+  a: TestApp,
+  id: string,
+  answers: Record<string, unknown>,
+  baseRev: number,
+  extra: { currentStepId?: string; history?: string[] } = {},
+) {
+  return a.app.inject({
+    method: 'PUT',
+    url: `/api/sessions/${id}/state`,
+    payload: {
+      baseRev,
+      state: { answers, history: V1_A_PATH, currentStepId: 'result', ...extra },
+    },
+  });
+}
+
+async function complete(a: TestApp, id: string) {
+  return a.app.inject({ method: 'POST', url: `/api/sessions/${id}/complete` });
+}
+
+describe('test 1: version pinning', () => {
+  it('keeps a v1 session on v1 after v2 is published; new sessions get v2', async () => {
+    const a = await app();
+    const { session } = await created(a, { variantOverride: 'A' });
+    a.services.versions.publish(FUNNEL, 2);
+
+    const got = contract.getSession.response.parse((await read(a, session.id)).json());
+    expect(got.session.funnelVersion).toBe(1);
+    expect(got.funnel.meta).toMatchObject({ version: 1, experimentId: EXPERIMENT_V1 });
+
+    const saved = await save(a, session.id, HYBRID, 0);
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toEqual({ stateRev: 1 });
+
+    // meeting_hours exists only in v2: neither its answer nor the step fits a v1 session.
+    const v2Answer = await save(a, session.id, { ...HYBRID, meeting_hours: 6 }, 1);
+    expect(v2Answer.statusCode).toBe(422);
+    expect(v2Answer.json()).toMatchObject({
+      error: { code: 'unprocessable', details: { answer: 'meeting_hours' } },
+    });
+    const v2Step = await save(a, session.id, HYBRID, 1, { currentStepId: 'meeting_hours' });
+    expect(v2Step.statusCode).toBe(422);
+    expect(v2Step.json()).toMatchObject({ error: { details: { stepId: 'meeting_hours' } } });
+
+    const done = await complete(a, session.id);
+    expect(done.statusCode).toBe(200);
+    expect(done.json()).toMatchObject({ resultId: 'hybrid_structured' });
+
+    const fresh = await created(a);
+    expect(fresh.session.funnelVersion).toBe(2);
+    expect(fresh.funnel.sequence).toContain('meeting_hours');
+  });
+});
+
+describe('PUT /api/sessions/:id/state', () => {
+  it('stores the state and bumps the revision', async () => {
+    const clock = testClock();
+    const a = await app({ clock });
+    const { session } = await created(a, { variantOverride: 'A' });
+    clock.advance(1000);
+    expect((await save(a, session.id, { team_size: 5 }, 0)).json()).toEqual({ stateRev: 1 });
+    expect((await save(a, session.id, HYBRID, 1)).json()).toEqual({ stateRev: 2 });
+    const body = contract.getSession.response.parse((await read(a, session.id)).json());
+    expect(body.session).toMatchObject({
+      stateRev: 2,
+      state: { answers: HYBRID, history: V1_A_PATH, currentStepId: 'result' },
+    });
+    expect(row(a, session.id)?.updatedAt).toBe('2026-10-01T12:00:01.000Z');
+  });
+
+  it('answers 409 with the server state when baseRev is stale', async () => {
+    const a = await app();
+    const { session } = await created(a, { variantOverride: 'A' });
+    await save(a, session.id, { team_size: 5 }, 0);
+    const res = await save(a, session.id, HYBRID, 0);
+    expect(res.statusCode).toBe(409);
+    const details = contract.saveState.errorDetails.conflict.parse(
+      ErrorBody.parse(res.json()).error.details,
+    );
+    expect(details).toEqual({
+      stateRev: 1,
+      state: { answers: { team_size: 5 }, history: V1_A_PATH, currentStepId: 'result' },
+    });
+    expect(row(a, session.id)?.stateRev).toBe(1);
+  });
+
+  it.each([
+    ['out of range', { team_size: 999 }, 'team_size', 'max', '999'],
+    ['an unknown option', { work_mode: 'zeppelin' }, 'work_mode', 'invalidOption', 'zeppelin'],
+    [
+      'too many choices',
+      { priorities: ['speed', 'focus', 'culture', 'cost'] },
+      'priorities',
+      'maxSelections',
+      'culture',
+    ],
+    ['the wrong shape', { tool_count: 'many' }, 'tool_count', 'invalidType', 'many'],
+  ])(
+    'rejects an answer %s with 422 naming the step, not the value',
+    async (_n, answers, stepId, code, value) => {
+      const a = await app();
+      const { session } = await created(a);
+      const res = await save(a, session.id, answers, 0);
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({
+        error: { code: 'unprocessable', details: { stepId, code } },
+      });
+      expect(res.body).not.toContain(value);
+      expect(row(a, session.id)?.stateRev).toBe(0);
+    },
+  );
+
+  it('rejects history steps that are not in the pinned funnel', async () => {
+    const a = await app();
+    const { session } = await created(a);
+    const res = await save(a, session.id, {}, 0, { currentStepId: 'intro', history: ['nowhere'] });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ error: { details: { stepId: 'nowhere' } } });
+  });
+
+  it('answers 404 and 410 like GET', async () => {
+    const clock = testClock();
+    const a = await app({ clock });
+    expect((await save(a, uuidv7(), {}, 0)).statusCode).toBe(404);
+    const { session } = await created(a);
+    clock.advance(72 * 60 * 60 * 1000);
+    expect((await save(a, session.id, {}, 0)).statusCode).toBe(410);
+    expect((await complete(a, session.id)).statusCode).toBe(410);
+  });
+});
+
+describe('optimistic lock in SQL', () => {
+  it('refuses a write whose base revision is no longer current', async () => {
+    const a = await app();
+    const { session } = await created(a);
+    const repo = createSessionsRepo(a.handle.db);
+    const now = '2026-10-01T12:00:00.000Z';
+    expect(repo.saveState(session.id, '{}', 0, now)).toBe(true);
+    expect(repo.saveState(session.id, '{}', 0, now)).toBe(false);
+    expect(row(a, session.id)?.stateRev).toBe(1);
+  });
+});
+
+describe('POST /api/sessions/:id/complete', () => {
+  it('stores the computed result and returns it with the variant overrides', async () => {
+    const a = await app();
+    const { session } = await created(a, { variantOverride: 'B' });
+    await save(a, session.id, { ...HYBRID, async_maturity: 'high' }, 0, { history: [] });
+    const res = await complete(a, session.id);
+    expect(res.statusCode).toBe(200);
+    const body = contract.completeSession.response.parse(res.json());
+    expect(body.resultId).toBe('async_native');
+    expect(body.result.title).toBe('Your team is ready to reduce meetings');
+    expect(row(a, session.id)?.resultId).toBe('async_native');
+  });
+
+  it('is idempotent: a stored result is returned even after the answers change', async () => {
+    const a = await app();
+    const { session } = await created(a, { variantOverride: 'A' });
+    await save(a, session.id, HYBRID, 0);
+    const first: unknown = (await complete(a, session.id)).json();
+    await save(a, session.id, { ...HYBRID, work_mode: 'office' }, 1);
+    const again = await complete(a, session.id);
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toEqual(first);
+    expect(row(a, session.id)?.resultId).toBe('hybrid_structured');
+  });
+
+  it('answers 422 naming the first unanswered visible step', async () => {
+    const a = await app();
+    const { session } = await created(a, { variantOverride: 'A' });
+    await save(a, session.id, without(HYBRID, 'office_days'), 0);
+    const res = await complete(a, session.id);
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({
+      error: { code: 'unprocessable', details: { stepId: 'office_days', code: 'required' } },
+    });
+    expect(row(a, session.id)?.resultId).toBeNull();
+  });
+
+  it('does not require answers of steps that became hidden', async () => {
+    const a = await app();
+    // office_days was answered for hybrid, then work_mode changed to remote: the step is
+    // hidden and its stale answer is kept but not required. No v1 rule reads office_days,
+    // so "not used for the result" is covered by computeResult's tests in shared.
+    const { session } = await created(a, { variantOverride: 'A' });
+    await save(a, session.id, { ...HYBRID, office_days: 4 }, 0);
+    await save(a, session.id, { ...HYBRID, work_mode: 'remote', office_days: 4 }, 1);
+    expect((await complete(a, session.id)).json()).toMatchObject({ resultId: 'balanced' });
+
+    const other = await created(a, { variantOverride: 'A' });
+    const remote = without({ ...HYBRID, work_mode: 'remote' }, 'office_days');
+    await save(a, other.session.id, remote, 0);
+    const done = await complete(a, other.session.id);
+    expect(done.statusCode).toBe(200);
+    // With hybrid the same answers miss office_days, which is then required.
+    const third = await created(a, { variantOverride: 'A' });
+    await save(a, third.session.id, without(HYBRID, 'office_days'), 0);
+    const missing = await complete(a, third.session.id);
+    expect(missing.statusCode).toBe(422);
+    expect(
+      SessionUnprocessableDetailsSchema.parse(ErrorBody.parse(missing.json()).error.details),
+    ).toEqual({ stepId: 'office_days', code: 'required' });
+  });
+
+  it('answers 404 for an unknown session', async () => {
+    const a = await app();
+    expect((await complete(a, uuidv7())).statusCode).toBe(404);
   });
 });
