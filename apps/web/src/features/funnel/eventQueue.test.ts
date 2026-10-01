@@ -104,6 +104,10 @@ const push = (queue: EventQueue, count: number) => {
     queue.push('step_viewed', 'team_size', { step_type: 'number' });
 };
 
+/** The stored outbox, parsed (and so checked) with the shared schema. */
+const storedEvents = (raw = storage.data.get(`funnel:events:${SESSION}`)): ClientEvent[] =>
+  ClientEventSchema.array().parse(JSON.parse(raw ?? '[]'));
+
 const sentIds = (index: number) => server.requests[index]?.map((e) => e.event_id) ?? [];
 
 beforeEach(() => {
@@ -125,10 +129,10 @@ describe('event shape and client_seq', () => {
     const queue = makeQueue();
     queue.push('answer_submitted', 'team_size', { answer_kind: 'number' });
 
-    const [event] = JSON.parse(storage.data.get(`funnel:events:${SESSION}`) ?? '[]') as unknown[];
-    const parsed = ClientEventSchema.parse(event);
-    expect(parsed).toEqual({
-      event_id: expect.any(String) as string,
+    const [parsed] = storedEvents();
+    expect(parsed?.event_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect({ ...parsed, event_id: 'id' }).toEqual({
+      event_id: 'id',
       session_id: SESSION,
       name: 'answer_submitted',
       client_timestamp: '2026-10-02T10:00:00.000Z',
@@ -224,10 +228,7 @@ describe('server answers', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toContain('unknown_event');
     const left = sentIds(0)[3];
-    const stored = JSON.parse(storage.data.get(`funnel:events:${SESSION}`) ?? '[]') as {
-      event_id: string;
-    }[];
-    expect(stored.map((e) => e.event_id)).toEqual([left]);
+    expect(storedEvents().map((e) => e.event_id)).toEqual([left]);
   });
 
   it('keeps events on network errors and 5xx and retries with backoff 1, 2, 4, 8, 16, 30, 30 s', async () => {
@@ -314,21 +315,24 @@ describe('server answers', () => {
 });
 
 describe('beacon on hide', () => {
-  it('beacons the whole outbox in batches of 100 and keeps it', () => {
+  // A failing request keeps all 150 events in the outbox when the page hides.
+  const offline = { send: () => Promise.reject(new Error('offline')) };
+
+  it('beacons the whole outbox in batches of 100 and keeps it', async () => {
     const beacon = vi.fn<(body: BatchBody) => boolean>(() => true);
-    const queue = makeQueue({ beacon });
-    push(queue, 5);
+    const queue = makeQueue({ ...offline, beacon });
+    push(queue, 150);
+    await vi.advanceTimersByTimeAsync(0);
     hidden?.();
-    expect(beacon).toHaveBeenCalledTimes(1);
-    expect(beacon.mock.calls[0]?.[0].events).toHaveLength(5);
-    expect(queue.pending()).toBe(5);
+    expect(beacon.mock.calls.map(([body]) => body.events.length)).toEqual([100, 50]);
+    expect(queue.pending()).toBe(150);
   });
 
-  it('stops when the browser refuses a beacon', () => {
+  it('stops when the browser refuses a beacon', async () => {
     const beacon = vi.fn<(body: BatchBody) => boolean>(() => false);
-    const queue = makeQueue({ beacon });
-    push(queue, 9);
-    for (let i = 0; i < 25; i += 1) queue.push('back_clicked', 'team_size', {});
+    const queue = makeQueue({ ...offline, beacon });
+    push(queue, 150);
+    await vi.advanceTimersByTimeAsync(0);
     hidden?.();
     expect(beacon).toHaveBeenCalledTimes(1);
   });
@@ -355,7 +359,7 @@ describe('refresh and storage', () => {
     const next = refresh();
     expect(next.pending()).toBe(3);
     await vi.advanceTimersByTimeAsync(2_000);
-    const storedIds = (JSON.parse(stored ?? '[]') as { event_id: string }[]).map((e) => e.event_id);
+    const storedIds = storedEvents(stored).map((e) => e.event_id);
     expect(sentIds(0)).toEqual(storedIds);
     expect(next.pending()).toBe(0);
   });
@@ -377,9 +381,54 @@ describe('refresh and storage', () => {
     release?.();
     await flushed;
 
-    const stored = JSON.parse(storage.data.get(`funnel:events:${SESSION}`) ?? '[]') as unknown[];
-    expect(stored).toHaveLength(3);
+    expect(storedEvents()).toHaveLength(3);
     expect(next.pending()).toBe(3);
+  });
+
+  it('two tabs of one session never repeat client_seq', () => {
+    const tabA = makeQueue();
+    const tabB = makeQueue();
+    tabA.push('step_viewed', 'intro', {});
+    tabB.push('step_viewed', 'intro', {});
+    tabA.push('step_viewed', 'team_size', {});
+    tabB.push('back_clicked', 'team_size', {});
+    expect(
+      storedEvents()
+        .map((e) => e.client_seq)
+        .toSorted((a, b) => a - b),
+    ).toEqual([0, 1, 2, 3]);
+  });
+
+  it("one tab's write keeps the other tab's stored events and drops only its own acked ones", async () => {
+    const tabA = makeQueue({ send: () => Promise.reject(new Error('offline')) });
+    push(tabA, 2);
+    const idsA = storedEvents().map((e) => e.event_id);
+
+    const tabB = makeQueue();
+    push(tabB, 1);
+    await tabB.flush();
+    expect(tabB.pending()).toBe(0);
+
+    // B's outbox held A's two events (loaded at creation) and its own; all were acked,
+    // so B removes them from storage, but A still has its own copy and writes it back.
+    tabA.push('back_clicked', 'team_size', {});
+    expect(
+      storedEvents()
+        .map((e) => e.event_id)
+        .slice(0, 2),
+    ).toEqual(idsA);
+    expect(storedEvents()).toHaveLength(3);
+  });
+
+  it('a tab does not erase events only the other tab stored', () => {
+    const tabA = makeQueue();
+    const tabB = makeQueue();
+    push(tabA, 2);
+    const idsA = storedEvents().map((e) => e.event_id);
+    tabB.push('back_clicked', 'team_size', {});
+    const stored = storedEvents().map((e) => e.event_id);
+    expect(stored).toHaveLength(3);
+    expect(stored).toEqual(expect.arrayContaining(idsA));
   });
 
   it('ignores a corrupt outbox and foreign or invalid stored events', () => {
@@ -388,7 +437,7 @@ describe('refresh and storage', () => {
 
     const valid = makeQueue();
     valid.push('step_viewed', 'intro', {});
-    const [event] = JSON.parse(storage.data.get(`funnel:events:${SESSION}`) ?? '[]') as object[];
+    const [event] = storedEvents();
     storage.setItem(
       `funnel:events:${SESSION}`,
       JSON.stringify([event, event, { ...event, session_id: 'other' }, { broken: true }]),

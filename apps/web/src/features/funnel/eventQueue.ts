@@ -205,12 +205,16 @@ export function createEventQueue(
   const { sessionId } = context;
   const utm = utmFields(context.utm);
 
+  /** The counter as stored; another tab of the same session may have moved it on. */
+  const storedSeq = (): number => {
+    const value = Number(readStorage(deps.storage, seqKey(sessionId)));
+    return Number.isSafeInteger(value) && value > 0 ? value : 0;
+  };
+
   let outbox = loadOutbox(deps.storage, sessionId);
-  const storedSeq = Number(readStorage(deps.storage, seqKey(sessionId)));
-  let nextSeq = Math.max(
-    Number.isSafeInteger(storedSeq) && storedSeq > 0 ? storedSeq : 0,
-    ...outbox.map((event) => event.client_seq + 1),
-  );
+  let nextSeq = Math.max(storedSeq(), ...outbox.map((event) => event.client_seq + 1));
+  /** Ids this queue removed: a merge with storage must not bring them back. */
+  const removed = new Set<string>();
 
   let timer: TimerHandle | null = null;
   let inFlight: Promise<void> | null = null;
@@ -226,8 +230,14 @@ export function createEventQueue(
     if (disposed) return;
     try {
       // The counter goes first: if the outbox write hits the quota, seq still never repeats.
-      deps.storage?.setItem(seqKey(sessionId), String(nextSeq));
-      deps.storage?.setItem(outboxKey(sessionId), JSON.stringify(outbox));
+      deps.storage?.setItem(seqKey(sessionId), String(Math.max(nextSeq, storedSeq())));
+      // Two tabs share the session (8.1): keep stored events of the other tab, so one tab's
+      // write never erases what only the other tab has stored.
+      const own = new Set(outbox.map((event) => event.event_id));
+      const foreign = loadOutbox(deps.storage, sessionId).filter(
+        (event) => !own.has(event.event_id) && !removed.has(event.event_id),
+      );
+      deps.storage?.setItem(outboxKey(sessionId), JSON.stringify([...outbox, ...foreign]));
     } catch {
       // Quota or blocked storage: the in-memory outbox keeps working for this page.
     }
@@ -255,6 +265,7 @@ export function createEventQueue(
 
   function remove(ids: ReadonlySet<string>): void {
     if (ids.size === 0) return;
+    for (const id of ids) removed.add(id);
     outbox = outbox.filter((event) => !ids.has(event.event_id));
     persist();
   }
@@ -317,6 +328,7 @@ export function createEventQueue(
 
   function push(name: string, stepId: string | null, properties: EventProperties): void {
     if (disposed) return;
+    nextSeq = Math.max(nextSeq, storedSeq());
     outbox.push({
       event_id: deps.uuid(),
       session_id: sessionId,
