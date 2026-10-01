@@ -19,6 +19,7 @@ import {
   type Step,
   type VariantKey,
 } from '../config/schema.ts';
+import { own } from '../own.ts';
 
 /** Also the wire shape of the session response (6.2), hence a zod schema. */
 export const ResolvedFunnelSchema = z.object({
@@ -47,7 +48,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function deepMerge(base: unknown, patch: unknown): unknown {
   if (!isPlainObject(base) || !isPlainObject(patch)) return patch;
   const merged: Record<string, unknown> = { ...base };
-  for (const [key, value] of Object.entries(patch)) merged[key] = deepMerge(base[key], value);
+  for (const [key, value] of Object.entries(patch)) merged[key] = deepMerge(own(base, key), value);
   return merged;
 }
 
@@ -63,11 +64,11 @@ export function resolveFunnel(config: FunnelConfig, variant: VariantKey): Resolv
 
   const steps: Record<string, Step> = {};
   for (const id of stepSequence) {
-    const base = Object.hasOwn(config.steps, id) ? config.steps[id] : undefined;
+    const base = own(config.steps, id);
     if (!base) {
       throw new DomainError('unprocessable', `step "${id}" of variant ${variant} does not exist`);
     }
-    const step = parseMerged(StepSchema, base, stepOverrides[id], `step "${id}"`);
+    const step = parseMerged(StepSchema, base, own(stepOverrides, id), `step "${id}"`);
     // Events and answers are keyed by the step's id and shaped by its type.
     if (step.id !== base.id || step.type !== base.type) {
       throw new DomainError('unprocessable', `step "${id}": an override cannot change id or type`);
@@ -77,7 +78,7 @@ export function resolveFunnel(config: FunnelConfig, variant: VariantKey): Resolv
 
   const results: Record<string, Result> = {};
   for (const [id, base] of Object.entries(config.results)) {
-    const result = parseMerged(ResultSchema, base, resultOverrides[id], `result "${id}"`);
+    const result = parseMerged(ResultSchema, base, own(resultOverrides, id), `result "${id}"`);
     if (result.id !== base.id) {
       throw new DomainError('unprocessable', `result "${id}": an override cannot change id`);
     }

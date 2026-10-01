@@ -4,6 +4,7 @@
 import type { EventDefinition, FunnelConfig } from '../config/schema.ts';
 import { isAnswerKind } from './answerKind.ts';
 import type { EventProperties } from './schema.ts';
+import { own } from '../own.ts';
 
 export const BASE_EVENTS = [
   'session_started',
@@ -59,7 +60,7 @@ export function filterProperties(
   const kept: EventProperties = {};
   const dropped: string[] = [];
   for (const [key, value] of Object.entries(properties)) {
-    const check = Object.hasOwn(PROPERTY_CHECKS, key) ? PROPERTY_CHECKS[key] : undefined;
+    const check = own(PROPERTY_CHECKS, key);
     const valid = isScalar(value) && (!check || check(value));
     if (allowed.has(key) && valid) kept[key] = value;
     else dropped.push(key);

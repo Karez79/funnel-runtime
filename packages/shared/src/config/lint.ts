@@ -19,6 +19,7 @@ import {
   type FunnelConfig,
   type Step,
 } from './schema.ts';
+import { own } from '../own.ts';
 
 const LINT_ERROR_CODES = [
   'schema_version',
@@ -175,7 +176,7 @@ function lintSequence(config: FunnelConfig, variant: (typeof VARIANTS)[number], 
       out.error('missing_step', `variant ${variant} uses unknown step "${id}"`);
     }
   }
-  const resultSteps = stepSequence.filter((id) => config.steps[id]?.type === 'result');
+  const resultSteps = stepSequence.filter((id) => own(config.steps, id)?.type === 'result');
   const last = stepSequence.at(-1);
   if (resultSteps.length !== 1 || last === undefined || resultSteps[0] !== last) {
     out.error(

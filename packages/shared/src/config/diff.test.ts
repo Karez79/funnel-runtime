@@ -161,4 +161,14 @@ describe('diffConfigs', () => {
       'config_changed:-:futureFlag',
     ]);
   });
+
+  it('reports a result named after a built-in object member', () => {
+    const a = v1();
+    const b = v1();
+    const balanced = b.results['balanced'];
+    if (!balanced) throw new Error('fixture');
+    b.results['constructor'] = { ...balanced, id: 'constructor' };
+    expect(summary(diffConfigs(a, b))).toEqual(['result_added:-:constructor']);
+    expect(summary(diffConfigs(b, a))).toEqual(['result_removed:-:constructor']);
+  });
 });

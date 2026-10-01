@@ -10,6 +10,7 @@
 // Lookups use own keys only, so names like `constructor` are never operators or answers.
 import { z } from 'zod';
 import type { Condition, ConditionLeaf, KNOWN_OPERATORS } from '../config/schema.ts';
+import { own } from '../own.ts';
 
 export const AnswerValueSchema = z.union([z.string(), z.number(), z.array(z.string())]);
 export type AnswerValue = z.infer<typeof AnswerValueSchema>;
@@ -58,8 +59,7 @@ function isPresentOperator(operator: string): operator is keyof typeof PRESENT_O
 }
 
 function answerOf(answers: Answers, key: string): AnswerValue | undefined {
-  if (!Object.hasOwn(answers, key)) return undefined;
-  const answer = answers[key];
+  const answer = own(answers, key);
   return Array.isArray(answer) && answer.length === 0 ? undefined : answer;
 }
 
