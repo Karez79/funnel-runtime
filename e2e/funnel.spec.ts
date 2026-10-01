@@ -3,6 +3,7 @@
 // on v1, the preview test uses the v2 draft. `?variant=` pins the variant (QA override),
 // so step orders are known. Each test runs in a fresh browser context: a new session.
 import type { Page } from '@playwright/test';
+import { contract } from '@funnel/shared';
 import { expect, test } from './fixtures.ts';
 
 const heading = (page: Page) => page.getByRole('heading', { level: 1 });
@@ -95,16 +96,41 @@ test('rapid Enter presses move one step at a time and stay consistent', async ({
   await page.keyboard.press('2');
   await page.keyboard.press('Enter');
   await expect(heading(page)).not.toHaveText('Where does the team work most of the time?');
-  await page.waitForLoadState('networkidle');
-  const reached = /\/s\/([a-z_]+)/.exec(page.url())?.[1];
-  const shown = await heading(page).textContent();
-  // The server has the step that is on screen.
+  // Each queued key may still start a move after the previous one renders; wait until the
+  // URL, the rendered step and the server agree and stay that way (no network request
+  // marks the end of a view transition, so networkidle is not enough).
   const id: unknown = JSON.parse(
     (await page.evaluate(() => localStorage.getItem('funnel:workstyle-planner:session'))) ?? 'null',
   );
   expect(typeof id).toBe('string');
-  const stored: unknown = await (await request.get(`/api/sessions/${String(id)}`)).json();
-  expect(stored).toMatchObject({ session: { state: { currentStepId: reached } } });
+  const snapshot = async () => {
+    const url = /\/s\/([a-z_]+)/.exec(page.url())?.[1] ?? '';
+    const rendered = (await page.locator('[data-step]').getAttribute('data-step')) ?? '';
+    const stored = contract.getSession.response.parse(
+      await (await request.get(`/api/sessions/${String(id)}`)).json(),
+    );
+    const server = stored.session.state.currentStepId;
+    return `${url}|${rendered}|${server}`;
+  };
+  // On failure the received value is the last `url|rendered|server` snapshot.
+  let previous = '';
+  await expect
+    .poll(
+      async () => {
+        const now = await snapshot();
+        const [url, rendered, server] = now.split('|');
+        const settled = now === previous && url === rendered && rendered === server;
+        previous = now;
+        return settled ? 'settled' : now;
+      },
+      { intervals: [300], timeout: 10_000 },
+    )
+    .toBe('settled');
+  const reached = previous.split('|')[0];
+  // Every move is one step from a rendered state: from work_mode (remote) the queued keys
+  // can only reach these steps, in order; a stale move would skip or branch elsewhere.
+  expect(['priorities', 'timezone_span', 'async_maturity']).toContain(reached);
+  const shown = await heading(page).textContent();
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`/s/${reached ?? 'missing'}`));
   await expect(heading(page)).toHaveText(shown ?? 'missing');
