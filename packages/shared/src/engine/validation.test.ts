@@ -190,6 +190,19 @@ describe('validateCompletion', () => {
     expect(warn).toHaveBeenCalled();
   });
 
+  it('reports an unanswered step keyed by a built-in name as required', () => {
+    const config = v1();
+    const tools = config.steps['tool_count'];
+    if (!tools || !isKnownStep(tools) || tools.type !== 'number') throw new Error('fixture');
+    tools.input.name = 'constructor';
+    const rest = Object.fromEntries(Object.entries(complete).filter(([k]) => k !== 'tool_count'));
+    expect(validateCompletion(resolveFunnel(config, 'A'), rest)).toMatchObject({
+      ok: false,
+      stepId: 'tool_count',
+      code: 'required',
+    });
+  });
+
   it('names the first visible step that is missing or invalid', () => {
     expect(validateCompletion(a, { ...complete, work_mode: 'hybrid' })).toMatchObject({
       ok: false,

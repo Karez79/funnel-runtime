@@ -8,6 +8,7 @@ import { conditionAnswers } from '../engine/conditions.ts';
 import type { ResultRule } from './schema.ts';
 import { resolveFunnel, type ResolvedFunnel } from '../engine/resolve.ts';
 import { VARIANTS, type FunnelConfig } from './schema.ts';
+import { own } from '../own.ts';
 
 const CHANGE_KINDS = [
   'experiment_changed',
@@ -83,8 +84,8 @@ function diffVariant(a: ResolvedFunnel, b: ResolvedFunnel, out: ConfigChange[]):
   }
 
   for (const id of keptAfter) {
-    const stepA = a.steps[id];
-    const stepB = b.steps[id];
+    const stepA = own(a.steps, id);
+    const stepB = own(b.steps, id);
     if (!stepA || !stepB) continue;
     const paths = changedPaths(omit(stepA, ['visibleWhen']), omit(stepB, ['visibleWhen']), 2);
     if (paths.length > 0) push('step_changed', id, `step "${id}": ${paths.join(', ')} changed`);
@@ -96,7 +97,7 @@ function diffVariant(a: ResolvedFunnel, b: ResolvedFunnel, out: ConfigChange[]):
   }
 
   for (const [id, resultB] of Object.entries(b.results)) {
-    const resultA = a.results[id];
+    const resultA = own(a.results, id);
     if (!resultA) continue;
     const paths = changedPaths(resultA, resultB, 2);
     if (paths.length > 0) push('result_changed', id, `result "${id}": ${paths.join(', ')} changed`);
@@ -248,12 +249,12 @@ export function diffConfigs(a: FunnelConfig, b: FunnelConfig): ConfigChange[] {
     }
   }
   for (const id of Object.keys(b.results)) {
-    if (!(id in a.results)) {
+    if (own(a.results, id) === undefined) {
       out.push({ kind: 'result_added', subject: id, message: `Result "${id}" added` });
     }
   }
   for (const id of Object.keys(a.results)) {
-    if (!(id in b.results)) {
+    if (own(b.results, id) === undefined) {
       out.push({ kind: 'result_removed', subject: id, message: `Result "${id}" removed` });
     }
   }

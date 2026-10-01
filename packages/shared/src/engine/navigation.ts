@@ -14,6 +14,7 @@ import {
   type EvaluateOptions,
 } from './conditions.ts';
 import type { ResolvedFunnel } from './resolve.ts';
+import { own } from '../own.ts';
 
 interface Walk {
   readonly path: string[];
@@ -30,7 +31,7 @@ function walk(resolved: ResolvedFunnel, answers: Answers, options: EvaluateOptio
     path.push(id);
     if (!isInteractive(step)) continue;
     const key = answerKey(step);
-    const value = answers[key];
+    const value = own(answers, key);
     if (value !== undefined) visible[key] = value;
   }
   return { path, answers: visible };

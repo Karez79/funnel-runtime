@@ -7,6 +7,7 @@ import { answerKey, isInteractive, type InteractiveStep, type Step } from '../co
 import { effectiveAnswers, visiblePath } from './navigation.ts';
 import type { Answers, EvaluateOptions } from './conditions.ts';
 import type { ResolvedFunnel } from './resolve.ts';
+import { own } from '../own.ts';
 
 export type ValidationCode =
   | 'required'
@@ -122,7 +123,7 @@ export function validateCompletion(
   for (const id of visiblePath(resolved, answers, options)) {
     const step = resolved.steps[id];
     if (!step || !isInteractive(step)) continue;
-    const result = validateAnswer(step, effective[answerKey(step)]);
+    const result = validateAnswer(step, own(effective, answerKey(step)));
     if (!result.ok) return { ...result, stepId: id };
   }
   return { ok: true };

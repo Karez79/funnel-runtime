@@ -127,6 +127,20 @@ describe('lintConfig: errors', () => {
     expect(codes(config).filter((c) => c === 'unknown_result')).toHaveLength(2);
   });
 
+  it('built-in object names are not existing results, steps or overrides', () => {
+    const config = v1();
+    const rule = config.resultRules[0];
+    if (!rule) throw new Error('fixture');
+    rule.resultId = 'toString';
+    config.defaultResultId = 'constructor';
+    config.experiment.variants.B.stepOverrides['hasOwnProperty'] = {};
+    config.experiment.variants.A.stepSequence.splice(1, 0, 'valueOf');
+    expect(codes(config)).toEqual(
+      expect.arrayContaining(['unknown_result', 'unknown_override', 'missing_step']),
+    );
+    expect(codes(config).filter((c) => c === 'unknown_result')).toHaveLength(2);
+  });
+
   it('override keys must exist', () => {
     const config = v1();
     config.experiment.variants.B.stepOverrides['ghost'] = { content: { title: 'x' } };

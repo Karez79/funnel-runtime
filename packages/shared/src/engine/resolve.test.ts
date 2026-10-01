@@ -135,6 +135,19 @@ describe('resolveFunnel', () => {
     });
   });
 
+  it('resolves a step and a result named after built-in object members', () => {
+    const config = v1();
+    const intro = config.steps['intro'];
+    const balanced = config.results['balanced'];
+    if (!intro || !balanced) throw new Error('fixture');
+    config.steps['toString'] = { ...intro, id: 'toString' };
+    config.results['constructor'] = { ...balanced, id: 'constructor' };
+    config.experiment.variants.A.stepSequence.splice(1, 0, 'toString');
+    const resolved = resolveFunnel(config, 'A');
+    expect(resolved.steps['toString']?.content.title).toBe(intro.content.title);
+    expect(resolved.results['constructor']?.title).toBe(balanced.title);
+  });
+
   it('throws a domain error for a sequence step that does not exist', () => {
     const config = v1();
     config.experiment.variants.A.stepSequence.splice(1, 0, 'ghost');

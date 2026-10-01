@@ -66,7 +66,7 @@ export {
 } from './events/schema.ts';
 export type { ClientEvent, EventProperties } from './events/schema.ts';
 export { BASE_EVENTS, catalogEvent, filterProperties, isServerOnly } from './events/catalog.ts';
-export { answerKind } from './events/answerKind.ts';
+export { answerKind, isAnswerKind } from './events/answerKind.ts';
 
 export {
   GENERATOR_KEY_HEADER,

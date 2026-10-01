@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { v1, v2 } from '../../test/fixtures.ts';
+import { isInteractive } from '../config/schema.ts';
 import type { Answers } from './conditions.ts';
 import { effectiveAnswers, nextStep, progress, stepBack, visiblePath } from './navigation.ts';
 import { resolveFunnel } from './resolve.ts';
@@ -50,6 +51,21 @@ describe('unknown operators at runtime', () => {
     expect(progress(resolved, hybrid, 'result', { warn }).total).toBe(6);
     expect(warn).toHaveBeenCalledTimes(4);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('matches'));
+  });
+});
+
+describe('answer keys that are built-in object names', () => {
+  it('are missing until answered', () => {
+    const config = v1();
+    const tools = config.steps['tool_count'];
+    const office = config.steps['office_days'];
+    if (!tools || !isInteractive(tools) || !office) throw new Error('fixture');
+    tools.input.name = 'constructor';
+    config.experiment.variants.A.stepSequence = ['intro', 'tool_count', 'office_days', 'result'];
+    office.visibleWhen = { answer: 'constructor', operator: 'exists' };
+    const resolved = resolveFunnel(config, 'A');
+    expect(visiblePath(resolved, {})).not.toContain('office_days');
+    expect(visiblePath(resolved, { constructor: 3 })).toContain('office_days');
   });
 });
 
