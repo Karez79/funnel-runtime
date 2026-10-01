@@ -29,10 +29,34 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
 
+  # The Playwright version is read from the lockfile so the container image always
+  # matches @playwright/test; browsers and their system libraries are preinstalled
+  # in the image, so CI never runs apt or downloads browsers.
+  playwright-version:
+    name: playwright version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.pw.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: pnpm-lock.yaml
+          sparse-checkout-cone-mode: false
+      - id: pw
+        run: |
+          version="$(grep -oE "^  '?@playwright/test@[0-9]+\.[0-9]+\.[0-9]+" pnpm-lock.yaml | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$')"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   e2e:
     name: e2e
+    needs: playwright-version
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -41,13 +65,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - id: pw
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
       - uses: actions/upload-artifact@v7
         if: failure()
