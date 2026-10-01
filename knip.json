@@ -2,7 +2,10 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": [".claude/hooks/*.mjs", "e2e/**/*.spec.ts", "e2e/global-teardown.ts"]
+      "entry": [".claude/hooks/*.mjs", "e2e/**/*.spec.ts"],
+      "playwright": {
+        "config": ["playwright.config.ts"]
+      }
     },
     "packages/shared": {
       "project": ["src/**/*.ts"]
