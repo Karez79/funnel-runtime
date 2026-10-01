@@ -12,6 +12,7 @@ import { currentStep, initialState } from './funnelReducer.ts';
 import styles from './FunnelPage.module.css';
 import { FunnelView } from './FunnelView.tsx';
 import { PreviewBanner } from './PreviewBanner.tsx';
+import stepStyles from './steps/steps.module.css';
 import { ResultScreen, type ResultOutcome } from './ResultScreen.tsx';
 import { createTracker, NOOP_SINK } from './tracking.ts';
 import { useFunnelMachine } from './useFunnelMachine.ts';
@@ -54,7 +55,7 @@ export function PreviewPage() {
 
   return (
     <main className={styles.wrap}>
-      <PreviewBanner version={v} variant={variant}>
+      <PreviewBanner version={version} variant={variant}>
         {VARIANTS.map((other) => (
           <Link
             key={other}
@@ -70,7 +71,7 @@ export function PreviewPage() {
       ) : (
         <Card variant="glass" className={styles.card} aria-busy={query.isPending}>
           {(query.isError || !query.isEnabled) && (
-            <h1 className={styles.title}>This version cannot be previewed</h1>
+            <h1 className={stepStyles.title}>This version cannot be previewed</h1>
           )}
         </Card>
       )}

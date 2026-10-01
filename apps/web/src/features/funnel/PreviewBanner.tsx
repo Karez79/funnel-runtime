@@ -8,7 +8,8 @@ export function PreviewBanner({
   variant,
   children,
 }: {
-  version: number;
+  /** The raw route parameter, so a malformed one is shown as typed. */
+  version: string;
   variant: VariantKey;
   children: ReactNode;
 }) {
