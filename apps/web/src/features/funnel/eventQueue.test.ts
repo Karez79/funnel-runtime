@@ -28,6 +28,13 @@ function memoryStorage(): StorageLike & { data: Map<string, string> } {
     setItem: (key, value) => {
       data.set(key, value);
     },
+    removeItem: (key) => {
+      data.delete(key);
+    },
+    get length() {
+      return data.size;
+    },
+    key: (index) => [...data.keys()][index] ?? null,
   };
 }
 
@@ -72,8 +79,11 @@ let server: ReturnType<typeof fakeServer>;
 let warn: ReturnType<typeof vi.fn<(message: string) => void>>;
 let hidden: (() => void) | undefined;
 
-function makeQueue(overrides: Partial<EventQueueDeps> = {}): EventQueue {
-  const queue = createEventQueue(CONTEXT, {
+function makeQueue(
+  overrides: Partial<EventQueueDeps> = {},
+  context: EventQueueContext = CONTEXT,
+): EventQueue {
+  const queue = createEventQueue(context, {
     send: server.send,
     beacon: () => true,
     storage,
@@ -337,6 +347,23 @@ describe('beacon on hide', () => {
     expect(beacon).toHaveBeenCalledTimes(1);
   });
 
+  it('dispose beacons pending events and keeps them in the outbox', () => {
+    const beacon = vi.fn<(body: BatchBody) => boolean>(() => true);
+    const queue = makeQueue({ beacon });
+    push(queue, 3);
+    queue.dispose();
+    queue.dispose();
+    expect(beacon).toHaveBeenCalledTimes(1);
+    expect(beacon.mock.calls[0]?.[0].events).toHaveLength(3);
+    expect(storedEvents()).toHaveLength(3);
+  });
+
+  it('dispose with an empty outbox sends no beacon', () => {
+    const beacon = vi.fn<(body: BatchBody) => boolean>(() => true);
+    makeQueue({ beacon }).dispose();
+    expect(beacon).not.toHaveBeenCalled();
+  });
+
   it('dispose stops timers and the hidden listener', async () => {
     const queue = makeQueue();
     push(queue, 3);
@@ -449,13 +476,17 @@ describe('refresh and storage', () => {
   });
 
   it('works in memory when storage throws', async () => {
+    const fail = (): never => {
+      throw new Error('SecurityError');
+    };
     const throwing: StorageLike = {
-      getItem: () => {
-        throw new Error('SecurityError');
+      getItem: fail,
+      setItem: fail,
+      removeItem: fail,
+      get length() {
+        return fail();
       },
-      setItem: () => {
-        throw new Error('QuotaExceededError');
-      },
+      key: fail,
     };
     const queue = makeQueue({ storage: throwing });
     expect(() => {
@@ -471,5 +502,66 @@ describe('refresh and storage', () => {
     const queue = makeQueue({ storage: null });
     push(queue, 1);
     expect(queue.pending()).toBe(1);
+  });
+});
+
+describe('outboxes of other sessions', () => {
+  const OLD = '01900000-0000-7000-8000-000000000002';
+  const OLDER = '01900000-0000-7000-8000-000000000003';
+
+  /** Leaves `count` unsent events of session `id` in storage, like a closed tab would. */
+  function leaveBehind(id: string, count: number): string[] {
+    // Its own requests never answer, so it neither sends nor drains anything.
+    const old = makeQueue(
+      { beacon: () => false, send: () => new Promise(() => undefined) },
+      { ...CONTEXT, sessionId: id },
+    );
+    push(old, count);
+    old.dispose();
+    return storedEvents(storage.data.get(`funnel:events:${id}`)).map((e) => e.event_id);
+  }
+
+  it('sends them once and removes their keys when the server answered for all', async () => {
+    const oldIds = leaveBehind(OLD, 3);
+    makeQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sentIds(0)).toEqual(oldIds);
+    expect(server.requests[0]?.every((e) => e.session_id === OLD)).toBe(true);
+    expect(storage.data.has(`funnel:events:${OLD}`)).toBe(false);
+    expect(storage.data.has(`funnel:seq:${OLD}`)).toBe(false);
+  });
+
+  it('keeps them when the request fails, and keeps events the server did not mention', async () => {
+    const oldIds = leaveBehind(OLD, 2);
+    const olderIds = leaveBehind(OLDER, 2);
+    server.replies.push(
+      () => new Error('offline'),
+      (events) => ({
+        ...ack(events.slice(0, 1), () => 'duplicate'),
+      }),
+    );
+    makeQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    const left = (id: string) =>
+      storedEvents(storage.data.get(`funnel:events:${id}`)).map((e) => e.event_id);
+    expect(left(OLD)).toEqual(oldIds);
+    expect(left(OLDER)).toEqual(olderIds.slice(1));
+  });
+
+  it('removes a bare client_seq key of another session without a request', async () => {
+    storage.data.set(`funnel:seq:${OLD}`, '7');
+    makeQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.data.has(`funnel:seq:${OLD}`)).toBe(false);
+    expect(server.send).not.toHaveBeenCalled();
+  });
+
+  it('drops old events the server refuses for good, with a warning', async () => {
+    leaveBehind(OLD, 2);
+    server.replies.push(() => ({ status: 400, json: null }));
+    makeQueue();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(storage.data.has(`funnel:events:${OLD}`)).toBe(false);
+    expect(warn).toHaveBeenCalledWith('2 old events dropped');
   });
 });

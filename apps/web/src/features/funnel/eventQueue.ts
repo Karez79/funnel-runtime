@@ -51,6 +51,9 @@ export interface BatchBody {
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+  readonly length: number;
+  key(index: number): string | null;
 }
 
 type TimerHandle = ReturnType<typeof setTimeout>;
@@ -77,8 +80,26 @@ export interface EventQueue {
   dispose(): void;
 }
 
-const outboxKey = (sessionId: string): string => `funnel:events:${sessionId}`;
-const seqKey = (sessionId: string): string => `funnel:seq:${sessionId}`;
+const OUTBOX_PREFIX = 'funnel:events:';
+const SEQ_PREFIX = 'funnel:seq:';
+const outboxKey = (sessionId: string): string => `${OUTBOX_PREFIX}${sessionId}`;
+const seqKey = (sessionId: string): string => `${SEQ_PREFIX}${sessionId}`;
+
+/** Session ids, other than `current`, that still have queue keys in storage. */
+function otherSessions(storage: StorageLike | null, current: string): string[] {
+  const ids = new Set<string>();
+  try {
+    for (let i = 0; i < (storage?.length ?? 0); i++) {
+      const key = storage?.key(i) ?? '';
+      const prefix = [OUTBOX_PREFIX, SEQ_PREFIX].find((p) => key.startsWith(p));
+      if (prefix !== undefined) ids.add(key.slice(prefix.length));
+    }
+  } catch {
+    return [];
+  }
+  ids.delete(current);
+  return [...ids];
+}
 
 function readStorage(storage: StorageLike | null, key: string): string | null {
   try {
@@ -355,14 +376,55 @@ export function createEventQueue(
     }
   }
 
+  /**
+   * Outboxes of sessions this browser left behind (expired session, `?variant=` override,
+   * reset): their events are sent once, and the keys go when nothing is left to send. A
+   * failure leaves them for the next queue. One orphan request at a time.
+   */
+  async function drainOtherSessions(): Promise<void> {
+    for (const id of otherSessions(deps.storage, sessionId)) {
+      const events = loadOutbox(deps.storage, id).slice(0, MAX_BATCH_EVENTS);
+      let outcome: Outcome = { kind: 'acked', results: new Map() };
+      if (events.length > 0) {
+        try {
+          const response = await deps.send({ events });
+          outcome = classify(response.status, response.json);
+        } catch {
+          continue;
+        }
+      }
+      if (outcome.kind === 'retry' || disposed) continue;
+      // Acked or refused for good (400/413): either way the server answered for them.
+      if (outcome.kind === 'poison') deps.warn(`${String(events.length)} old events dropped`);
+      const answered = new Set(
+        outcome.kind === 'acked' ? [...outcome.results.keys()] : events.map((e) => e.event_id),
+      );
+      const left = loadOutbox(deps.storage, id).filter((e) => !answered.has(e.event_id));
+      try {
+        if (left.length === 0) {
+          deps.storage?.removeItem(outboxKey(id));
+          deps.storage?.removeItem(seqKey(id));
+        } else {
+          deps.storage?.setItem(outboxKey(id), JSON.stringify(left));
+        }
+      } catch {
+        // Blocked storage: try again with the next queue.
+      }
+    }
+  }
+
   const unsubscribe = deps.onHidden(beaconAll);
   planNext();
+  void drainOtherSessions();
 
   return {
     push,
     pending: () => outbox.length,
     flush,
     dispose() {
+      // Leaving the funnel inside the SPA fires no visibilitychange: hand pending events to
+      // a beacon now. They stay in the outbox; dedup makes the next send harmless.
+      if (!disposed && outbox.length > 0) beaconAll();
       disposed = true;
       if (timer !== null) deps.timer.clear(timer);
       timer = null;
