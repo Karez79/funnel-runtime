@@ -1,0 +1,62 @@
+.ib {
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--line) 70%, var(--card));
+  background: color-mix(in oklch, var(--card) 70%, transparent);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    transform 0.25s var(--spring),
+    color 0.15s,
+    background 0.15s;
+}
+
+.ib:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ib:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--card);
+}
+
+.ib:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.sm {
+  width: 32px;
+  height: 32px;
+}
+
+.sm svg {
+  width: 15px;
+  height: 15px;
+}
+
+.md {
+  width: 38px;
+  height: 38px;
+}
+
+.lg {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+  box-shadow: var(--ring-line);
+}
+
+.dark {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--on-ink);
+}
+
+.dark:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--ink) 85%, var(--card));
+  color: var(--on-ink);
+}

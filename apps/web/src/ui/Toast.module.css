@@ -1,0 +1,60 @@
+.toast {
+  margin: 0;
+  inset: auto 24px 24px auto;
+  border: 0;
+  padding: 12px 18px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  transition:
+    opacity 0.2s,
+    transform 0.35s var(--spring),
+    overlay 0.3s allow-discrete,
+    display 0.3s allow-discrete;
+}
+
+.toast:has(.action) {
+  padding-right: 12px;
+}
+
+.toast:not(:popover-open) {
+  display: none;
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+@starting-style {
+  .toast:popover-open {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: color-mix(in oklch, var(--on-ink) 14%, transparent);
+  color: var(--on-ink);
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+}
+
+@media (width <= 720px) {
+  .toast {
+    inset: auto 16px 16px;
+  }
+}
