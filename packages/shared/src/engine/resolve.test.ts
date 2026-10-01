@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { v1, v2 } from '../../test/fixtures.ts';
 import { DomainError } from '../api/errors.ts';
 import { isInteractive } from '../config/schema.ts';
-import { resolveFunnel } from './resolve.ts';
+import { ResolvedFunnelSchema, resolveFunnel } from './resolve.ts';
 
 describe('resolveFunnel', () => {
   it('uses the step order of the requested variant', () => {
@@ -37,6 +37,36 @@ describe('resolveFunnel', () => {
     const priorities = resolveFunnel(config, 'B').steps['priorities'];
     expect(priorities?.content.helperText).toBe('Choose up to three outcomes.');
     expect(priorities && isInteractive(priorities) && priorities.input.options).toHaveLength(5);
+  });
+
+  it('merges a partial nested override key by key', () => {
+    const config = v1();
+    config.experiment.variants.B.stepOverrides['priorities'] = { content: { title: 'X' } };
+    config.experiment.variants.B.resultOverrides['balanced'] = { cta: { label: 'L' } };
+    const resolved = resolveFunnel(config, 'B');
+    expect(resolved.steps['priorities']?.content).toEqual({
+      title: 'X',
+      helperText: 'Choose between one and three priorities.',
+    });
+    expect(resolved.results['balanced']?.cta).toEqual({
+      label: 'L',
+      action: 'expand_recommendation',
+    });
+  });
+
+  it.each([
+    ['step id', 'stepOverrides', 'priorities', { id: 'ghost' }],
+    ['step type', 'stepOverrides', 'priorities', { type: 'single-select' }],
+    ['result id', 'resultOverrides', 'balanced', { id: 'other' }],
+  ] as const)('rejects an override of the %s', (_name, kind, key, patch) => {
+    const config = v1();
+    config.experiment.variants.B[kind][key] = patch;
+    expect(() => resolveFunnel(config, 'B')).toThrow(/cannot change/);
+  });
+
+  it('produces a value that matches its own wire schema', () => {
+    const resolved = resolveFunnel(v1(), 'B');
+    expect(ResolvedFunnelSchema.parse(resolved)).toEqual(resolved);
   });
 
   it('deep-merges result overrides', () => {

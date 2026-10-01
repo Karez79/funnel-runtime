@@ -137,7 +137,14 @@ const KNOWN_STEP_SCHEMAS = {
 
 type KnownStepSchema = (typeof KNOWN_STEP_SCHEMAS)[keyof typeof KNOWN_STEP_SCHEMAS];
 export type KnownStep = z.infer<KnownStepSchema>;
-export type Step = KnownStep | z.infer<typeof UnknownStep>;
+
+/**
+ * A step that is already parsed, without the parse-time transform of StepSchema: for API
+ * responses, which zod must be able to encode. Known schemas come first, so a valid known
+ * step never falls through to UnknownStep.
+ */
+export const ParsedStepSchema = z.union([...Object.values(KNOWN_STEP_SCHEMAS), UnknownStep]);
+export type Step = z.infer<typeof ParsedStepSchema>;
 
 function isKnownType(type: string): type is keyof typeof KNOWN_STEP_SCHEMAS {
   return Object.hasOwn(KNOWN_STEP_SCHEMAS, type);
@@ -206,24 +213,27 @@ const Experiment = z.looseObject({
   variants: z.strictObject({ A: Variant, B: Variant } satisfies Record<VariantKey, typeof Variant>),
 });
 
-const EventDefinition = z.looseObject({
+export const EventDefinitionSchema = z.looseObject({
   name: z.string().min(1),
   trigger: z.string().optional(),
   properties: z.array(z.string()).default([]),
 });
-export type EventDefinition = z.infer<typeof EventDefinition>;
+export type EventDefinition = z.infer<typeof EventDefinitionSchema>;
 
 const Events = z.looseObject({
   baseProperties: z.array(z.string()).default([]),
-  allowed: z.array(EventDefinition),
+  allowed: z.array(EventDefinitionSchema),
   privacy: z.looseObject({
     storeRawAnswers: z.boolean(),
     allowAnswerKinds: z.boolean().optional(),
   }),
 });
 
-const ResultRule = z.looseObject({ resultId: z.string().min(1), when: ConditionSchema });
-export type ResultRule = z.infer<typeof ResultRule>;
+export const ResultRuleSchema = z.looseObject({
+  resultId: z.string().min(1),
+  when: ConditionSchema,
+});
+export type ResultRule = z.infer<typeof ResultRuleSchema>;
 
 const FunnelConfigSchema = z.looseObject({
   schemaVersion: z.string().min(1),
@@ -239,7 +249,7 @@ const FunnelConfigSchema = z.looseObject({
     .default({ excludeTypes: ['info', 'result'] }),
   experiment: Experiment,
   steps: z.record(z.string(), StepSchema),
-  resultRules: z.array(ResultRule).default([]),
+  resultRules: z.array(ResultRuleSchema).default([]),
   defaultResultId: z.string().min(1),
   results: z.record(z.string(), ResultSchema),
   events: Events,

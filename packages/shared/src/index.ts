@@ -34,5 +34,5 @@ export type {
 export { AnswerValueSchema, conditionAnswers, evaluateCondition } from './engine/conditions.ts';
 export type { Answers, AnswerValue, EvaluateOptions } from './engine/conditions.ts';
 
-export { resolveFunnel } from './engine/resolve.ts';
+export { ResolvedFunnelSchema, resolveFunnel } from './engine/resolve.ts';
 export type { ResolvedFunnel } from './engine/resolve.ts';

@@ -4,37 +4,41 @@
 // replace) and the merged step or result is parsed again, so an override can never
 // produce a step the renderer does not understand. Lint resolves both variants before a
 // version is published, which is why a failure here is an error, not a fallback.
-import type { ZodType } from 'zod';
+import { z } from 'zod';
 import { DomainError } from '../api/errors.ts';
 import {
+  EventDefinitionSchema,
   formatIssues,
+  ParsedStepSchema,
+  ResultRuleSchema,
   ResultSchema,
   StepSchema,
-  type EventDefinition,
+  VARIANTS,
   type FunnelConfig,
   type Result,
-  type ResultRule,
   type Step,
   type VariantKey,
 } from '../config/schema.ts';
 
-export interface ResolvedFunnel {
-  readonly meta: {
-    readonly funnelId: string;
-    readonly version: number;
-    readonly title: string;
-    readonly experimentId: string;
-    readonly variant: VariantKey;
-    readonly progressExcludeTypes: readonly string[];
-  };
+/** Also the wire shape of the session response (6.2), hence a zod schema. */
+export const ResolvedFunnelSchema = z.object({
+  meta: z.object({
+    funnelId: z.string(),
+    version: z.number().int(),
+    title: z.string(),
+    experimentId: z.string(),
+    variant: z.enum(VARIANTS),
+    progressExcludeTypes: z.array(z.string()),
+  }),
   /** Step ids in the variant's order; the last one is the result step. */
-  readonly sequence: readonly string[];
-  readonly steps: Readonly<Record<string, Step>>;
-  readonly results: Readonly<Record<string, Result>>;
-  readonly resultRules: readonly ResultRule[];
-  readonly defaultResultId: string;
-  readonly eventCatalog: readonly EventDefinition[];
-}
+  sequence: z.array(z.string()),
+  steps: z.record(z.string(), ParsedStepSchema),
+  results: z.record(z.string(), ResultSchema),
+  resultRules: z.array(ResultRuleSchema),
+  defaultResultId: z.string(),
+  eventCatalog: z.array(EventDefinitionSchema),
+});
+export type ResolvedFunnel = z.infer<typeof ResolvedFunnelSchema>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -47,7 +51,7 @@ function deepMerge(base: unknown, patch: unknown): unknown {
   return merged;
 }
 
-function parseMerged<T>(schema: ZodType<T>, base: unknown, patch: unknown, what: string): T {
+function parseMerged<T>(schema: z.ZodType<T>, base: unknown, patch: unknown, what: string): T {
   const parsed = schema.safeParse(deepMerge(base, patch ?? {}));
   if (parsed.success) return parsed.data;
   const issues = formatIssues(parsed.error).join('; ');
@@ -63,12 +67,21 @@ export function resolveFunnel(config: FunnelConfig, variant: VariantKey): Resolv
     if (!base) {
       throw new DomainError('unprocessable', `step "${id}" of variant ${variant} does not exist`);
     }
-    steps[id] = parseMerged(StepSchema, base, stepOverrides[id], `step "${id}"`);
+    const step = parseMerged(StepSchema, base, stepOverrides[id], `step "${id}"`);
+    // Events and answers are keyed by the step's id and shaped by its type.
+    if (step.id !== base.id || step.type !== base.type) {
+      throw new DomainError('unprocessable', `step "${id}": an override cannot change id or type`);
+    }
+    steps[id] = step;
   }
 
   const results: Record<string, Result> = {};
   for (const [id, base] of Object.entries(config.results)) {
-    results[id] = parseMerged(ResultSchema, base, resultOverrides[id], `result "${id}"`);
+    const result = parseMerged(ResultSchema, base, resultOverrides[id], `result "${id}"`);
+    if (result.id !== base.id) {
+      throw new DomainError('unprocessable', `result "${id}": an override cannot change id`);
+    }
+    results[id] = result;
   }
 
   return {
