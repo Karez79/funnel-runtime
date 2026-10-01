@@ -145,7 +145,7 @@ function isKnownType(type: string): type is keyof typeof KNOWN_STEP_SCHEMAS {
 
 // The schema is chosen by `type` before parsing, so issues of a broken known step point
 // at the broken field, and a step of an unknown type falls back to UnknownStep (8.2).
-const StepSchema = z.looseObject({ type: z.string() }).transform((raw, ctx): Step => {
+export const StepSchema = z.looseObject({ type: z.string() }).transform((raw, ctx): Step => {
   const schema: z.ZodType<Step> = isKnownType(raw.type)
     ? KNOWN_STEP_SCHEMAS[raw.type]
     : UnknownStep;
@@ -180,14 +180,14 @@ export function answerKey(step: Step): string {
 
 const Cta = z.looseObject({ label: z.string(), action: z.string() });
 
-const Result = z.looseObject({
+export const ResultSchema = z.looseObject({
   id: z.string().min(1),
   title: z.string(),
   summary: z.string(),
   recommendations: z.array(z.string()),
   cta: Cta,
 });
-export type Result = z.infer<typeof Result>;
+export type Result = z.infer<typeof ResultSchema>;
 
 const PlainObject = z.record(z.string(), z.unknown());
 
@@ -241,7 +241,7 @@ const FunnelConfigSchema = z.looseObject({
   steps: z.record(z.string(), StepSchema),
   resultRules: z.array(ResultRule).default([]),
   defaultResultId: z.string().min(1),
-  results: z.record(z.string(), Result),
+  results: z.record(z.string(), ResultSchema),
   events: Events,
 });
 
@@ -253,8 +253,10 @@ export type ParseConfigResult =
 export function parseConfig(raw: unknown): ParseConfigResult {
   const res = FunnelConfigSchema.safeParse(raw);
   if (res.success) return { ok: true, config: res.data };
-  return {
-    ok: false,
-    issues: res.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
-  };
+  return { ok: false, issues: formatIssues(res.error) };
+}
+
+/** `path.to.field: message` lines, the one format for config problems everywhere. */
+export function formatIssues(error: z.ZodError): string[] {
+  return error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`);
 }
