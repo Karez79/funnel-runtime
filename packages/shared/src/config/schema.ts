@@ -137,7 +137,21 @@ const KNOWN_STEP_SCHEMAS = {
 
 type KnownStepSchema = (typeof KNOWN_STEP_SCHEMAS)[keyof typeof KNOWN_STEP_SCHEMAS];
 export type KnownStep = z.infer<KnownStepSchema>;
-export type Step = KnownStep | z.infer<typeof UnknownStep>;
+
+/**
+ * A step that is already parsed, without the parse-time transform of StepSchema: for API
+ * responses, which zod must be able to encode. The fallback accepts only unknown types, so
+ * a broken known step fails here instead of reaching the renderer as "unknown".
+ */
+export const ParsedStepSchema = z.union([
+  ...Object.values(KNOWN_STEP_SCHEMAS),
+  UnknownStep.extend({
+    type: z
+      .string()
+      .refine((type) => !isKnownType(type), 'a known step type must match its schema'),
+  }),
+]);
+export type Step = z.infer<typeof ParsedStepSchema>;
 
 function isKnownType(type: string): type is keyof typeof KNOWN_STEP_SCHEMAS {
   return Object.hasOwn(KNOWN_STEP_SCHEMAS, type);
@@ -145,7 +159,7 @@ function isKnownType(type: string): type is keyof typeof KNOWN_STEP_SCHEMAS {
 
 // The schema is chosen by `type` before parsing, so issues of a broken known step point
 // at the broken field, and a step of an unknown type falls back to UnknownStep (8.2).
-const StepSchema = z.looseObject({ type: z.string() }).transform((raw, ctx): Step => {
+export const StepSchema = z.looseObject({ type: z.string() }).transform((raw, ctx): Step => {
   const schema: z.ZodType<Step> = isKnownType(raw.type)
     ? KNOWN_STEP_SCHEMAS[raw.type]
     : UnknownStep;
@@ -180,14 +194,14 @@ export function answerKey(step: Step): string {
 
 const Cta = z.looseObject({ label: z.string(), action: z.string() });
 
-const Result = z.looseObject({
+export const ResultSchema = z.looseObject({
   id: z.string().min(1),
   title: z.string(),
   summary: z.string(),
   recommendations: z.array(z.string()),
   cta: Cta,
 });
-export type Result = z.infer<typeof Result>;
+export type Result = z.infer<typeof ResultSchema>;
 
 const PlainObject = z.record(z.string(), z.unknown());
 
@@ -206,24 +220,27 @@ const Experiment = z.looseObject({
   variants: z.strictObject({ A: Variant, B: Variant } satisfies Record<VariantKey, typeof Variant>),
 });
 
-const EventDefinition = z.looseObject({
+export const EventDefinitionSchema = z.looseObject({
   name: z.string().min(1),
   trigger: z.string().optional(),
   properties: z.array(z.string()).default([]),
 });
-export type EventDefinition = z.infer<typeof EventDefinition>;
+export type EventDefinition = z.infer<typeof EventDefinitionSchema>;
 
 const Events = z.looseObject({
   baseProperties: z.array(z.string()).default([]),
-  allowed: z.array(EventDefinition),
+  allowed: z.array(EventDefinitionSchema),
   privacy: z.looseObject({
     storeRawAnswers: z.boolean(),
     allowAnswerKinds: z.boolean().optional(),
   }),
 });
 
-const ResultRule = z.looseObject({ resultId: z.string().min(1), when: ConditionSchema });
-export type ResultRule = z.infer<typeof ResultRule>;
+export const ResultRuleSchema = z.looseObject({
+  resultId: z.string().min(1),
+  when: ConditionSchema,
+});
+export type ResultRule = z.infer<typeof ResultRuleSchema>;
 
 const FunnelConfigSchema = z.looseObject({
   schemaVersion: z.string().min(1),
@@ -239,9 +256,9 @@ const FunnelConfigSchema = z.looseObject({
     .default({ excludeTypes: ['info', 'result'] }),
   experiment: Experiment,
   steps: z.record(z.string(), StepSchema),
-  resultRules: z.array(ResultRule).default([]),
+  resultRules: z.array(ResultRuleSchema).default([]),
   defaultResultId: z.string().min(1),
-  results: z.record(z.string(), Result),
+  results: z.record(z.string(), ResultSchema),
   events: Events,
 });
 
@@ -253,8 +270,10 @@ export type ParseConfigResult =
 export function parseConfig(raw: unknown): ParseConfigResult {
   const res = FunnelConfigSchema.safeParse(raw);
   if (res.success) return { ok: true, config: res.data };
-  return {
-    ok: false,
-    issues: res.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
-  };
+  return { ok: false, issues: formatIssues(res.error) };
+}
+
+/** `path.to.field: message` lines, the one format for config problems everywhere. */
+export function formatIssues(error: z.ZodError): string[] {
+  return error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`);
 }
