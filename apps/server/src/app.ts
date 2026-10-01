@@ -1,5 +1,6 @@
 // Composition root: wires repos -> services -> routes. The only module that sees all
 // layers at once, so routes never reach the database directly (CLAUDE.md 3.1).
+import { LIVE_STREAM, type LiveEntry } from '@funnel/shared';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -20,10 +21,13 @@ import { createSessionsService } from './modules/sessions/service.ts';
 import { createEventsRepo } from './modules/events/repo.ts';
 import { eventsRoutes } from './modules/events/routes.ts';
 import { createEventsService } from './modules/events/service.ts';
+import { createLiveBus } from './modules/live/bus.ts';
+import { liveRoutes } from './modules/live/routes.ts';
 import { basicAuth } from './plugins/auth.ts';
 import { errorsPlugin } from './plugins/errors.ts';
 import type { App } from './plugins/route.ts';
 import { securityPlugin } from './plugins/security.ts';
+import { sseStreams } from './plugins/sse.ts';
 import { webPlugin } from './plugins/web.ts';
 
 export type AppEnv = Pick<
@@ -39,6 +43,8 @@ export type AppEnv = Pick<
 >;
 
 const MINUTE_MS = 60_000;
+/** Keeps Railway's proxy from closing an idle Live events stream (CLAUDE.md 11.1). */
+const LIVE_HEARTBEAT_MS = 15_000;
 
 /**
  * Services shared across modules. One instance per process: the versions service caches
@@ -83,9 +89,14 @@ export async function buildApp(
     createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
-  eventsRoutes(app, createEventsService(createEventsRepo(db), versions, clock), {
+  const live = createLiveBus(LIVE_STREAM.backlog);
+  const publish = (entries: LiveEntry[]) => {
+    live.publish(entries);
+  };
+  eventsRoutes(app, createEventsService(createEventsRepo(db), versions, clock, publish), {
     rateLimit: { max: env.rateLimits.events, timeWindow: MINUTE_MS },
   });
+  liveRoutes(app, live, sseStreams(app, LIVE_HEARTBEAT_MS));
 
   const stopRetention = createRetentionService(createRetentionRepo(db), clock, app.log).start();
   app.addHook('onClose', (_instance, done) => {

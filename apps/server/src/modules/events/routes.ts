@@ -4,5 +4,5 @@ import { route } from '../../plugins/route.ts';
 import type { EventsService } from './service.ts';
 
 export function eventsRoutes(app: App, service: EventsService, options: RouteOptions): void {
-  route(app, contract.eventsBatch, (req) => service.ingest(req.body).response, options);
+  route(app, contract.eventsBatch, (req) => service.ingest(req.body), options);
 }
