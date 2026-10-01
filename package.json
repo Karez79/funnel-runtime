@@ -11,7 +11,7 @@
     "lint:es": "eslint . --max-warnings 0",
     "lint:format": "prettier --check .",
     "lint:css": "stylelint \"**/*.css\" --ignore-path .gitignore --allow-empty-input",
-    "lint:deps": "depcruise packages apps --config .dependency-cruiser.cjs",
+    "lint:deps": "depcruise packages apps e2e --config .dependency-cruiser.cjs",
     "lint:dead": "knip",
     "lint:dup": "jscpd .",
     "lint": "pnpm lint:es && pnpm lint:format && pnpm lint:css && pnpm lint:deps && pnpm lint:dead && pnpm lint:dup",
@@ -20,10 +20,12 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "start": "pnpm --filter @funnel/server start",
     "db:generate": "pnpm --filter @funnel/server db:generate",
-    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @funnel/server dev\" \"pnpm --filter @funnel/web dev\""
+    "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @funnel/server dev\" \"pnpm --filter @funnel/web dev\"",
+    "e2e": "pnpm --filter @funnel/web build && playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.3",
     "concurrently": "^10.0.5",

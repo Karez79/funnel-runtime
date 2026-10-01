@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DomainError, type RouteDef } from '@funnel/shared';
@@ -67,6 +67,18 @@ describe('unknown routes and static web', () => {
     const res = await t.app.inject({ method: 'GET', url: '/api/nope' });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: { code: 'not_found', message: 'Not found' } });
+  });
+
+  it('accepts a web build path relative to the working directory', async () => {
+    const dist = mkdtempSync(join(process.cwd(), '.tmp-web-'));
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>rel</title>');
+    try {
+      t = await createTestApp({ webDist: relative(process.cwd(), dist) });
+      const res = await t.app.inject({ method: 'GET', url: '/' });
+      expect(res.body).toContain('<title>rel</title>');
+    } finally {
+      rmSync(dist, { recursive: true, force: true });
+    }
   });
 
   it('serves index.html for client-side routes when the web build exists', async () => {
