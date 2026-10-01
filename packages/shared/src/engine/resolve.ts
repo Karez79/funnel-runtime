@@ -84,20 +84,22 @@ export function resolveFunnel(config: FunnelConfig, variant: VariantKey): Resolv
     results[id] = result;
   }
 
-  return {
+  // Parsing the result copies every array and object it knows, so a caller that mutates
+  // the resolved funnel never reaches the (possibly cached) config.
+  return ResolvedFunnelSchema.parse({
     meta: {
       funnelId: config.funnelId,
       version: config.version,
       title: config.title,
       experimentId: config.experiment.id,
       variant,
-      progressExcludeTypes: [...config.progress.excludeTypes],
+      progressExcludeTypes: config.progress.excludeTypes,
     },
-    sequence: [...stepSequence],
+    sequence: stepSequence,
     steps,
     results,
     resultRules: config.resultRules,
     defaultResultId: config.defaultResultId,
     eventCatalog: config.events.allowed,
-  };
+  });
 }

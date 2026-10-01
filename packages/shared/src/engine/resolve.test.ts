@@ -107,6 +107,19 @@ describe('resolveFunnel', () => {
     expect(config).toEqual(before);
   });
 
+  it('shares no arrays or rule objects with the config', () => {
+    const config = v1();
+    const before = structuredClone(config);
+    const resolved = resolveFunnel(config, 'B');
+    resolved.resultRules.pop();
+    resolved.eventCatalog.pop();
+    resolved.sequence.pop();
+    resolved.meta.progressExcludeTypes.pop();
+    const rule = resolved.resultRules[0];
+    if (rule) rule.resultId = 'changed';
+    expect(config).toEqual(before);
+  });
+
   it('carries the event catalog, result rules and meta of the version', () => {
     const config = v2();
     const resolved = resolveFunnel(config, 'B');
