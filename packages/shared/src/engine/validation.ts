@@ -5,7 +5,7 @@
 // Messages come from `validation.messages` of the step, with English defaults.
 import { answerKey, isInteractive, type InteractiveStep, type Step } from '../config/schema.ts';
 import { effectiveAnswers, visiblePath } from './navigation.ts';
-import type { Answers } from './conditions.ts';
+import type { Answers, EvaluateOptions } from './conditions.ts';
 import type { ResolvedFunnel } from './resolve.ts';
 
 export type ValidationCode =
@@ -108,9 +108,13 @@ export type CompletionResult =
     };
 
 /** Every visible interactive step has a valid answer; hidden steps and their answers are ignored. */
-export function validateCompletion(resolved: ResolvedFunnel, answers: Answers): CompletionResult {
-  const effective = effectiveAnswers(resolved, answers);
-  for (const id of visiblePath(resolved, answers)) {
+export function validateCompletion(
+  resolved: ResolvedFunnel,
+  answers: Answers,
+  options: EvaluateOptions = {},
+): CompletionResult {
+  const effective = effectiveAnswers(resolved, answers, options);
+  for (const id of visiblePath(resolved, answers, options)) {
     const step = resolved.steps[id];
     if (!step || !isInteractive(step)) continue;
     const result = validateAnswer(step, effective[answerKey(step)]);
