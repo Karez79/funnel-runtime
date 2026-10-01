@@ -31,7 +31,7 @@ export async function createTestApp(env: Partial<AppEnv> = {}): Promise<TestApp>
     handle,
     close: async () => {
       await app.close();
-      handle.close();
+      if (handle.isOpen()) handle.close();
       rmSync(dir, { recursive: true, force: true });
     },
   };

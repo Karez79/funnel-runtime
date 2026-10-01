@@ -10,6 +10,7 @@ export type Db = BetterSQLite3Database<typeof schema>;
 export interface DbHandle {
   db: Db;
   close: () => void;
+  isOpen: () => boolean;
 }
 
 export function openDb(path: string): DbHandle {
@@ -18,5 +19,9 @@ export function openDb(path: string): DbHandle {
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
   sqlite.pragma('busy_timeout = 5000');
-  return { db: drizzle(sqlite, { schema }), close: () => sqlite.close() };
+  return {
+    db: drizzle(sqlite, { schema }),
+    close: () => sqlite.close(),
+    isOpen: () => sqlite.open,
+  };
 }

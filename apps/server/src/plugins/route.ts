@@ -1,5 +1,7 @@
 // Registers a route straight from its definition in @funnel/shared's contract, so
-// paths, schemas and auth are never restated on the server (CLAUDE.md 3.1).
+// paths, schemas, success status, body limits and auth are never restated on the
+// server (CLAUDE.md 3.1). Handlers return the success body (type-checked against the
+// contract) or throw a DomainError, which plugins/errors.ts renders.
 import type { RouteDef } from '@funnel/shared';
 import type {
   FastifyBaseLogger,
@@ -28,7 +30,10 @@ type RouteRequest<D extends RouteDef> = FastifyRequest<{
   Body: Infer<D['body']>;
 }>;
 
-type Handler<D extends RouteDef> = (req: RouteRequest<D>, reply: FastifyReply) => unknown;
+type Handler<D extends RouteDef> = (
+  req: RouteRequest<D>,
+  reply: FastifyReply,
+) => z.input<D['response']> | Promise<z.input<D['response']>>;
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -37,6 +42,7 @@ declare module 'fastify' {
 }
 
 export function route<D extends RouteDef>(app: App, def: D, handler: Handler<D>): void {
+  const status = def.status ?? 200;
   app.route({
     method: def.method,
     url: def.path,
@@ -44,11 +50,16 @@ export function route<D extends RouteDef>(app: App, def: D, handler: Handler<D>)
       ...(def.params ? { params: def.params } : {}),
       ...(def.query ? { querystring: def.query } : {}),
       ...(def.body ? { body: def.body } : {}),
-      response: { 200: def.response },
+      response: { [status]: def.response },
     },
-    ...(def.auth === 'admin' ? { preHandler: app.adminGuard } : {}),
-    // The zod validator has already parsed params/query/body against `def`, so the
-    // request is narrowed to the inferred types here; this is the one place it happens.
-    handler: (req, reply) => handler(req as RouteRequest<D>, reply),
+    ...(def.bodyLimit === undefined ? {} : { bodyLimit: def.bodyLimit }),
+    // onRequest runs before body parsing, so an anonymous caller gets 401, not 400.
+    ...(def.auth === 'admin' ? { onRequest: app.adminGuard } : {}),
+    handler: async (req, reply) => {
+      // The zod validator has already parsed params/query/body against `def`, so the
+      // request is narrowed to the inferred types here; this is the one place it happens.
+      const body = await handler(req as RouteRequest<D>, reply);
+      return reply.code(status).send(body);
+    },
   });
 }

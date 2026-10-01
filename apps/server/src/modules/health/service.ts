@@ -1,11 +1,16 @@
-import type { HealthResponse } from '@funnel/shared';
+import { DomainError, type HealthResponse } from '@funnel/shared';
 import type { HealthRepo } from './repo.ts';
 
 export function createHealthService(repo: HealthRepo, buildVersion: string) {
   return {
     status(): HealthResponse {
-      const dbOk = repo.ping();
-      return { status: dbOk ? 'ok' : 'degraded', version: buildVersion, db: dbOk ? 'ok' : 'error' };
+      if (!repo.ping()) {
+        throw new DomainError('unavailable', 'Database unavailable', {
+          version: buildVersion,
+          db: 'error',
+        });
+      }
+      return { status: 'ok', version: buildVersion, db: 'ok' };
     },
   };
 }

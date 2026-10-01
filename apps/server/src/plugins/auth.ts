@@ -1,6 +1,7 @@
 // Basic Auth for admin routes (CLAUDE.md 6). Credentials are compared in constant time.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { errorBody } from './errors.ts';
 
 // Hash first so both buffers have equal length and the comparison leaks nothing.
 const digest = (value: string): Buffer => createHash('sha256').update(value).digest();
@@ -18,6 +19,6 @@ export function basicAuth(user: string, password: string) {
     await reply
       .code(401)
       .header('www-authenticate', 'Basic realm="funnel-admin", charset="UTF-8"')
-      .send({ error: { code: 'unauthorized', message: 'Admin credentials required' } });
+      .send(errorBody('unauthorized', 'Admin credentials required'));
   };
 }

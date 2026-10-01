@@ -10,6 +10,7 @@ import { createHealthRepo } from './modules/health/repo.ts';
 import { healthRoutes } from './modules/health/routes.ts';
 import { createHealthService } from './modules/health/service.ts';
 import { basicAuth } from './plugins/auth.ts';
+import { errorsPlugin } from './plugins/errors.ts';
 import type { App } from './plugins/route.ts';
 import { webPlugin } from './plugins/web.ts';
 
@@ -21,10 +22,14 @@ export type AppEnv = Pick<
 export async function buildApp(env: AppEnv, db: Db): Promise<App> {
   const app = Fastify({
     logger: { level: env.logLevel },
-    disableRequestLogging: env.logLevel === 'silent',
+    // Railway terminates TLS in front of us; client IPs (rate limits) come from the proxy.
+    trustProxy: true,
+    // The largest allowed body (an event batch, CLAUDE.md 6.0); routes may lower it.
+    bodyLimit: 256 * 1024,
   }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  errorsPlugin(app);
 
   await app.register(helmet, {
     contentSecurityPolicy: {

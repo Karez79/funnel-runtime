@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
-import { basicAuth } from './plugins/auth.ts';
+import { DomainError, type RouteDef } from '@funnel/shared';
+import { z } from 'zod';
+import { route } from './plugins/route.ts';
 import { loadEnv } from './env.ts';
 import { adminAuth, createTestApp, type TestApp } from './test/harness.ts';
 
@@ -26,8 +28,13 @@ describe('GET /api/health', () => {
     t.handle.close();
     const res = await t.app.inject({ method: 'GET', url: '/api/health' });
     expect(res.statusCode).toBe(503);
-    expect(res.json()).toMatchObject({ status: 'degraded', db: 'error' });
-    t.handle.close = () => undefined;
+    expect(res.json()).toEqual({
+      error: {
+        code: 'unavailable',
+        message: 'Database unavailable',
+        details: { version: 'test', db: 'error' },
+      },
+    });
   });
 
   it('sets a same-origin content security policy', async () => {
@@ -70,37 +77,91 @@ describe('unknown routes and static web', () => {
       const res = await t.app.inject({ method: 'GET', url: '/s/team_size' });
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('<title>funnel</title>');
+      const head = await t.app.inject({ method: 'HEAD', url: '/admin/versions' });
+      expect(head.statusCode).toBe(200);
     } finally {
       rmSync(dist, { recursive: true, force: true });
     }
   });
 });
 
-describe('basic auth', () => {
-  async function guarded(header: string | undefined): Promise<number> {
-    t = await createTestApp();
-    t.app.get('/api/admin/probe', { preHandler: basicAuth('admin', 'secret') }, () => ({
-      ok: true,
-    }));
-    const res = await t.app.inject({
-      method: 'GET',
-      url: '/api/admin/probe',
-      headers: header === undefined ? {} : { authorization: header },
-    });
-    return res.statusCode;
-  }
+describe('contract routes', () => {
+  const probe = {
+    method: 'POST',
+    path: '/api/admin/probe',
+    auth: 'admin',
+    status: 201,
+    bodyLimit: 64,
+    body: z.object({ n: z.number().int() }),
+    response: z.object({ doubled: z.number() }),
+  } as const satisfies RouteDef;
 
-  it('accepts the configured credentials', async () => {
-    expect(await guarded(adminAuth)).toBe(200);
+  async function call(headers: Record<string, string>, payload: string) {
+    t = await createTestApp();
+    route(t.app, probe, (req) => {
+      if (req.body.n < 0) throw new DomainError('conflict', 'negative', { n: req.body.n });
+      if (req.body.n === 13) throw new Error('secret internals');
+      return { doubled: req.body.n * 2 };
+    });
+    return t.app.inject({
+      method: 'POST',
+      url: probe.path,
+      headers: { 'content-type': 'application/json', ...headers },
+      payload,
+    });
+  }
+  const auth = { authorization: adminAuth };
+
+  it('runs the handler with the declared success status', async () => {
+    const res = await call(auth, '{"n":2}');
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({ doubled: 4 });
+  });
+
+  it('checks credentials before parsing the body', async () => {
+    const res = await call({}, '{not json');
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({
+      error: { code: 'unauthorized', message: 'Admin credentials required' },
+    });
   });
 
   it.each([
-    ['no header', undefined],
     ['wrong password', `Basic ${Buffer.from('admin:nope').toString('base64')}`],
     ['no separator', `Basic ${Buffer.from('admin').toString('base64')}`],
     ['other scheme', 'Bearer abc'],
   ])('rejects %s with 401', async (_name, header) => {
-    expect(await guarded(header)).toBe(401);
+    const res = await call({ authorization: header }, '{"n":1}');
+    expect(res.statusCode).toBe(401);
+  });
+
+  it.each([
+    ['malformed JSON', '{not json', 400, 'invalid_request'],
+    ['schema violation', '{"n":1.5}', 400, 'invalid_request'],
+    [
+      'body over the route limit',
+      JSON.stringify({ n: 1, pad: 'x'.repeat(100) }),
+      413,
+      'payload_too_large',
+    ],
+  ])('renders %s in the shared envelope', async (_name, payload, status, code) => {
+    const res = await call(auth, payload);
+    expect(res.statusCode).toBe(status);
+    expect(res.json()).toMatchObject({ error: { code } });
+  });
+
+  it('renders a DomainError with its status and details', async () => {
+    const res = await call(auth, '{"n":-1}');
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: { code: 'conflict', message: 'negative', details: { n: -1 } },
+    });
+  });
+
+  it('hides unexpected errors behind a generic 500', async () => {
+    const res = await call(auth, '{"n":13}');
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toEqual({ error: { code: 'internal', message: 'Internal server error' } });
   });
 });
 
