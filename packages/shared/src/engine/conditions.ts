@@ -48,7 +48,8 @@ const PRESENT_OPERATORS: Readonly<
   contains: (answer, value) => {
     if (!Array.isArray(answer)) return false;
     const wanted: unknown[] = Array.isArray(value) ? value : [value];
-    return wanted.every((v) => typeof v === 'string' && answer.includes(v));
+    // An empty list would match everything; that is an authoring mistake, not "always".
+    return wanted.length > 0 && wanted.every((v) => typeof v === 'string' && answer.includes(v));
   },
 };
 

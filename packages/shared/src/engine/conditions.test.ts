@@ -55,6 +55,8 @@ describe('evaluateCondition: operators', () => {
     expect(evalLeaf('priorities', 'contains', ['speed', 'focus'])).toBe(true);
     expect(evalLeaf('priorities', 'contains', ['speed', 'cost'])).toBe(false);
     expect(evalLeaf('work_mode', 'contains', 'hybrid')).toBe(false);
+    expect(evalLeaf('priorities', 'contains', [])).toBe(false);
+    expect(evalLeaf('priorities', 'contains', 1)).toBe(false);
   });
 
   it('exists is true for a present answer; value false asks for absence', () => {
