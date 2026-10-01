@@ -48,3 +48,5 @@ export type { Progress } from './engine/navigation.ts';
 
 export { validateAnswer, validateCompletion } from './engine/validation.ts';
 export type { CompletionResult, ValidationCode, ValidationResult } from './engine/validation.ts';
+
+export { computeResult } from './engine/result.ts';
