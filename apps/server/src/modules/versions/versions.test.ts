@@ -148,13 +148,19 @@ describe('publish', () => {
     expect(domainError(() => service.publish(FUNNEL, 9)).code).toBe('not_found');
   });
 
-  it('is seen by another service instance on the same database', async () => {
+  it('drops the cached active version and is stored in the journal', async () => {
     const { repo, service, clock } = await setup();
-    const other = createVersionsService(repo, clock);
-    expect(other.active(FUNNEL).version).toBe(1);
+    expect(service.active(FUNNEL).version).toBe(1);
     service.publish(FUNNEL, 2);
-    // A fresh instance reads the journal; the publishing instance dropped its cache.
+    expect(service.active(FUNNEL).version).toBe(2);
     expect(createVersionsService(repo, clock).active(FUNNEL).version).toBe(2);
+  });
+
+  it('allows publishing an older draft after a newer one', async () => {
+    const { service } = await setup();
+    service.upload(configJson('funnel-v2.json', { version: 3 }));
+    service.publish(FUNNEL, 3);
+    expect(service.publish(FUNNEL, 2)).toMatchObject({ version: 2, fromVersion: 3 });
     expect(service.active(FUNNEL).version).toBe(2);
   });
 });
@@ -171,6 +177,21 @@ describe('stored configs', () => {
     const { service } = await setup(false);
     expect(domainError(() => service.config(FUNNEL, 1)).code).toBe('not_found');
     expect(domainError(() => service.active(FUNNEL)).code).toBe('not_found');
+  });
+
+  it('report a stored config that no longer parses as an internal error', async () => {
+    const { db, service } = await setup();
+    db.run(sql`update funnel_versions set config_json = '{}' where version = 2`);
+    const err = domainError(() => service.config(FUNNEL, 2));
+    expect(err.code).toBe('internal');
+  });
+
+  it('do not remember funnels without an active version', async () => {
+    const { repo, clock, service } = await setup(false);
+    expect(service.findActive(FUNNEL)).toBeNull();
+    // Seeded through another instance, so this one's caches are not reset by the seed.
+    createVersionsService(repo, clock).seedIfEmpty(configJson('funnel-v1.json'), []);
+    expect(service.findActive(FUNNEL)?.version).toBe(1);
   });
 });
 

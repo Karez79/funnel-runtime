@@ -2,7 +2,9 @@
 // and the active version is the newest row of the activation journal, so publishing a
 // new config needs no redeploy and rolling back loses nothing. Parsed configs and the
 // active version are cached in memory: versions are immutable, and the active-version
-// cache is dropped on every journal write in this process (one instance, CLAUDE.md 2).
+// cache is dropped on every journal write. That is correct only with one service
+// instance per process (one server instance, CLAUDE.md 2): app.ts creates it once and
+// every module that needs versions gets that instance.
 import { createHash } from 'node:crypto';
 import {
   DomainError,
@@ -38,7 +40,7 @@ const notFound = (version: number) =>
 
 export function createVersionsService(repo: VersionsRepo, clock: Clock) {
   const configs = new Map<string, FunnelConfig>();
-  const activeVersions = new Map<string, number | null>();
+  const activeVersions = new Map<string, number>();
 
   function config(funnelId: string, version: number): FunnelConfig {
     const key = `${funnelId}@${String(version)}`;
@@ -48,17 +50,21 @@ export function createVersionsService(repo: VersionsRepo, clock: Clock) {
     if (!row) throw notFound(version);
     const parsed = parseConfig(JSON.parse(row.configJson));
     // Every stored config passed the same schema on upload.
-    if (!parsed.ok) throw new Error(`stored config ${key} no longer parses`);
+    if (!parsed.ok) throw new DomainError('internal', `Stored config ${key} no longer parses`);
     configs.set(key, parsed.config);
     return parsed.config;
   }
 
   function findActive(funnelId: string): ActiveVersion | null {
-    if (!activeVersions.has(funnelId)) {
-      activeVersions.set(funnelId, repo.latestActivation(funnelId)?.version ?? null);
+    let version = activeVersions.get(funnelId);
+    if (version === undefined) {
+      // Misses are not cached: the funnel id comes from a public URL, and remembering
+      // every unknown id would let anyone grow this map without bound.
+      version = repo.latestActivation(funnelId)?.version;
+      if (version === undefined) return null;
+      activeVersions.set(funnelId, version);
     }
-    const version = activeVersions.get(funnelId) ?? null;
-    return version === null ? null : { version, config: config(funnelId, version) };
+    return { version, config: config(funnelId, version) };
   }
 
   /**

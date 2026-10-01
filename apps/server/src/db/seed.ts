@@ -3,6 +3,8 @@
 // funnel-v3.json is the second iteration and is never seeded: it arrives later through
 // the admin API on the running server. The server calls this at every start (it does
 // nothing once a version exists); `pnpm seed` runs the same function by hand.
+// Like main.ts this is a composition entry, not storage code: it builds the versions
+// service and seeds through the same upload and publish as the admin API.
 import { readFileSync } from 'node:fs';
 import { systemClock, type Clock } from '../clock.ts';
 import { createVersionsRepo } from '../modules/versions/repo.ts';
