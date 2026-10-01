@@ -5,7 +5,14 @@
 // details, so callers switch on `code` exactly like the server does. A network failure
 // or a non-JSON error page (proxy, 502) becomes `unavailable` / the status's code.
 // Basic Auth for admin routes is left to the browser (same-origin credentials).
-import { contract, DomainError, ErrorBody, type ErrorCode, type RouteDef } from '@funnel/shared';
+import {
+  codeForStatus,
+  contract,
+  DomainError,
+  ErrorBody,
+  type ErrorCode,
+  type RouteDef,
+} from '@funnel/shared';
 import { z } from 'zod';
 
 type Routes = typeof contract;
@@ -14,7 +21,8 @@ export type RouteName = keyof Routes;
 type Part<R, K extends 'params' | 'query' | 'body'> = R extends {
   readonly [P in K]: infer S extends z.ZodType;
 }
-  ? K extends 'query'
+  ? // A part whose every key is optional (a query with defaults) may be left out.
+    object extends z.input<S>
     ? { readonly [P in K]?: z.input<S> }
     : { readonly [P in K]: z.input<S> }
   : { readonly [P in K]?: never };
@@ -31,20 +39,6 @@ export interface CallOptions {
   /** Lets a request outlive the page (state saved on unload). */
   readonly keepalive?: boolean;
 }
-
-/** Codes for error responses that carry no JSON envelope (a proxy page, a crash). */
-const STATUS_CODES: Readonly<Record<number, ErrorCode>> = {
-  400: 'invalid_request',
-  401: 'unauthorized',
-  403: 'forbidden',
-  404: 'not_found',
-  409: 'conflict',
-  410: 'gone',
-  413: 'payload_too_large',
-  422: 'unprocessable',
-  429: 'rate_limited',
-  500: 'internal',
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -79,8 +73,10 @@ async function failure(res: Response): Promise<DomainError> {
     const { code, message, details } = parsed.data.error;
     return new DomainError(code, message, details);
   }
-  const code = STATUS_CODES[res.status] ?? (res.status >= 500 ? 'unavailable' : 'invalid_request');
-  return new DomainError(code, `Request failed with status ${String(res.status)}`);
+  return new DomainError(
+    codeForStatus(res.status),
+    `Request failed with status ${String(res.status)}`,
+  );
 }
 
 export async function call<N extends RouteName>(
@@ -115,16 +111,25 @@ export async function call<N extends RouteName>(
   return data.value as CallOutput<N>;
 }
 
+type ErrorSchemas<N extends RouteName> = Routes[N] extends { readonly errorDetails: infer D }
+  ? D
+  : never;
+
 /**
- * The typed `details` of a failure with `code`, parsed with the route's schema from the
- * contract (e.g. `contract.saveState.errorDetails.conflict`), or `undefined` when the
- * error is something else or its details do not match.
+ * The typed `details` of a failure of route `name` with `code` (one of the codes the
+ * contract declares details for, e.g. `errorDetails('saveState', 'conflict', error)`), or
+ * `undefined` when the error is something else or its details do not match.
  */
-export function errorDetails<S extends z.ZodType>(
-  schema: S,
+export function errorDetails<N extends RouteName, C extends keyof ErrorSchemas<N> & ErrorCode>(
+  name: N,
+  code: C,
   error: unknown,
-  code: ErrorCode,
-): z.output<S> | undefined {
+): (ErrorSchemas<N>[C] extends z.ZodType ? z.output<ErrorSchemas<N>[C]> : never) | undefined {
   if (!(error instanceof DomainError) || error.code !== code) return undefined;
-  return parseWith(schema, error.details)?.value;
+  const route: RouteDef = contract[name];
+  const schema = route.errorDetails?.[code];
+  const parsed = schema && parseWith(schema, error.details);
+  // Narrowing after the check: parsed with exactly this route's schema for `code`.
+  return parsed?.value as
+    (ErrorSchemas<N>[C] extends z.ZodType ? z.output<ErrorSchemas<N>[C]> : never) | undefined;
 }

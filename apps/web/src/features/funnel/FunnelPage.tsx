@@ -41,7 +41,9 @@ export function FunnelPage() {
           </div>
         ) : (
           <div className={styles.body}>
-            <h1 className={styles.title}>{step?.content.title ?? response?.funnel.meta.title}</h1>
+            {response && (
+              <h1 className={styles.title}>{step?.content.title ?? response.funnel.meta.title}</h1>
+            )}
             {step?.content.body && <p className={styles.text}>{step.content.body}</p>}
           </div>
         )}

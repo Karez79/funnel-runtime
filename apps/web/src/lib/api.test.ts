@@ -1,4 +1,4 @@
-import { contract, DomainError } from '@funnel/shared';
+import { DomainError } from '@funnel/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { call, errorDetails } from './api.ts';
 
@@ -51,6 +51,11 @@ describe('call', () => {
       call('previewVersion', { params: { v: 3 }, query: { variant: 'B' } }),
     ).rejects.toMatchObject({ code: 'internal' });
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/admin/versions/3/preview?variant=B');
+    const fetchNoQuery = stubFetch(respond(200, { funnel: {} }));
+    await expect(
+      call('previewVersion', { params: { v: 3 }, query: { variant: undefined } }),
+    ).rejects.toMatchObject({ code: 'internal' });
+    expect(fetchNoQuery.mock.calls[0]?.[0]).toBe('/api/admin/versions/3/preview');
 
     const fetch2 = stubFetch(respond(404, { error: { code: 'not_found', message: 'nope' } }));
     await expect(call('getSession', { params: { id: 'a/b' } })).rejects.toBeInstanceOf(DomainError);
@@ -76,13 +81,11 @@ describe('call', () => {
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(DomainError);
     expect(error).toMatchObject({ code: 'conflict', status: 409, message: 'stale' });
-    expect(errorDetails(contract.saveState.errorDetails.conflict, error, 'conflict')).toEqual(
-      details,
-    );
-    expect(errorDetails(contract.saveState.errorDetails.conflict, error, 'gone')).toBeUndefined();
-    expect(
-      errorDetails(contract.saveState.errorDetails.unprocessable, error, 'conflict'),
-    ).toBeUndefined();
+    expect(errorDetails('saveState', 'conflict', error)).toEqual(details);
+    expect(errorDetails('saveState', 'unprocessable', error)).toBeUndefined();
+    // Details that do not match the contract are not handed out as typed.
+    const broken = new DomainError('conflict', 'stale', { stateRev: 'x' });
+    expect(errorDetails('saveState', 'conflict', broken)).toBeUndefined();
   });
 
   it('maps an error without the envelope by its status', async () => {

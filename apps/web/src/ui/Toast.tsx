@@ -25,7 +25,12 @@ export function Toast({ message, onClose }: { message: ToastMessage | null; onCl
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || id === undefined) return;
+    if (!el) return;
+    if (id === undefined) {
+      // Cleared by the parent while open (e.g. after its action ran).
+      if (el.matches(':popover-open')) el.hidePopover();
+      return;
+    }
     if (!el.matches(':popover-open')) el.showPopover();
     const timer = window.setTimeout(() => {
       el.hidePopover();
@@ -36,15 +41,32 @@ export function Toast({ message, onClose }: { message: ToastMessage | null; onCl
     };
   }, [id]);
 
+  const { action } = message ?? {};
   return (
-    <div ref={ref} popover="manual" role="status" className={styles.toast}>
-      <span>{message?.text}</span>
-      {message?.action && (
-        <button type="button" className={styles.action} onClick={message.action.onClick}>
-          {message.action.icon && <Icon name={message.action.icon} className={styles.icon} />}
-          {message.action.label}
-        </button>
-      )}
-    </div>
+    <>
+      {/* Always in the accessibility tree, so screen readers announce the new text: the
+          popover itself is display:none until shown, and a live region that appears
+          together with its text is often not announced. */}
+      <span role="status" className={styles.srOnly}>
+        {message?.text}
+      </span>
+      <div ref={ref} popover="manual" className={styles.toast}>
+        <span>{message?.text}</span>
+        {action && (
+          <button
+            type="button"
+            className={styles.action}
+            onClick={() => {
+              action.onClick();
+              ref.current?.hidePopover();
+              onClose();
+            }}
+          >
+            {action.icon && <Icon name={action.icon} className={styles.icon} />}
+            {action.label}
+          </button>
+        )}
+      </div>
+    </>
   );
 }

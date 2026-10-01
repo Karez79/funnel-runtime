@@ -5,6 +5,8 @@
 import { flushSync } from 'react-dom';
 
 const BACK_CLASS = 'back';
+/** Only the latest transition may clear the class; an earlier one can finish later. */
+let latest = 0;
 
 export function withViewTransition(update: () => void, { back = false } = {}): void {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -13,11 +15,12 @@ export function withViewTransition(update: () => void, { back = false } = {}): v
     return;
   }
   const root = document.documentElement;
+  const token = ++latest;
   root.classList.toggle(BACK_CLASS, back);
   const transition = document.startViewTransition(() => {
     flushSync(update);
   });
   void transition.finished.finally(() => {
-    root.classList.remove(BACK_CLASS);
+    if (token === latest) root.classList.remove(BACK_CLASS);
   });
 }

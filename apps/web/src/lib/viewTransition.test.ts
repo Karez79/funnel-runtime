@@ -65,6 +65,23 @@ describe('withViewTransition', () => {
     });
   });
 
+  it('an earlier transition finishing late keeps the class of the latest one', async () => {
+    const browser = stubBrowser({ supported: true, reduced: false });
+    withViewTransition(() => undefined, { back: true });
+    const finishFirst = browser.finish;
+    const second = stubBrowser({ supported: true, reduced: false });
+    second.classes.add('back');
+    withViewTransition(() => undefined, { back: true });
+    finishFirst();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(second.classes.has('back')).toBe(true);
+    second.finish();
+    await vi.waitFor(() => {
+      expect(second.classes.has('back')).toBe(false);
+    });
+  });
+
   it('forward transitions clear a leftover back class', () => {
     const browser = stubBrowser({ supported: true, reduced: false });
     browser.classes.add('back');

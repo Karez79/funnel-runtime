@@ -4,13 +4,23 @@
 // starts a new QA session with that override: an override acts only when a session is
 // created, so an assignment never changes under a running session (DECISIONS.md).
 // UTM tags are read from the URL once, when the session is created.
-import { DomainError, VARIANTS, type SessionResponse, type VariantKey } from '@funnel/shared';
+import {
+  contract,
+  DomainError,
+  VARIANTS,
+  type SessionResponse,
+  type VariantKey,
+} from '@funnel/shared';
+import type { z } from 'zod';
 import { call } from '../../lib/api.ts';
 import { readJson, writeJson } from '../../lib/storage.ts';
 
 export const DEFAULT_FUNNEL_ID = 'workstyle-planner';
 
-const UTM_KEYS = ['source', 'medium', 'campaign', 'content', 'term'] as const;
+const UtmSchema = contract.createSession.body.shape.utm.unwrap();
+type Utm = z.input<typeof UtmSchema>;
+/** `?utm_<key>=` for every key the contract accepts. */
+const UTM_KEYS = UtmSchema.keyof().options;
 
 const sessionKey = (funnelId: string) => `funnel:${funnelId}:session`;
 
@@ -25,8 +35,8 @@ function variantOverride(search: URLSearchParams): VariantKey | undefined {
   return VARIANTS.find((variant) => variant === value);
 }
 
-function utmFrom(search: URLSearchParams): Partial<Record<(typeof UTM_KEYS)[number], string>> {
-  const utm: Partial<Record<(typeof UTM_KEYS)[number], string>> = {};
+function utmFrom(search: URLSearchParams): Utm {
+  const utm: Utm = {};
   for (const key of UTM_KEYS) {
     const value = search.get(`utm_${key}`);
     if (value) utm[key] = value;
