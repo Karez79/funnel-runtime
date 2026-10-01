@@ -1,4 +1,8 @@
+/* Funnel card over a soft colored glow (reference .fwrap / .fcard). */
 .wrap {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
@@ -6,17 +10,44 @@
   padding: 48px 16px 72px;
 }
 
+.wrap::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 70vh;
+  z-index: -1;
+  background:
+    radial-gradient(
+      40% 50% at 30% 30%,
+      color-mix(in oklch, var(--a) 35%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      35% 45% at 72% 20%,
+      color-mix(in oklch, var(--b) 22%, transparent),
+      transparent 70%
+    );
+  filter: blur(30px);
+}
+
 .card {
-  width: 100%;
-  max-width: 560px;
-  background: var(--card);
-  border-radius: var(--r-panel);
-  box-shadow: var(--shadow);
-  padding: 28px 36px 36px;
+  view-transition-name: funnel-card;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+.body {
+  view-transition-name: funnel-body;
 }
 
 .title {
   font-size: clamp(24px, 4vw, 30px);
+  line-height: 1.15;
   font-weight: 500;
   letter-spacing: -0.03em;
   margin: 0 0 10px;
@@ -24,5 +55,6 @@
 
 .text {
   color: var(--ink-2);
-  margin: 0;
+  margin: 0 0 28px;
+  font-size: 14.5px;
 }

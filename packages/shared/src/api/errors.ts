@@ -33,6 +33,16 @@ const ERROR_STATUS: Record<ErrorCode, number> = {
   unavailable: 503,
 };
 
+/**
+ * The code a client reports for an error response without the JSON envelope (a proxy
+ * page, a crash): the inverse of ERROR_STATUS, and `unavailable` for other 5xx.
+ */
+export function codeForStatus(status: number): ErrorCode {
+  const known = ERROR_CODES.find((code) => ERROR_STATUS[code] === status);
+  if (known) return known;
+  return status >= 500 ? 'unavailable' : 'invalid_request';
+}
+
 export const ErrorBody = z.object({
   error: z.object({
     code: z.enum(ERROR_CODES),
