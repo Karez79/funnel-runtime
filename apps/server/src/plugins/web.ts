@@ -9,10 +9,17 @@ import type { App } from './route.ts';
 
 const ADMIN_PAGE = /^\/admin(?:\/|$)/;
 
-/** The SPA router matches paths case-insensitively and tolerates doubled slashes. */
+/** The SPA router decodes paths, matches them case-insensitively and tolerates doubled slashes. */
 function isAdminPage(url: string): boolean {
-  const path = (url.split(/[?#]/)[0] ?? '').replaceAll(/\/{2,}/g, '/').toLowerCase();
-  return ADMIN_PAGE.test(path);
+  const raw = url.split(/[?#]/)[0] ?? '';
+  let path = raw;
+  try {
+    // The router decodes segments too, so /%61dmin is /admin.
+    path = decodeURIComponent(raw);
+  } catch {
+    // Malformed escapes: the router would not match them either; check the raw path.
+  }
+  return ADMIN_PAGE.test(path.replaceAll(/\/{2,}/g, '/').toLowerCase());
 }
 
 export async function webPlugin(app: App, webDist: string | undefined): Promise<void> {

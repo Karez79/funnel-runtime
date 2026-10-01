@@ -1,0 +1,36 @@
+.pill {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+}
+
+.blue {
+  background: var(--a);
+  color: var(--on-ink);
+}
+
+.coral {
+  background: var(--b);
+  color: var(--on-ink);
+}
+
+.black {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.outline {
+  background: var(--card);
+  color: var(--ink-2);
+  box-shadow: var(--ring-line);
+}
+
+.dashed {
+  outline: 1.5px dashed var(--ink-3);
+  outline-offset: -1.5px;
+  color: var(--ink-2);
+}

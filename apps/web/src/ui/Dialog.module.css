@@ -40,3 +40,31 @@
     opacity: 0;
   }
 }
+
+.confirm {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+}
+
+.confirm h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+}
+
+.body {
+  color: var(--ink-2);
+  margin: 0 0 20px;
+}
+
+.body p {
+  margin: 0 0 8px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
