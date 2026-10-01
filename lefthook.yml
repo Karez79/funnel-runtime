@@ -1,0 +1,15 @@
+# Fast local gates; the full `pnpm check` runs in CI and in the Claude Stop hook.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: prettier
+      glob: '*.{ts,tsx,js,mjs,cjs,json,css,md,yml,yaml}'
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    - name: eslint
+      glob: '*.{ts,tsx}'
+      run: pnpm exec eslint --max-warnings 0 {staged_files}
+pre-push:
+  jobs:
+    - name: typecheck
+      run: pnpm typecheck
