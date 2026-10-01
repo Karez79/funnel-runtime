@@ -61,7 +61,7 @@ export function DataQuality({ summary }: { summary: AnalyticsSummary }) {
           ))
         )}
         <tr>
-          <Td>Matches generator ground truth</Td>
+          <Td>Matches generator ground truth (last run, any filter)</Td>
           <Td numeric>–</Td>
           <Td>
             {truth === null ? (

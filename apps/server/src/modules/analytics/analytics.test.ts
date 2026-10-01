@@ -351,7 +351,6 @@ describe('generator ground truth', () => {
       truth([
         { name: 'v1', query: { version: '1' }, expected: wrong },
         { name: 'v9', query: { version: '9' }, expected },
-        { name: 'bad', query: { variant: 'C' }, expected },
       ]),
     );
     const body = contract.uploadGroundTruth.response.parse(res.json());
@@ -359,13 +358,30 @@ describe('generator ground truth', () => {
     expect(body.differences).toEqual([
       'v1: kpis.all.started: expected 5, got 1',
       'v9: Version 9 not found',
-      'bad: invalid filters',
     ]);
     expect((await okSummary(a)).groundTruthMatches).toBe(false);
   });
 
+  it('refuses checks that cover no session or do not pin valid filters', async () => {
+    const a = await start();
+    const empty = await okSummary(a, '?version=1');
+    await newSession(a);
+    const expected = await okSummary(a, '?version=1');
+    for (const check of [
+      // An empty expectation would match an empty server: a vacuous "Yes".
+      { name: 'empty', query: { version: '1' }, expected: empty },
+      // Without a version the check would follow whichever version is active later.
+      { name: 'unpinned', query: {}, expected },
+      { name: 'bad', query: { version: '1', variant: 'C' }, expected },
+    ]) {
+      expect((await upload(a, truth([check]))).statusCode).toBe(400);
+    }
+    expect((await okSummary(a)).groundTruthMatches).toBeNull();
+  });
+
   it('uses the newest upload', async () => {
     const a = await start();
+    await newSession(a);
     const expected = await okSummary(a, '?version=1');
     const wrong = structuredClone(expected);
     wrong.kpis.all.started = 5;

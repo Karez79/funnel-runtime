@@ -36,6 +36,7 @@ const Reason = z.enum(REJECT_REASONS);
 const StoredTruth = GroundTruthSchema.optional();
 /** The upload answer lists at most this many differences; verify prints them all. */
 const MAX_DIFFERENCES = 100;
+const MINUTE = 60_000;
 
 /** Stored JSON is written by ingest; a malformed value reads as empty, not as a 500. */
 function parseJson<T>(schema: z.ZodType<T>, json: string, fallback: T): T {
@@ -125,10 +126,10 @@ export function createAnalyticsService(
   /** Differences per check, prefixed with the check's name; empty when all match. */
   function compareWith(truth: GroundTruth): string[] {
     return truth.checks.flatMap((check) => {
-      const filters = AnalyticsFiltersSchema.safeParse(check.query);
-      if (!filters.success) return [`${check.name}: invalid filters`];
       try {
-        return compareSummaries(check.expected, compute(filters.data)).map(
+        // GroundTruthSchema has already checked that the query is valid filters.
+        const filters = AnalyticsFiltersSchema.parse(check.query);
+        return compareSummaries(check.expected, compute(filters)).map(
           (line) => `${check.name}: ${line}`,
         );
       } catch (error) {
@@ -139,16 +140,25 @@ export function createAnalyticsService(
     });
   }
 
+  // Recomputing every check costs one aggregate per check, so the answer is kept until
+  // the data, the stored ground truth or the minute changes (the minute: "in progress"
+  // of live sessions depends on time alone).
+  let cached: { key: string; matches: boolean | null } | undefined;
+  function matchesStored(): boolean | null {
+    const key = `${repo.fingerprint()}@${String(Math.floor(clock.now().getTime() / MINUTE))}`;
+    if (cached?.key === key) return cached.matches;
+    const json = repo.latestGroundTruth();
+    const truth = json === undefined ? undefined : parseJson(StoredTruth, json, undefined);
+    const matches = truth === undefined ? null : compareWith(truth).length === 0;
+    cached = { key, matches };
+    return matches;
+  }
+
   return {
     filters,
 
     summary(query: AnalyticsFilters): AnalyticsSummary {
-      const json = repo.latestGroundTruth();
-      const truth = json === undefined ? undefined : parseJson(StoredTruth, json, undefined);
-      return {
-        ...compute(query),
-        groundTruthMatches: truth === undefined ? null : compareWith(truth).length === 0,
-      };
+      return { ...compute(query), groundTruthMatches: matchesStored() };
     },
 
     uploadGroundTruth(truth: GroundTruth) {

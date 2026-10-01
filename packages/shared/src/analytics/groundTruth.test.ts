@@ -118,6 +118,20 @@ describe('GroundTruthSchema', () => {
     expect(GroundTruthSchema.parse(file)).toEqual(file);
   });
 
+  it('rejects a check without sessions, without a version or with invalid filters', () => {
+    const file = (query: Record<string, string>, expected: AnalyticsSummary) => ({
+      generatedAt: '2026-10-01T12:00:00.000Z',
+      seed: 1,
+      sessions: 1,
+      checks: [{ name: 'c', query, expected }],
+    });
+    const empty = summary({ sessions: [] });
+    expect(GroundTruthSchema.safeParse(file({ version: '1' }, empty)).success).toBe(false);
+    expect(GroundTruthSchema.safeParse(file({}, summary())).success).toBe(false);
+    expect(GroundTruthSchema.safeParse(file({ version: 'x' }, summary())).success).toBe(false);
+    expect(GroundTruthSchema.safeParse(file({ version: '1' }, summary())).success).toBe(true);
+  });
+
   it('rejects a file without checks', () => {
     const file = { generatedAt: '2026-10-01T12:00:00.000Z', seed: 1, sessions: 1, checks: [] };
     expect(GroundTruthSchema.safeParse(file).success).toBe(false);

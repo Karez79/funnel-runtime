@@ -11,6 +11,7 @@ import {
   gte,
   isNotNull,
   lte,
+  max,
   ne,
   sql,
   sum,
@@ -18,7 +19,14 @@ import {
 } from 'drizzle-orm';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { Db } from '../../db/client.ts';
-import { events, groundTruth, ingestLog, rejectedEvents, sessions } from '../../db/schema.ts';
+import {
+  events,
+  funnelActivations,
+  groundTruth,
+  ingestLog,
+  rejectedEvents,
+  sessions,
+} from '../../db/schema.ts';
 
 export interface Period {
   from?: string | undefined;
@@ -122,6 +130,35 @@ export function createAnalyticsRepo(db: Db) {
 
     saveGroundTruth(json: string, createdAt: string): void {
       db.insert(groundTruth).values({ json, createdAt }).run();
+    },
+
+    /**
+     * Changes whenever anything an analytics number depends on changes: rows are only
+     * appended, except sessions, whose results and states are counted and timestamped.
+     */
+    fingerprint(): string {
+      const s = db
+        .select({ n: count(), results: count(sessions.resultId), at: max(sessions.updatedAt) })
+        .from(sessions)
+        .get();
+      const e = db.select({ n: count() }).from(events).get();
+      const i = db
+        .select({ id: max(ingestLog.id) })
+        .from(ingestLog)
+        .get();
+      const r = db
+        .select({ id: max(rejectedEvents.id) })
+        .from(rejectedEvents)
+        .get();
+      const a = db
+        .select({ id: max(funnelActivations.id) })
+        .from(funnelActivations)
+        .get();
+      const g = db
+        .select({ id: max(groundTruth.id) })
+        .from(groundTruth)
+        .get();
+      return JSON.stringify([s, e?.n, i?.id, r?.id, a?.id, g?.id]);
     },
 
     /** The newest uploaded ground truth as stored, or undefined before the first upload. */

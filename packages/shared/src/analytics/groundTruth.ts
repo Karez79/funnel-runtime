@@ -5,21 +5,39 @@
 // rule of what must match lives here once.
 //
 // What is not compared, and why: `groundTruthMatches` is the answer to this very
-// question; the `active` flag of a version and versions published after the run change
-// legitimately later (rollback, iteration 2) without changing a single number of the run.
+// question; the `active` flag of a version changes legitimately later (rollback,
+// iteration 2) without changing a single number of the run; and only the versions listed
+// in the expected summary are compared. The generator lists every version published when
+// it finishes, so the ones skipped are those published after the run (with no sessions in
+// its window anyway).
+//
+// A check must cover sessions and name its version: an empty expected summary would
+// match an empty answer, and a check without a version would silently follow whichever
+// version is active when it is read.
 import { z } from 'zod';
-import { AnalyticsSummarySchema, type AnalyticsSummary } from './summary.ts';
+import {
+  AnalyticsFiltersSchema,
+  AnalyticsSummarySchema,
+  type AnalyticsSummary,
+} from './summary.ts';
 
 /** Rates are computed in floating point by the same code on both sides. */
 const TOLERANCE = 1e-9;
 
-const GroundTruthCheckSchema = z.object({
-  /** Shown by verify, e.g. "v2 · campaign spring_launch". */
-  name: z.string().min(1).max(200),
-  /** Query string of `GET /api/analytics/summary`, exactly as verify sends it. */
-  query: z.record(z.string(), z.string()),
-  expected: AnalyticsSummarySchema,
-});
+const GroundTruthCheckSchema = z
+  .object({
+    /** Shown by verify, e.g. "v2 · campaign spring_launch". */
+    name: z.string().min(1).max(200),
+    /** Query string of `GET /api/analytics/summary`, exactly as verify sends it. */
+    query: z
+      .record(z.string(), z.string())
+      .refine(
+        (query) => query.version !== undefined && AnalyticsFiltersSchema.safeParse(query).success,
+        'query must be valid analytics filters with a version',
+      ),
+    expected: AnalyticsSummarySchema,
+  })
+  .refine((check) => check.expected.kpis.all.started > 0, 'a check must cover sessions');
 
 export const GroundTruthSchema = z.object({
   generatedAt: z.iso.datetime({ offset: true }),
