@@ -9,6 +9,10 @@
 // counts sets of sessions (11.2), and `out_of_order` is only a data-quality flag.
 // Rejected items are kept for the data-quality panel, but never with property values:
 // those are exactly where a raw answer would sit.
+// A batch sent with a valid GENERATOR_KEY marks its ingest_log and rejected_events rows
+// as `generated`, so the generator's checks can count its own duplicates and rejections
+// without those of real visitors (analytics `traffic=generator`). A wrong key is not an
+// error here: the batch is simply not the generator's.
 import {
   catalogEvent,
   ClientEventSchema,
@@ -22,6 +26,7 @@ import {
 } from '@funnel/shared';
 import type { z } from 'zod';
 import type { Clock } from '../../clock.ts';
+import { sameSecret } from '../../secrets.ts';
 import type { VersionsService } from '../versions/service.ts';
 import type { EventsRepo, IngestSession } from './repo.ts';
 
@@ -106,11 +111,16 @@ export function createEventsService(
   versions: VersionsService,
   clock: Clock,
   publish: (entries: LiveEntryDraft[]) => void,
+  generatorKey: string,
 ) {
   return {
-    ingest(envelope: { batch_id?: string | undefined; events: unknown[] }): BatchResponse {
+    ingest(
+      envelope: { batch_id?: string | undefined; events: unknown[] },
+      key?: string,
+    ): BatchResponse {
       const receivedAt = clock.now().toISOString();
       const batchId = envelope.batch_id ?? null;
+      const generated = key !== undefined && sameSecret(key, generatorKey);
       // Per batch: sessions read once, and the highest client_seq stored so far per
       // session, advanced as events are accepted (better-sqlite3 is synchronous, so
       // nothing else writes between these reads and the insert below).
@@ -190,10 +200,11 @@ export function createEventsService(
                   reason: i.reason,
                   rawJson: rawForStorage(i.item),
                   receivedAt,
+                  generated,
                 },
               ],
         ),
-        { batchId, receivedAt },
+        { batchId, receivedAt, generated },
       );
 
       let next = 0;
