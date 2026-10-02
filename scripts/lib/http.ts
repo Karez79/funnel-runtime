@@ -1,9 +1,9 @@
 // HTTP client of the generator and `verify` (CLAUDE.md 9.1): every call goes through a
 // route of the shared contract, so the scripts test the real API with the same paths and
-// schemas the server registers. Admin routes get Basic Auth, public ones the generator
-// key (synthetic traffic, rate-limit exemption). Each answer also carries the server's
-// `Date` header: the ground truth's time window is taken from the server's clock, not
-// from the machine that runs the generator.
+// schemas the server registers. Admin routes get Basic Auth; the generator key goes
+// with every call (synthetic traffic, rate-limit exemption, the ground-truth upload).
+// Each answer also carries the server's `Date` header: the ground truth's time window is
+// taken from the server's clock, not from the machine that runs the generator.
 import {
   codeForStatus,
   contract,
@@ -59,7 +59,7 @@ export function createClient(options: ClientOptions) {
     }
     const headers: Record<string, string> = {};
     if (route.auth === 'admin' && basic) headers.authorization = basic;
-    if (route.auth === 'public' && options.generatorKey) {
+    if (options.generatorKey) {
       headers[GENERATOR_KEY_HEADER] = options.generatorKey;
     }
     const hasBody = request.body !== undefined;

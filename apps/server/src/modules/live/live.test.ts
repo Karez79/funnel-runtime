@@ -207,6 +207,17 @@ describe('GET /api/live', () => {
     expect(entry?.name).toHaveLength(200);
   });
 
+  it('streams without credentials when ADMIN_AUTH=off', async () => {
+    t = await createTestApp({ env: { adminAuth: { mode: 'off' } } });
+    const base = await t.app.listen({ host: '127.0.0.1', port: 0 });
+    const res = await fetch(`${base}/api/live`);
+    expect(res.status).toBe(200);
+    const body = res.body;
+    if (!body) throw new Error('no body');
+    await readUntil(body, (text) => text.includes(': connected'));
+    await body.cancel();
+  });
+
   it('ends open streams when the server shuts down', async () => {
     t = await createTestApp();
     const base = await t.app.listen({ host: '127.0.0.1', port: 0 });
