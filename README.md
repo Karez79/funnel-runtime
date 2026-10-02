@@ -242,6 +242,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | стили только из токенов | Stylelint: цвета, радиусы, тени, шрифты только через `var(--…)`                                                           |
 | покрытие                | `packages/shared` ≥ 90% строк, `apps/server` ≥ 80%                                                                        |
 | поведение в браузере    | Playwright e2e: воронка, админка, Live events                                                                             |
+| доступность             | axe (`@axe-core/playwright`) в e2e: WCAG 2.x A/AA, ни одного нарушения serious и critical                                 |
 | прод после деплоя       | `verify-deploy.yml` ждёт `/api/health` с версией задеплоенного коммита                                                    |
 
 ## Таймлайн
@@ -259,7 +260,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | 6 — генератор, verify, документация      | 2026-10-02 02:02 ² | 2026-10-02 04:28 ³ | генератор и ground truth, `pnpm verify`, строка сверки в дашборде, документы                                          |
 | 6b — сверка, устойчивая к живому трафику | 2026-10-02 04:37   | 2026-10-02 04:59 ⁴ | проверки генератора считают только его трафик (`traffic=generator`): на проде в окно прогона попали посетители (#137) |
 | 7 — вторая итерация (v3)                 | —                  | впереди            |                                                                                                                       |
-| 8 — полировка                            | —                  | впереди            |                                                                                                                       |
+| 8 — полировка                            | 2026-10-02 05:22   | 2026-10-02 07:32 ⁵ | EXPLAIN.md, `pnpm screenshots` и картинки, axe в e2e и контраст AA, пустые состояния админки                          |
 
 ¹ Фазы 3–5 шли параллельно. Конец — слияние последнего PR задачи в ветку фазы; в `main` фазы вливаются позже, по очереди (Фаза 5 — в 03:50).
 
@@ -269,13 +270,15 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 ⁴ Слияние последнего PR задачи (#145) в ветку фазы; слияние в `main` и повторный прогон генератора на проде — после (#137).
 
+⁵ Слияние последнего PR задачи (#163) в ветку фазы; около часа простоя из-за лимита аккаунта (с 06:00).
+
 ## Работа с агентами
 
 Код писали и проверяли агенты Claude Code; человек код не читал. Проверку делали автоматические проверки (`pnpm check`), e2e, CI и субагент `reviewer` (`.claude/agents/reviewer.md`, только чтение), который оставлял в каждом PR комментарий с находками `blocker` / `major` / `minor`. Журнал — [`docs/AGENT_LOG.md`](docs/AGENT_LOG.md), решения вне спецификации — [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 - **Декомпозиция.** На каждую фазу — [milestone](https://github.com/Karez79/funnel-runtime/milestones?state=all), на каждую задачу — issue, ветка `task/N.M-*` и PR в ветку фазы; фаза вливается в `main` merge-коммитом. Все PR — [закрытые pull request'ы](https://github.com/Karez79/funnel-runtime/pulls?q=is%3Apr+is%3Aclosed).
 - **Параллельность.** Фаза 1 (контракт) шла последовательно. Фазы 3, 4 и 5 вели три агента-лида в отдельных `git worktree` одновременно; PR внутри фазы открывались стеком, ревьюеры работали параллельно с разработкой.
-- **Что нашёл ревьюер (фазы 0–6, по `pnpm review:stats`).** Фаза 0: 1 blocker, 8 major — например, Stop-хук молча пропускал `pnpm check` после `cd`, правила dependency-cruiser не срабатывали. Фаза 1: 13 major, в итоговом ревью — имена из `Object.prototype` (`toString`) проходили линт как существующие шаги. Фаза 2: 3 major, среди них неограниченный рост кеша по публичному `funnelId` и обход rate limit подменой `X-Forwarded-For`. Фаза 3: 6 major, гонки быстрых нажатий во время view transition, воспроизведённые на прод-билде и закрытые e2e. Фаза 4: 0 major, 23 minor. Фаза 5: 5 major — например, Live events склеивал три копии события в одной пачке в одну строку. Фаза 6: 3 major — «Matches generator ground truth: Yes» мог быть пустым (проверка без сессий совпадала с пустым сервером), неверное время в таймлайне README и будущий прогон генератора на проде, описанный в README как уже состоявшийся; ещё e2e генератора поймал окно сверки, захватывавшее трафик предыдущей спеки.
+- **Что нашёл ревьюер (по `pnpm review:stats`).** Фаза 0: 1 blocker, 8 major — например, Stop-хук молча пропускал `pnpm check` после `cd`, правила dependency-cruiser не срабатывали. Фаза 1: 13 major, в итоговом ревью — имена из `Object.prototype` (`toString`) проходили линт как существующие шаги. Фаза 2: 3 major, среди них неограниченный рост кеша по публичному `funnelId` и обход rate limit подменой `X-Forwarded-For`. Фаза 3: 6 major, гонки быстрых нажатий во время view transition, воспроизведённые на прод-билде и закрытые e2e. Фаза 4: 0 major, 23 minor. Фаза 5: 5 major — например, Live events склеивал три копии события в одной пачке в одну строку. Фаза 6: 3 major — «Matches generator ground truth: Yes» мог быть пустым (проверка без сессий совпадала с пустым сервером), неверное время в таймлайне README и будущий прогон генератора на проде, описанный в README как уже состоявшийся; ещё e2e генератора поймал окно сверки, захватывавшее трафик предыдущей спеки. Фаза 8: 2 major — axe проверял почти пустой дашборд (на данных генератора нашлись нарушения контраста), а шаг README предлагал загрузить конфиг на проде.
 - **Правила процесса.** PR с `blocker` или `major` вливается только после повторного ревью с APPROVE и зелёного CI; найденное исправляется сразу, в том же или следующем PR.
 - **Хуки.** После правки файла — Prettier и ESLint `--fix`; на Stop — `pnpm check` (с кешем по отпечатку дерева), красный результат не даёт агенту закончить.
 - **Ошибки процесса** записаны честно: стековый PR, закрытый GitHub при удалении базовой ветки; неверный диагноз ревьюера о сборке `better-sqlite3`, который исправил основной агент.
@@ -291,8 +294,9 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 funnel-runtime/
   CLAUDE.md                     спецификация проекта
   configs/                      funnel-v1.json, funnel-v2.json (итерация 1), funnel-v3.json (итерация 2)
-  docs/                         ARCHITECTURE, DATA_MODEL, EVENTS, ANALYTICS, EXPERIMENT, LIMITATIONS,
-                                TIMELINE, AGENT_LOG, DECISIONS, REQUIREMENTS, design/reference.html
+  docs/                         ARCHITECTURE, EXPLAIN, DATA_MODEL, EVENTS, ANALYTICS, EXPERIMENT, LIMITATIONS,
+                                TIMELINE, AGENT_LOG, DECISIONS, REQUIREMENTS, design/reference.html,
+                                images/ (pnpm screenshots)
   packages/shared/src/
     config/                     schema.ts (zod), lint.ts, diff.ts
     engine/                     conditions, resolve, navigation, validation, result
@@ -311,7 +315,7 @@ funnel-runtime/
     ui/                         Button, Pill, Panel, Ring, HalfDonut, Dialog, CommandPalette, Toast, …
     features/                   funnel, admin-shell, versions, dashboard, live
   scripts/                      generate-traffic.ts, verify.ts; demo-iteration2.ts (Фаза 7), screenshots.ts (Фаза 8)
-  e2e/                          Playwright smoke
+  e2e/                          Playwright smoke и axe (доступность)
   .claude/                      agents/reviewer.md, settings.json (хуки)
   .github/workflows/            ci.yml, verify-deploy.yml
   Dockerfile  railway.json  .env.example
