@@ -4,7 +4,7 @@
 // sessions stay where they are. Nothing changes the active version without a dialog.
 import type { VersionSummary } from '@funnel/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { errorDetails } from '../../lib/api.ts';
 import { formatSessions } from '../../lib/format.ts';
@@ -69,6 +69,12 @@ export function VersionsPage() {
     : params.has('rollback')
       ? { kind: 'rollback' }
       : null;
+  // A palette command opens the confirmation without `ask`: refetch for a current count.
+  const urlKey = fromUrl === null ? null : `${fromUrl.kind}:${String(publishParam)}`;
+  const { refetch } = list;
+  useEffect(() => {
+    if (urlKey !== null) void refetch();
+  }, [urlKey, refetch]);
   const reviewed =
     selected ?? (publishable ? publishParam : null) ?? drafts.at(-1)?.version ?? null;
   const candidate = list.data ? (pending ?? fromUrl) : null;
