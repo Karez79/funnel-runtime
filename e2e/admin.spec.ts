@@ -137,7 +137,7 @@ test.describe('admin error states', () => {
   }) => {
     await page.goto('/admin/nope');
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
-    await page.getByRole('button', { name: 'Back to dashboard' }).click();
+    await page.getByRole('link', { name: 'Back to dashboard' }).click();
     await expect(page).toHaveURL(/\/admin\/?$/);
     // A redeploy removes the old page chunks, the JS and its CSS.
     await page.route(/VersionsPage-[^/]*\.(js|css)$/, (route) => route.fulfill({ status: 404 }));

@@ -4,7 +4,7 @@
 // renders when the admin chunks themselves fail to load. "Back to dashboard" is a full
 // page load on purpose: it also picks up the new build after a redeploy.
 import { useRouteError } from 'react-router';
-import { Button } from '../../ui/Button.tsx';
+import { Button, ButtonLink } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import styles from './AdminError.module.css';
 
@@ -41,13 +41,7 @@ export function AdminError({ notFound = false }: { notFound?: boolean }) {
         <div className={styles.actions}>
           {notFound ? (
             // Reloading a missing page only shows it again: the dashboard is the one action.
-            <Button
-              onClick={() => {
-                window.location.assign('/admin');
-              }}
-            >
-              Back to dashboard
-            </Button>
+            <ButtonLink href="/admin">Back to dashboard</ButtonLink>
           ) : (
             <>
               <Button
