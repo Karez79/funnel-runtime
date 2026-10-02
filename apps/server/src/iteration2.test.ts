@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   AnalyticsSummarySchema,
   answerKey,
+  computeResult,
   contract,
   ErrorBody,
   isInteractive,
@@ -123,21 +124,34 @@ function schemaSnapshot(a: TestApp) {
   };
 }
 
-function expandedEvent(s: SessionResponse['session']) {
+/** A client event of the session, with the context the session itself has. */
+function clientEvent(
+  s: SessionResponse['session'],
+  name: string,
+  stepId: string,
+  properties: Record<string, string | number>,
+) {
   return {
     event_id: uuidv7(),
     session_id: s.id,
-    name: 'recommendation_expanded',
+    name,
     client_timestamp: new Date().toISOString(),
     client_seq: 1,
     funnel_id: FUNNEL,
     funnel_version: s.funnelVersion,
     experiment_id: s.experimentId,
     variant: s.variant,
-    step_id: 'result',
-    properties: { result_id: 'balanced', action: 'expand_recommendation', source: 'result_cta' },
+    step_id: stepId,
+    properties,
   };
 }
+
+const expandedEvent = (s: SessionResponse['session']) =>
+  clientEvent(s, 'recommendation_expanded', 'result', {
+    result_id: 'balanced',
+    action: 'expand_recommendation',
+    source: 'result_cta',
+  });
 
 async function sendEvents(a: TestApp, events: unknown[]) {
   const res = await a.app.inject({
@@ -185,23 +199,22 @@ describe('a v2 session survives the publication of v3', () => {
     expect(resumed.session.funnelVersion).toBe(2);
     expect(resumed.funnel.steps['tool_count']).toBeDefined();
     const events = await sendEvents(a, [
-      {
-        ...expandedEvent(resumed.session),
-        name: 'step_viewed',
-        step_id: 'tool_count',
-        properties: { step_type: 'number' },
-      },
+      clientEvent(resumed.session, 'step_viewed', 'tool_count', { step_type: 'number' }),
     ]);
     expect(events.accepted).toBe(1);
     const finished = await walk(a, resumed, 'result', { tool_count: 12 });
     expect(finished.answers['tool_count']).toBe(12);
-    const { resultId } = await complete(a, old.session.id);
-    expect(Object.keys(resumed.funnel.results)).toContain(resultId);
+    // The result is v2's: computed on the pinned funnel, with v2's B wording, not v3's
+    // (v3 changes the wording of every B result).
+    const { resultId, result } = await complete(a, old.session.id);
+    expect(resultId).toBe(computeResult(resumed.funnel, finished.answers));
+    expect(result).toEqual(resumed.funnel.results[resultId]);
 
     // A new session of variant B starts on v3, where B has no tool_count.
     const fresh = await newSession(a, { variantOverride: 'B' });
     expect(fresh.session.funnelVersion).toBe(3);
     expect(fresh.funnel.sequence).not.toContain('tool_count');
+    expect(fresh.funnel.results[resultId]).not.toEqual(result);
     const stale = await a.app.inject({
       method: 'PUT',
       url: `/api/sessions/${fresh.session.id}/state`,
