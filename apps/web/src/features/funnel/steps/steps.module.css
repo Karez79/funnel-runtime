@@ -174,10 +174,11 @@
   appearance: textfield;
 }
 
-/* Without field-sizing: width from the digit count NumberStep puts in --digits. */
+/* Without field-sizing: width from the digit count NumberStep puts in --digits; one
+   tabular digit with the -0.04em tracking is about 1ch - 0.16em wide in this font. */
 @supports not (field-sizing: content) {
   .input {
-    width: calc(var(--digits, 3) * 1ch + 0.1em);
+    width: calc(var(--digits, 3) * (1ch - 0.16em) + 0.1em);
   }
 }
 
