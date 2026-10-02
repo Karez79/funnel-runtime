@@ -9,5 +9,17 @@ export default defineConfig({
     proxy: { '/api': 'http://localhost:3000' },
   },
   // Never inline assets as data: URLs: the CSP allows fonts and images from 'self' only.
-  build: { outDir: 'dist', emptyOutDir: true, assetsInlineLimit: 0 },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    assetsInlineLimit: 0,
+    // Third-party code in its own chunk: it changes less often than the app (better
+    // caching), and neither chunk crosses the 500 kB warning (`pnpm build` has no warnings).
+    rolldownOptions: {
+      // The timing diagnostic reports React Compiler (babel) time, which depends on machine
+      // load, not on the code; left on, `pnpm build` warns on a busy machine only.
+      checks: { bundlerTimings: false },
+      output: { codeSplitting: { groups: [{ name: 'vendor', test: /node_modules/ }] } },
+    },
+  },
 });

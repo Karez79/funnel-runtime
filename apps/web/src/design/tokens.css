@@ -45,6 +45,7 @@
   --r-field: 20px; /* number input */
   --r-option: 16px; /* answer options */
   --r-key: 8px; /* key hints, week cells */
+  --r-dot: 3px; /* legend swatches */
   --shadow: 0 1px 2px oklch(0.3 0.03 260 / 0.03), 0 18px 48px -12px oklch(0.3 0.03 260 / 0.12);
   --shadow-sm: 0 1px 2px oklch(0.3 0.03 260 / 0.035), 0 8px 24px -10px oklch(0.3 0.03 260 / 0.1);
 
@@ -54,6 +55,7 @@
   --ring-line: inset 0 0 0 1px var(--line); /* hairline inside options and fields */
   --ring-ink: inset 0 0 0 1.5px var(--ink); /* selected option, focused field */
   --ring-error: inset 0 0 0 1.5px var(--b); /* invalid field */
+  --ring-dot: inset 0 0 0 5px var(--ink); /* filled radio of a selected option */
   --shadow-pop: 0 2px 6px oklch(0.3 0.03 260 / 0.08), 0 24px 60px oklch(0.3 0.03 260 / 0.18);
 
   /* spring-ish easing built with linear() */

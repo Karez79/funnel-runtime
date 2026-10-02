@@ -63,7 +63,8 @@ export interface SharedServices {
 export function createSharedServices(db: Db, clock: Clock = systemClock): SharedServices {
   return {
     versions: createVersionsService(createVersionsRepo(db), clock),
-    live: createLiveBus(LIVE_STREAM.backlog),
+    // The same clock as `receivedAt`, so seq and receive time never disagree in tests.
+    live: createLiveBus(LIVE_STREAM.backlog, () => clock.now().getTime()),
   };
 }
 

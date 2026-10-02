@@ -97,8 +97,16 @@ export function progress(
   return { index, total: counted.length };
 }
 
-/** Pops the history stack; `null` when there is nowhere to go back to. */
-export function stepBack(history: readonly string[]): { stepId: string; history: string[] } | null {
-  const stepId = history.at(-1);
-  return stepId === undefined ? null : { stepId, history: history.slice(0, -1) };
+/**
+ * Pops the history stack; `null` when there is nowhere to go back to. With `to`, pops
+ * down to that visited step (browser Back over several entries); `null` if it was never
+ * visited.
+ */
+export function stepBack(
+  history: readonly string[],
+  to?: string,
+): { stepId: string; history: string[] } | null {
+  const index = to === undefined ? history.length - 1 : history.lastIndexOf(to);
+  const stepId = history[index];
+  return stepId === undefined ? null : { stepId, history: history.slice(0, index) };
 }
