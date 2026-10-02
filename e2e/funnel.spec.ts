@@ -432,3 +432,46 @@ test('preview runs a version in memory: no session, no events', async ({ page, r
   expect(total(await after.json())).toBe(sessionsBefore);
   expect(writes).toEqual([]);
 });
+
+test('every number step shows its lower bound as a placeholder next to the unit', async ({
+  page,
+}) => {
+  // v2 variant A (preview of the draft) has all four number steps of the configs.
+  await page.goto('/admin/preview/2?variant=A');
+  await page.getByRole('button', { name: 'Start' }).click();
+  const field = page.getByRole('spinbutton');
+  const card = page.locator('[data-step]');
+  await expect(card).toHaveAttribute('data-step', 'team_size');
+  const seen: string[] = [];
+  for (let i = 0; i < 15; i += 1) {
+    const stepId = (await card.getAttribute('data-step')) ?? '';
+    if (stepId === 'result') break;
+    if (await field.count()) {
+      seen.push(stepId);
+      const min = await field.getAttribute('min');
+      await expect(field).toHaveAttribute('placeholder', min ?? '');
+      await expect(field).toHaveValue('');
+      await expect(field).toBeFocused();
+      // The placeholder is a hint, not an answer.
+      await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+      const unit = page.locator('label', { has: field }).locator('span');
+      await expect(unit).toBeVisible();
+      const [box, unitBox] = await Promise.all([field.boundingBox(), unit.boundingBox()]);
+      if (!box || !unitBox) throw new Error('no layout');
+      // Number and unit form one group: the unit starts right after the digits.
+      expect(unitBox.x - (box.x + box.width)).toBeLessThan(16);
+      // −/+ on an empty field start from the placeholder.
+      await page.getByRole('button', { name: 'Increase' }).click();
+      await expect(field).toHaveValue(String(Number(min) + 1));
+    } else if (await page.getByRole('radio', { name: 'Hybrid' }).count()) {
+      await page.getByRole('radio', { name: 'Hybrid' }).click();
+    } else if (await page.getByRole('radio').count()) {
+      await page.getByRole('radio').first().click();
+    } else if (await page.getByRole('checkbox').count()) {
+      await page.getByRole('checkbox').first().click();
+    }
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(card).not.toHaveAttribute('data-step', stepId);
+  }
+  expect(seen).toEqual(['team_size', 'office_days', 'meeting_hours', 'tool_count']);
+});

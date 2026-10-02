@@ -156,8 +156,7 @@
 }
 
 .input {
-  field-sizing: content;
-  min-width: 2ch;
+  /* Width is set inline from the number of digits shown (NumberStep.tsx). */
   width: 3.2ch;
   max-width: 100%;
   border: 0;
@@ -172,6 +171,11 @@
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   appearance: textfield;
+}
+
+.input::placeholder {
+  color: var(--ink-hint);
+  opacity: 1;
 }
 
 .input::-webkit-inner-spin-button,
