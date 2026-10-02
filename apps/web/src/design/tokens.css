@@ -9,8 +9,8 @@
   --soft: oklch(0.945 0.01 258); /* circle buttons, tracks */
   --card: oklch(1 0 0);
   --ink: oklch(0.25 0.014 265);
-  --ink-2: oklch(0.53 0.02 260);
-  --ink-3: oklch(0.71 0.02 260);
+  --ink-2: oklch(0.48 0.02 260); /* secondary text; reference 0.53, darkened for AA 4.5:1 on --bg */
+  --ink-3: oklch(0.71 0.02 260); /* non-text only: strokes, icons, disabled */
   --line: oklch(0.925 0.009 255);
   --a: oklch(0.7 0.1 260); /* variant A */
   --b: oklch(0.67 0.15 25); /* variant B */

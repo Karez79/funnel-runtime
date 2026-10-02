@@ -29,6 +29,7 @@
     "screenshots": "node scripts/screenshots.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@funnel/shared": "workspace:*",
     "@playwright/test": "^1.63.0",
