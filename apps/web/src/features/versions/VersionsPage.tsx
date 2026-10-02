@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { errorDetails } from '../../lib/api.ts';
+import { formatSessions } from '../../lib/format.ts';
 import { apiQuery } from '../../lib/query.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
@@ -17,7 +18,6 @@ import { Toast } from '../../ui/Toast.tsx';
 import { ActivationHistory } from './ActivationHistory.tsx';
 import { DiffPanel } from './DiffPanel.tsx';
 import { useVersionActions } from './useVersionActions.ts';
-import { formatSessions } from '../../lib/format.ts';
 import styles from './VersionsPage.module.css';
 import { VersionsTable } from './VersionsTable.tsx';
 
@@ -28,10 +28,10 @@ type Pending = { kind: 'publish' | 'activate'; version: number } | { kind: 'roll
 function stayingText(active: VersionSummary | undefined, target: number): string {
   if (!active) return `New sessions will start on version ${String(target)}.`;
   const from = String(active.version);
-  return (
-    `New sessions will start on version ${String(target)}. ` +
-    `The ${formatSessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`
-  );
+  const start = `New sessions will start on version ${String(target)}.`;
+  if (active.activeSessions === 0)
+    return `${start} No sessions are in progress on version ${from}.`;
+  return `${start} The ${formatSessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`;
 }
 
 export function VersionsPage() {
@@ -39,9 +39,14 @@ export function VersionsPage() {
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  // The confirmation states how many sessions stay; refetch so the count is current.
+  const ask = (next: Pending) => {
+    setPending(next);
+    void list.refetch();
+  };
   const actions = useVersionActions({
     onRollbackRequest: () => {
-      setPending({ kind: 'rollback' });
+      ask({ kind: 'rollback' });
     },
     onPublished: () => {
       setSelected(null);
@@ -150,10 +155,10 @@ export function VersionsPage() {
               reviewed={reviewed}
               onReview={setSelected}
               onRollback={() => {
-                setPending({ kind: 'rollback' });
+                ask({ kind: 'rollback' });
               }}
               onActivate={(version) => {
-                setPending({ kind: 'activate', version });
+                ask({ kind: 'activate', version });
               }}
             />
           )}
@@ -168,7 +173,7 @@ export function VersionsPage() {
           draft={versions.find((v) => v.version === reviewed)?.state === 'draft'}
           staying={reviewed === null ? '' : stayingText(active, reviewed)}
           onPublish={(version) => {
-            setPending({ kind: 'publish', version });
+            ask({ kind: 'publish', version });
           }}
         />
       </div>
