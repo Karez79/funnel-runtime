@@ -1,10 +1,12 @@
 // Layout of the Funnel journey (CLAUDE.md 10): steps of the shown sequence split into
 // white columns of at most three, the result step left out (it is the tile column), and
 // the step with the most drop-offs singled out. Pure: numbers in, layout out.
-import type { AnalyticsSummary } from '@funnel/shared';
+import type { AnalyticsSummary, VariantFilterSchema } from '@funnel/shared';
+import type { z } from 'zod';
 
 export type JourneyStep = AnalyticsSummary['steps'][number];
-export type ShownVariant = 'A' | 'B' | 'all';
+/** The dashboard's variant filter, as the contract defines it. */
+export type ShownVariant = z.infer<typeof VariantFilterSchema>;
 
 export interface JourneyColumn {
   readonly label: string;

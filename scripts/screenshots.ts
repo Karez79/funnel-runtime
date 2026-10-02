@@ -234,6 +234,9 @@ async function animation(browser: Browser, baseUrl: string, workDir: string): Pr
     baseURL: baseUrl,
     viewport: MOBILE,
     recordVideo: { dir: workDir, size: MOBILE },
+    // Steps swap in place: at a few frames per second the slide of the view transition
+    // shows up as the card jumping sideways and half out of the frame.
+    reducedMotion: 'reduce',
   });
   const page = await context.newPage();
   // The first frames are a blank page while the app loads; the animation starts at the intro.

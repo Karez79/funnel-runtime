@@ -1,11 +1,14 @@
 // The result screen (CLAUDE.md 8.2, 8.3). The result comes from the server (live) or from
 // the engine (preview); this component only renders an outcome: loading and error states
 // use the titles of the result step from the config. The CTA with
-// `action: expand_recommendation` opens a 30-day plan built from the recommendations
-// (`grid-template-rows: 0fr → 1fr`, no height measured in JS).
+// `action: expand_recommendation` turns the recommendations into a 30-day plan in place:
+// week labels open above the items (`grid-template-rows: 0fr → 1fr`, no height measured
+// in JS). In place, not a second list below the CTA: on a phone a list under the button
+// opens off screen and repeats the lines right above it.
 import { EXPAND_RECOMMENDATION, type Result, type Step } from '@funnel/shared';
 import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { Button } from '../../ui/Button.tsx';
+import { Eyebrow } from '../../ui/Eyebrow.tsx';
 import { Icon } from '../../ui/Icon.tsx';
 import styles from './ResultScreen.module.css';
 import { ResultWeek } from './ResultWeek.tsx';
@@ -18,15 +21,8 @@ export type ResultOutcome =
 
 const WEEKS_IN_PLAN = 4;
 
-/** Recommendations spread over four weeks, in order; UI adds only the week labels. */
-function planWeeks(recommendations: readonly string[]): string[][] {
-  const weeks: string[][] = [];
-  recommendations.forEach((text, i) => {
-    const week = Math.min(i, WEEKS_IN_PLAN - 1);
-    (weeks[week] ??= []).push(text);
-  });
-  return weeks;
-}
+/** Week of each recommendation, in order: one per week, the rest in the last week. */
+const weekOf = (index: number) => Math.min(index, WEEKS_IN_PLAN - 1);
 
 function ReadyResult({
   resultId,
@@ -50,20 +46,30 @@ function ReadyResult({
 
   return (
     <>
-      <span className={styles.kicker}>Your recommendation</span>
+      <Eyebrow>Your recommendation</Eyebrow>
       <h1 className={styles.title}>{result.title}</h1>
       <p className={styles.summary}>{result.summary}</p>
       <ResultWeek resultId={resultId} title="What a week could look like" />
-      <ul className={styles.recs}>
-        {result.recommendations.map((text) => (
+      <ol
+        className={styles.recs}
+        id={planId}
+        data-open={expands && open}
+        aria-label={expands && open ? '30-day plan' : undefined}
+      >
+        {result.recommendations.map((text, i) => (
           <li key={text}>
+            {expands && (i === 0 || weekOf(i) !== weekOf(i - 1)) && (
+              <span className={styles.planWeek} aria-hidden={!open}>
+                <strong>Week {weekOf(i) + 1}</strong>
+              </span>
+            )}
             <span className={styles.recIcon} aria-hidden="true">
               <Icon name="check" />
             </span>
             {text}
           </li>
         ))}
-      </ul>
+      </ol>
       <Button
         aria-expanded={expands ? open : undefined}
         aria-controls={expands ? planId : undefined}
@@ -85,23 +91,6 @@ function ReadyResult({
       >
         {result.cta.label}
       </Button>
-      {expands && (
-        <div className={styles.plan} id={planId} data-open={open}>
-          {/* Closed, the plan is out of the accessibility tree and the tab order. */}
-          <div inert={!open}>
-            <ol className={styles.planList} aria-label="30-day plan">
-              {planWeeks(result.recommendations).map((items, week) => (
-                <li key={week}>
-                  <strong>Week {week + 1}</strong>
-                  {items.map((text) => (
-                    <span key={text}>{text}</span>
-                  ))}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      )}
     </>
   );
 }

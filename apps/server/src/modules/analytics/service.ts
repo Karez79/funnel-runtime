@@ -160,6 +160,12 @@ export function createAnalyticsService(
     return matches;
   }
 
+  function assertGeneratorKey(key: string | undefined): void {
+    if (!sameSecret(key ?? '', generatorKey)) {
+      throw new DomainError('forbidden', 'Uploading ground truth requires the generator key');
+    }
+  }
+
   return {
     filters,
 
@@ -171,10 +177,10 @@ export function createAnalyticsService(
      * Only the generator may replace its ground truth: the admin guard alone is not enough
      * when ADMIN_AUTH=off opens the admin, and the "Matches" line must not be flippable.
      */
+    assertGeneratorKey,
+
     uploadGroundTruth(truth: GroundTruth, key: string | undefined) {
-      if (!sameSecret(key ?? '', generatorKey)) {
-        throw new DomainError('forbidden', 'Uploading ground truth requires the generator key');
-      }
+      assertGeneratorKey(key);
       repo.saveGroundTruth(JSON.stringify(truth), clock.now().toISOString());
       const differences = compareWith(truth);
       return {

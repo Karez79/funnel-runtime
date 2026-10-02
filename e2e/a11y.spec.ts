@@ -119,6 +119,9 @@ test('live events and the command palette pass axe', async ({ page }) => {
 
 test('admin pages pass axe on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  // A funnel visit, so Live events has rows to audit in its stacked phone layout.
+  await page.goto('/');
+  await expect(page.locator('[data-step="intro"]')).toBeVisible();
   for (const [path, heading] of [
     ['/admin', 'Funnel journey'],
     ['/admin/versions', 'Versions'],
@@ -126,6 +129,9 @@ test('admin pages pass axe on a phone', async ({ page }) => {
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    if (path === '/admin/live') {
+      await expect(page.getByRole('cell', { name: 'step_viewed' }).first()).toBeVisible();
+    }
     await audit(page);
   }
 });

@@ -31,14 +31,18 @@ export function VersionsTable({
 }) {
   const newestFirst = [...versions].sort((a, b) => b.version - a.version);
   return (
-    <Table label="All versions">
+    <Table label="All versions" stack>
       <thead>
         <tr>
           <Th>Version</Th>
           <Th>Status</Th>
           <Th>Release note</Th>
           <Th>Activated</Th>
-          <Th numeric>In progress</Th>
+          {/* Not the dashboard's In progress (active in the last 30 minutes): here every
+              session that has no result and has not expired, so it can still finish. */}
+          <Th numeric title="Started, no result yet, not expired">
+            Unfinished
+          </Th>
           <Th numeric>Sessions</Th>
           <Th>
             <VisuallyHidden>Actions</VisuallyHidden>
@@ -48,21 +52,25 @@ export function VersionsTable({
       <tbody>
         {newestFirst.map((v) => (
           <tr key={v.version} aria-current={v.version === reviewed ? 'true' : undefined}>
-            <Td>
+            <Td label="Version">
               <b>{v.version}</b>
             </Td>
-            <Td>
+            <Td label="Status">
               <Status version={v} />
             </Td>
-            <Td>
+            <Td label="Release note">
               <span className={styles.noteCell}>{v.releaseNote ?? '–'}</span>
             </Td>
-            <Td>
+            <Td label="Activated">
               <Mono>{v.activatedAt ? formatDateTime(v.activatedAt) : '–'}</Mono>
             </Td>
-            <Td numeric>{v.state === 'draft' ? '–' : formatCount(v.activeSessions)}</Td>
-            <Td numeric>{formatCount(v.totalSessions)}</Td>
-            <Td numeric>
+            <Td numeric label="Unfinished">
+              {v.state === 'draft' ? '–' : formatCount(v.activeSessions)}
+            </Td>
+            <Td numeric label="Sessions">
+              {formatCount(v.totalSessions)}
+            </Td>
+            <Td numeric wrap>
               <span className={styles.rowActions}>
                 {v.state === 'draft' && (
                   <Button

@@ -97,7 +97,9 @@ export async function buildApp(
   versionsRoutes(app, versions);
   sessionsRoutes(
     app,
-    createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
+    createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey, (message) => {
+      app.log.warn(message);
+    }),
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
   analyticsRoutes(

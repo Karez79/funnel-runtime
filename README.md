@@ -198,7 +198,11 @@ pnpm e2e                      # Playwright smoke против собранног
 
 Сервер при старте сам применяет миграции и сидит базу, если версий нет, поэтому `pnpm seed` (то же действие без запуска сервера) на пустой базе необязателен; на базе с версиями он ничего не меняет. Локальные секреты по умолчанию: админка `admin` / `admin` (локально Basic Auth включён, `ADMIN_AUTH=basic` по умолчанию; `ADMIN_AUTH=off` открывает её), ключ генератора `dev-generator-key`.
 
+Локально генератор запускается без настройки: сервер и генератор по умолчанию используют один ключ `dev-generator-key`, ничего экспортировать не нужно.
+
 ### Генератор против публичного URL
+
+Ключ генератора на проде — секрет владельца стенда: открытая админка не должна позволять постороннему залить синтетику или перезаписать ground truth, по которому дашборд пишет «Matches». Проверяющему генератор на проде запускать не нужно: последний прогон (150 сессий) уже в данных, а та же проверка целиком воспроизводится локально командами выше.
 
 ```sh
 export GENERATOR_KEY=…                      # ADMIN_USER/ADMIN_PASSWORD — только если админка закрыта (ADMIN_AUTH=basic)
@@ -329,7 +333,7 @@ funnel-runtime/
     config/                     schema.ts (zod), lint.ts, diff.ts
     engine/                     conditions, resolve, navigation, validation, result
     events/                     schema.ts, catalog.ts, answerKind.ts
-    analytics/                  aggregate.ts, stats.ts, summary.ts
+    analytics/                  aggregate.ts, stats.ts, summary.ts, condition.ts, groundTruth.ts
     api/                        contract.ts, errors.ts, domain.ts
   apps/server/
     drizzle/                    сгенерированные SQL-миграции
@@ -339,8 +343,8 @@ funnel-runtime/
       plugins/                  auth, security, errors, sse, route, web
   apps/web/src/
     design/                     tokens.css, global.css, fonts.ts
-    lib/                        api.ts, query.ts, storage.ts, viewTransition.ts
-    ui/                         Button, Pill, Panel, Ring, HalfDonut, Dialog, CommandPalette, Toast, …
+    lib/                        api.ts, query.ts, storage.ts, viewTransition.ts, format.ts, useDocumentKeydown.ts
+    ui/                         Button, Pill, Card (и панели), Eyebrow, Table, Ring, HalfDonut, Dialog, CommandPalette, Toast, …
     features/                   funnel, admin-shell, versions, dashboard, live
   scripts/                      generate-traffic.ts, verify.ts; demo-iteration2.ts (Фаза 7), screenshots.ts (Фаза 8)
   e2e/                          Playwright smoke и axe (доступность)

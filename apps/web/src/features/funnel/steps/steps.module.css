@@ -1,17 +1,4 @@
 /* Step screens (reference .fq, .fh, .opts, .opt, .num, .range, .err). */
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--a-soft);
-  color: var(--a-ink);
-  font-weight: 500;
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: var(--r-pill);
-  margin-bottom: 14px;
-}
-
 .title {
   font-size: clamp(24px, 4vw, 30px);
   line-height: 1.15;
