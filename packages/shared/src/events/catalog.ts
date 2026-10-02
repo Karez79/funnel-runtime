@@ -16,6 +16,16 @@ export const BASE_EVENTS = [
   'cta_clicked',
 ] as const;
 
+/**
+ * The result CTA action that opens the 30-day plan, and the `source` the plan-opening
+ * event (`recommendation_expanded`, v3 catalog) carries. The web client sends them and
+ * the generator mirrors the client, so both take them from here.
+ */
+export const EXPAND_RECOMMENDATION = {
+  action: 'expand_recommendation',
+  source: 'result_cta',
+} as const;
+
 /** Created by the server with the session; a client copy is rejected as `server_only`. */
 const SERVER_ONLY = new Set<string>(['session_started']);
 
