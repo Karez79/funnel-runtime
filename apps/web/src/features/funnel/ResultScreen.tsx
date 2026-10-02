@@ -17,6 +17,8 @@ export type ResultOutcome =
   | { readonly status: 'ready'; readonly resultId: string; readonly result: Result };
 
 const EXPAND = 'expand_recommendation';
+/** `recommendation_expanded.properties.source` (EVENTS.md): the plan opened from the result CTA. */
+const EXPAND_SOURCE = 'result_cta';
 const WEEKS_IN_PLAN = 4;
 
 /** Recommendations spread over four weeks, in order; UI adds only the week labels. */
@@ -72,11 +74,13 @@ function ReadyResult({
           track('cta_clicked', 'result', { result_id: resultId, action: result.cta.action });
           if (!expands) return;
           // Sent only if the session's catalog lists it (track checks); the values are
-          // the CTA's own, nothing beyond what the config defines.
+          // the CTA's own plus where the plan was opened from (`source`, whitelisted by
+          // the v3 catalog): the result CTA is the only place that opens it.
           if (!open) {
             track('recommendation_expanded', 'result', {
               result_id: resultId,
               action: result.cta.action,
+              source: EXPAND_SOURCE,
             });
           }
           setOpen(!open);

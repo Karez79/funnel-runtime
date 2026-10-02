@@ -115,11 +115,15 @@ describe('v3 event catalog', () => {
       filterProperties(definition, {
         result_id: 'regulated_scale',
         action: 'expand_recommendation',
-        source: 'cta',
+        source: 'result_cta',
         security_constraints: 'regulated',
       }),
     ).toEqual({
-      properties: { result_id: 'regulated_scale', action: 'expand_recommendation', source: 'cta' },
+      properties: {
+        result_id: 'regulated_scale',
+        action: 'expand_recommendation',
+        source: 'result_cta',
+      },
       dropped: ['security_constraints'],
     });
     expect(catalogEvent(resolveFunnel(v2(), 'B').eventCatalog, 'recommendation_expanded')).toBe(
