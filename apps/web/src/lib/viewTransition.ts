@@ -20,6 +20,8 @@ export function withViewTransition(update: () => void, { back = false } = {}): v
   const transition = document.startViewTransition(() => {
     flushSync(update);
   });
+  // A transition skipped by a newer one rejects `ready`; the update still runs.
+  transition.ready.catch(() => undefined);
   void transition.finished.finally(() => {
     if (token === latest) root.classList.remove(BACK_CLASS);
   });

@@ -15,12 +15,14 @@
 import {
   ClientEventSchema,
   contract,
+  DomainError,
   MAX_BATCH_EVENTS,
   type ClientEvent,
   type EventProperties,
   type VariantKey,
 } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
+import { call } from '../../lib/api.ts';
 
 /** Flush when this many events wait, without waiting for the timer. */
 const FLUSH_SIZE = 10;
@@ -34,14 +36,6 @@ export interface EventQueueContext {
   readonly funnelVersion: number;
   readonly experimentId: string;
   readonly variant: VariantKey;
-  /** UTM the session was created with; unknown keys are omitted from events. */
-  readonly utm?:
-    | {
-        readonly source?: string | null | undefined;
-        readonly medium?: string | null | undefined;
-        readonly campaign?: string | null | undefined;
-      }
-    | undefined;
 }
 
 export interface BatchBody {
@@ -132,16 +126,6 @@ function loadOutbox(storage: StorageLike | null, sessionId: string): ClientEvent
   return events;
 }
 
-type UtmFields = Partial<Pick<ClientEvent, 'utm_source' | 'utm_medium' | 'utm_campaign'>>;
-
-function utmFields(utm: EventQueueContext['utm']): UtmFields {
-  const fields: UtmFields = {};
-  if (utm?.source) fields.utm_source = utm.source;
-  if (utm?.medium) fields.utm_medium = utm.medium;
-  if (utm?.campaign) fields.utm_campaign = utm.campaign;
-  return fields;
-}
-
 function onDocumentHidden(callback: () => void): () => void {
   const listener = (): void => {
     if (document.visibilityState === 'hidden') callback();
@@ -163,14 +147,16 @@ function browserStorage(): StorageLike | null {
 const route = contract.eventsBatch;
 
 const defaultDeps = (): EventQueueDeps => ({
+  // Through the app's one typed client (lib/api.ts); a refusal comes back as its status,
+  // which is all `classify` needs.
   async send(body) {
-    const response = await fetch(route.path, {
-      method: route.method,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json: unknown = await response.json().catch(() => null);
-    return { status: response.status, json };
+    try {
+      const json = await call('eventsBatch', { body: { events: [...body.events] } });
+      return { status: 200, json };
+    } catch (error) {
+      if (error instanceof DomainError) return { status: error.status, json: null };
+      throw error;
+    }
   },
   beacon: (body) =>
     navigator.sendBeacon(
@@ -224,7 +210,6 @@ export function createEventQueue(
 ): EventQueue {
   const deps: EventQueueDeps = { ...defaultDeps(), ...overrides };
   const { sessionId } = context;
-  const utm = utmFields(context.utm);
 
   /** The counter as stored; another tab of the same session may have moved it on. */
   const storedSeq = (): number => {
@@ -361,7 +346,6 @@ export function createEventQueue(
       experiment_id: context.experimentId,
       variant: context.variant,
       step_id: stepId,
-      ...utm,
       properties: { ...properties },
     });
     nextSeq += 1;

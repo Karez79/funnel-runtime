@@ -7,6 +7,8 @@ function stubBrowser({ supported, reduced }: { supported: boolean; reduced: bool
   const startViewTransition = vi.fn((update: () => void) => {
     update();
     return {
+      // A skipped transition rejects `ready`; it must not surface as an unhandled error.
+      ready: Promise.reject(new DOMException('Transition was skipped', 'AbortError')),
       finished: new Promise<void>((resolve) => {
         finish = resolve;
       }),

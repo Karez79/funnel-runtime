@@ -40,6 +40,10 @@ export default defineConfig({
       ADMIN_USER: E2E_ADMIN.username,
       ADMIN_PASSWORD: E2E_ADMIN.password,
       GENERATOR_KEY: E2E_GENERATOR_KEY,
+      // Every test starts a session from one IP; the production default (30/min) is a
+      // per-visitor limit, not a property under test here (rate limits have server tests).
+      RATE_LIMIT_SESSIONS: '600',
+      RATE_LIMIT_EVENTS: '600',
     },
   },
 });
