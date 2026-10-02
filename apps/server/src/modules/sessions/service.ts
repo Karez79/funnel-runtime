@@ -224,13 +224,14 @@ export function createSessionsService(
     },
 
     /**
-     * The server computes and stores the result (6.3). Idempotent: once a result is
-     * stored it is returned as is, even if the state changed afterwards.
+     * The server computes and stores the result (6.3), always from the current stored
+     * state: after Back and a changed answer the result must match the answers the user
+     * now has. Idempotent: the same state gives the same result, and the row is written
+     * only when the result changes (one result per session for analytics, the latest).
      */
     complete(id: string): { resultId: string; result: Result } {
       const row = live(id);
       const funnel = resolved(row.funnelId, row.funnelVersion, row.variant);
-      if (row.resultId !== null) return resultOf(funnel, row.resultId);
       const { answers } = parseState(row);
       const completion = validateCompletion(funnel, answers);
       if (!completion.ok) {
@@ -241,7 +242,9 @@ export function createSessionsService(
         );
       }
       const outcome = resultOf(funnel, computeResult(funnel, answers));
-      repo.setResult(id, outcome.resultId, clock.now().toISOString());
+      if (outcome.resultId !== row.resultId) {
+        repo.setResult(id, outcome.resultId, clock.now().toISOString());
+      }
       return outcome;
     },
   };

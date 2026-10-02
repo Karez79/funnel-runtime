@@ -4,6 +4,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.tsx';
 import { Icon, type IconName } from './Icon.tsx';
+import { Kbd } from './Kbd.tsx';
 import styles from './CommandPalette.module.css';
 
 export interface Command {
@@ -89,7 +90,7 @@ export function CommandPalette({
             }
           }}
         />
-        <kbd className={styles.kbd}>Esc</kbd>
+        <Kbd>Esc</Kbd>
       </div>
       <ul className={styles.list} id={listId} role="listbox" aria-label="Commands">
         {groups.map((group) => (
@@ -132,10 +133,10 @@ export function CommandPalette({
       )}
       <div className={styles.foot}>
         <span>
-          <kbd className={styles.kbd}>↑</kbd> <kbd className={styles.kbd}>↓</kbd> to move
+          <Kbd>↑</Kbd> <Kbd>↓</Kbd> to move
         </span>
         <span>
-          <kbd className={styles.kbd}>Enter</kbd> to open
+          <Kbd>Enter</Kbd> to open
         </span>
       </div>
     </Dialog>
