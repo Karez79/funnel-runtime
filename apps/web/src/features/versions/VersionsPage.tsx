@@ -75,11 +75,8 @@ export function VersionsPage() {
   useEffect(() => {
     if (urlKey !== null) void refetch();
   }, [urlKey, refetch]);
-  // "Review changes" exists only for drafts: once the selected version is published, the
-  // choice lapses, or a later rollback would show its diff again with nothing to do.
-  const selectedDraft = drafts.some((d) => d.version === selected) ? selected : null;
   const reviewed =
-    selectedDraft ?? (publishable ? publishParam : null) ?? drafts.at(-1)?.version ?? null;
+    selected ?? (publishable ? publishParam : null) ?? drafts.at(-1)?.version ?? null;
   const candidate = list.data ? (pending ?? fromUrl) : null;
   // The version a confirmation would switch to; a rollback without a previous one has none.
   const target =
@@ -179,7 +176,6 @@ export function VersionsPage() {
 
         <DiffPanel
           version={reviewed}
-          draft={versions.find((v) => v.version === reviewed)?.state === 'draft'}
           staying={reviewed === null ? '' : stayingText(active, reviewed)}
           onPublish={(version) => {
             ask({ kind: 'publish', version });

@@ -2,6 +2,7 @@
 // session started on the old version keeps it. Sessions are created through the public
 // API, exactly as the funnel does; the admin is driven through the UI.
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
 import type { APIRequestContext } from '@playwright/test';
 import { z } from 'zod';
 import { expect, test } from './fixtures.ts';
@@ -66,7 +67,7 @@ test('publishing v2 moves new sessions only, and rolling back returns to v1', as
   expect(onV1.funnelVersion).toBe(1);
 
   await page.goto('/admin/versions');
-  // Chosen with the row button, so the choice must lapse once v2 is published.
+  // Chosen with the row button: publishing clears the choice (the panel shows drafts only).
   await page.getByRole('button', { name: 'Review changes' }).click();
   await expect(page.getByRole('heading', { name: 'Changes in version 2' })).toBeVisible();
   await page.getByRole('button', { name: 'Publish version 2' }).click();
@@ -94,7 +95,9 @@ test('publishing v2 moves new sessions only, and rolling back returns to v1', as
   // v2 is published now (and no longer active), so nothing is left to review.
   await expect(page.getByText(/^No drafts\. Upload a config/)).toBeVisible();
   // Uploading it again is idempotent: a toast says so, and no stale diff of v2 opens.
-  await page.locator('input[type="file"]').setInputFiles('configs/funnel-v2.json');
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles(resolve(import.meta.dirname, '../configs/funnel-v2.json'));
   await expect(
     page.getByRole('status').filter({ hasText: 'Version 2 is already stored' }),
   ).toBeVisible();
