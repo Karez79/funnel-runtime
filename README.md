@@ -8,7 +8,19 @@
 
 Демо-доступ к админке (Basic Auth): `admin` / `demo-875b44c4`
 
-<!-- Скриншоты: docs/images/*, появятся в Фазе 8 (pnpm screenshots) -->
+![Дашборд: KPI, Funnel journey, качество данных, A/B](docs/images/dashboard.png)
+
+<p align="center">
+  <img src="docs/images/funnel-question-390.png" width="300" alt="Вопрос воронки на мобильном (390px)">
+  &nbsp;&nbsp;
+  <img src="docs/images/funnel-result-390.png" width="300" alt="Результат воронки на мобильном (390px)">
+</p>
+
+<p align="center">
+  <img src="docs/images/funnel-walkthrough.webp" width="300" alt="Прохождение воронки: ответ, Continue, результат">
+</p>
+
+Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора); остальные скриншоты — в [`docs/images/`](docs/images/).
 
 ## Проверить за 5 минут
 
