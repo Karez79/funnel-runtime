@@ -166,7 +166,9 @@ export function createEventsService(
         })),
       ];
       // Both lists are newest first; the stable sort keeps that order within one receive
-      // time, rejections first, so once reversed a batch reads stored, then rejected.
+      // time, rejections first, so once reversed a batch reads stored, then rejected. That
+      // is an approximation: the live feed followed the order of items in the batch, and
+      // the tables keep no position for it.
       entries.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
       return entries.slice(0, limit).reverse();
     },

@@ -58,7 +58,7 @@ export function createEventsRepo(db: Db) {
         })
         .from(events)
         .where(eq(events.origin, 'client'))
-        .orderBy(desc(events.serverTs), desc(sql`rowid`))
+        .orderBy(desc(sql`rowid`))
         .limit(limit)
         .all();
       const rejected = db

@@ -15,3 +15,10 @@ export function mergeRows(rows: readonly LiveEntry[], incoming: readonly LiveEnt
   }
   return [...rows, ...fresh].sort((a, b) => b.seq - a.seq).slice(0, KEEP_ROWS);
 }
+
+/**
+ * Whether a `hello` naming `boot` starts the rows over: only a reconnect to another server
+ * process does (a redeploy), whose backlog carries new `seq` numbers for old results.
+ */
+export const isNewProcess = (previousBoot: string | null, boot: string): boolean =>
+  previousBoot !== null && previousBoot !== boot;

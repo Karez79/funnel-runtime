@@ -54,6 +54,7 @@ export {
   GENERATOR_KEY_HEADER,
   LIVE_STREAM,
   LiveEntrySchema,
+  LiveHelloSchema,
   SessionStateSchema,
   SessionUnprocessableDetailsSchema,
 } from './api/contract.ts';

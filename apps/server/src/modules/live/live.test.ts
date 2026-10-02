@@ -2,7 +2,13 @@ import { connect } from 'node:net';
 import Fastify from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it } from 'vitest';
-import { contract, LiveEntrySchema, type LiveEntry, type LiveEntryDraft } from '@funnel/shared';
+import {
+  contract,
+  LIVE_STREAM,
+  LiveEntrySchema,
+  type LiveEntry,
+  type LiveEntryDraft,
+} from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { sseStreams } from '../../plugins/sse.ts';
 import { buildApp, createSharedServices } from '../../app.ts';
@@ -66,11 +72,12 @@ async function eventually(check: () => boolean, timeoutMs = 3000): Promise<void>
   }
 }
 
+/** Plain `data:` messages (entries); named events such as `hello` are left out. */
 const dataLines = (text: string): LiveEntry[] =>
   text
-    .split('\n')
-    .filter((line) => line.startsWith('data: '))
-    .map((line) => LiveEntrySchema.parse(JSON.parse(line.slice('data: '.length))));
+    .split('\n\n')
+    .filter((block) => block.startsWith('data: '))
+    .map((block) => LiveEntrySchema.parse(JSON.parse(block.slice('data: '.length))));
 
 describe('live bus', () => {
   it('keeps the last entries, oldest first', () => {
@@ -148,6 +155,13 @@ describe('GET /api/live', () => {
     if (!body) throw new Error('no body');
 
     const backlog = await readUntil(body, (text) => dataLines(text).length >= 1);
+    // The process introduces itself first: a client reconnecting to another boot resets.
+    expect(backlog.text).toContain(
+      `event: ${LIVE_STREAM.helloEvent}\ndata: ${JSON.stringify({ boot: t.services.live.boot })}\n\n`,
+    );
+    expect(backlog.text.indexOf('event: hello')).toBeLessThan(
+      backlog.text.indexOf('\ndata: {"seq"'),
+    );
     expect(dataLines(backlog.text)).toMatchObject([
       {
         eventId: event.event_id,
@@ -206,7 +220,17 @@ describe('GET /api/live', () => {
     const first = event('intro', 1);
     const second = event('team_size', 2);
     const bad = { ...event('intro', 3), name: 'nope' };
-    for (const events of [[first], [second, bad]]) {
+    // Stored cut at 4 KB, so not whole JSON any more: only its event_id column is left.
+    const hugeItem = {
+      event_id: 'huge-1',
+      name: 'nope',
+      step_id: 'x'.repeat(150),
+      properties: Object.fromEntries(
+        Array.from({ length: 400 }, (_, i) => [`key_${String(i)}`, 1]),
+      ),
+    };
+    // `first` again: a duplicate is no row, so it does not come back after the restart.
+    for (const events of [[first], [second, bad, first], [hugeItem]]) {
       await t.app.inject({ method: 'POST', url: '/api/events/batch', payload: { events } });
     }
     // A new process on the same database: the in-memory feed starts from the tables.
@@ -218,7 +242,10 @@ describe('GET /api/live', () => {
         [first.event_id, 'accepted'],
         [second.event_id, 'accepted'],
         [bad.event_id, 'rejected'],
+        ['huge-1', 'rejected'],
       ]);
+      expect(backlog[3]).toMatchObject({ sessionId: null, name: null, stepId: null });
+      expect(shared.live.boot).not.toBe(t.services.live.boot);
       expect(backlog[1]).toMatchObject({
         sessionId: session.id,
         name: 'step_viewed',
@@ -237,6 +264,19 @@ describe('GET /api/live', () => {
       });
     } finally {
       await restarted.close();
+    }
+    // Services that already hold entries (one process, a second app) are not seeded again.
+    const again = await buildApp(TEST_ENV, t.handle.db, t.services);
+    try {
+      expect(t.services.live.recent().map((e) => e.eventId)).toEqual([
+        first.event_id,
+        second.event_id,
+        bad.event_id,
+        first.event_id,
+        'huge-1',
+      ]);
+    } finally {
+      await again.close();
     }
   });
 

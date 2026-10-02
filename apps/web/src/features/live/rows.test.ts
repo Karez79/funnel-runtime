@@ -1,6 +1,6 @@
 import type { LiveEntry } from '@funnel/shared';
 import { describe, expect, it } from 'vitest';
-import { KEEP_ROWS, mergeRows } from './rows.ts';
+import { isNewProcess, KEEP_ROWS, mergeRows } from './rows.ts';
 
 const entry = (seq: number, status: LiveEntry['status'] = 'duplicate'): LiveEntry => ({
   seq,
@@ -32,5 +32,13 @@ describe('mergeRows', () => {
     const rows = mergeRows([], many);
     expect(rows).toHaveLength(KEEP_ROWS);
     expect(rows[0]?.seq).toBe(KEEP_ROWS + 5);
+  });
+});
+
+describe('isNewProcess', () => {
+  it('starts over only when a reconnect reaches another server process', () => {
+    expect(isNewProcess(null, 'boot-1')).toBe(false); // the first connect
+    expect(isNewProcess('boot-1', 'boot-1')).toBe(false); // a reconnect to the same process
+    expect(isNewProcess('boot-1', 'boot-2')).toBe(true); // a redeploy
   });
 });
