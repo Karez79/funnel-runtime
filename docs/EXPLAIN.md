@@ -45,7 +45,7 @@ flowchart LR
 3. `transitionEvents` в `funnelReducer.ts` формирует `answer_submitted` (только `answer_kind`, без значения) и `step_completed`. Трекер из `tracking.ts` пропускает событие, только если оно есть в каталоге версии сессии. Очередь `eventQueue.ts` кладёт его в outbox в `localStorage` с `event_id` (uuid v7) и `client_seq`.
 4. Очередь шлёт пачку каждые 2 с или при 10 событиях, при скрытии вкладки — через `sendBeacon`. При сети или 5xx повторяет с задержкой 1, 2, 4… до 30 с с тем же `event_id`.
 5. `modules/events/service.ts` проверяет каждое событие отдельно, берёт версию, вариант и UTM из строки сессии и отбрасывает свойства вне whitelist; `modules/events/repo.ts` вставляет пачку одной транзакцией с `onConflictDoNothing`, и `changes === 0` означает `duplicate`. Итог виден в Live events.
-6. На последнем шаге `POST /api/sessions/:id/complete`: сервер (`complete` в `sessions/service.ts`) заново проверяет, что весь видимый путь отвечен, и сам считает результат `computeResult` по закреплённой версии. Клиент вызывает ту же функцию только для мгновенной отрисовки, подменить результат сессии он не может.
+6. На последнем шаге `POST /api/sessions/:id/complete`: сервер (`complete` в `sessions/service.ts`) заново проверяет, что весь видимый путь отвечен, и сам считает результат `computeResult` по закреплённой версии. Клиент результат не считает: воронка ждёт ответа `complete` (показывая `loadingTitle`), а локально `computeResult` вызывается только в предпросмотре без сессии. Подменить результат сессии клиент не может.
 7. `GET /api/analytics/summary`: `modules/analytics/service.ts` выбирает сессии и события по фильтрам и вызывает `aggregate` из `shared`. Тот же `aggregate` считает ground truth генератора по его журналу намерений.
 
 ## Почему SQLite
