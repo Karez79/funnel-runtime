@@ -48,6 +48,19 @@ const HealthResponse = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
+/**
+ * What the database schema is, seen over HTTP: `pnpm demo:iteration2` compares it before
+ * and after publishing a new version on a server it cannot open a shell on (Phase 7).
+ */
+const DbSchemaResponse = z.object({
+  /** sha256 of every sqlite_master entry (type, name, SQL), in a fixed order. */
+  hash: z.string().regex(/^[0-9a-f]{64}$/),
+  /** Tables, indexes and other schema objects. */
+  objects: z.number().int().nonnegative(),
+  /** Drizzle migrations applied to this database. */
+  migrations: z.number().int().nonnegative(),
+});
+
 // ---------- sessions (6.2) ----------
 
 export const SessionStateSchema = z.object({
@@ -163,6 +176,13 @@ export const contract = {
     path: '/api/health',
     auth: 'public',
     response: HealthResponse,
+  },
+
+  dbSchema: {
+    method: 'GET',
+    path: '/api/admin/schema',
+    auth: 'admin',
+    response: DbSchemaResponse,
   },
 
   // Only meta of the active version; the funnel itself reaches the client via a session (6.4).
