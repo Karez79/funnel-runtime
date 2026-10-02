@@ -15,6 +15,13 @@
       "when": 1790896172176,
       "tag": "0001_ground_truth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790905077330,
+      "tag": "0002_generated_rows",
+      "breakpoints": true
     }
   ]
 }

@@ -7,11 +7,8 @@ import { expect, test } from './fixtures.ts';
 
 test('after the generator the dashboard matches its ground truth', async ({ page }) => {
   test.setTimeout(120_000);
-  // The window opens at the run's first session, so earlier specs' traffic is outside it,
-  // unless a page they closed is still delivering its outbox (sendBeacon) when the run
-  // starts: ingest rows carry no session, so its duplicates would count in Data quality.
-  // The pause lets such stragglers land before the run.
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  // Earlier specs' traffic, even a closed page still delivering its outbox (sendBeacon)
+  // during the run, does not count: the checks ask for the generator's own rows only.
   const run = await generateTraffic({
     baseUrl: E2E_BASE_URL,
     sessions: 100,

@@ -279,6 +279,74 @@ describe('analytics API', () => {
     });
   });
 
+  it('with traffic=generator counts only rows written with the generator key', async () => {
+    const a = await start();
+    const create = async (body: Record<string, unknown>, headers = {}) => {
+      const res = await a.app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        payload: { funnelId: FUNNEL, ...body },
+        headers,
+      });
+      expect(res.statusCode).toBe(201);
+      return contract.createSession.response.parse(res.json()).session;
+    };
+    const synthetic = { trafficType: 'synthetic' };
+    const gen = await create(synthetic, generatorHeaders);
+    await create({ ...synthetic, variantOverride: 'B' }, generatorHeaders);
+    // A real visitor and a reviewer's ?variant=B session arrive during the run.
+    const visitor = await create({});
+    await create({ variantOverride: 'A' });
+
+    const batch = (s: typeof gen) => ({
+      events: [
+        {
+          event_id: uuidv7(),
+          session_id: s.id,
+          name: 'step_viewed',
+          client_timestamp: '2026-10-01T12:00:00.000Z',
+          client_seq: 1,
+          funnel_id: FUNNEL,
+          funnel_version: s.funnelVersion,
+          experiment_id: s.experimentId,
+          variant: s.variant,
+          step_id: 'intro',
+          properties: {},
+        },
+        { name: 'broken' },
+      ],
+    });
+    const send = async (payload: ReturnType<typeof batch>, headers = {}) => {
+      const res = await a.app.inject({
+        method: 'POST',
+        url: '/api/events/batch',
+        payload,
+        headers,
+      });
+      expect(res.statusCode).toBe(200);
+    };
+    const genBatch = batch(gen);
+    await send(genBatch, generatorHeaders);
+    await send(genBatch, generatorHeaders);
+    // The visitor's beacon is sent twice, and a wrong key does not make a batch the generator's.
+    const visitorBatch = batch(visitor);
+    await send(visitorBatch);
+    await send(visitorBatch, { 'x-generator-key': 'guess' });
+
+    const scoped = await okSummary(a, '?traffic=generator');
+    expect(scoped.kpis.all.started).toBe(1);
+    expect(scoped.steps.find((s) => s.stepId === 'intro')?.metrics.all.reached).toBe(1);
+    expect(scoped.dataQuality.duplicates).toBe(1);
+    expect(scoped.dataQuality.rejected).toEqual([{ reason: 'invalid_event', count: 2 }]);
+    expect((await okSummary(a, '?traffic=generator&includeQa=true')).kpis.all.started).toBe(2);
+
+    const all = await okSummary(a, '?includeQa=true');
+    expect(all.kpis.all.started).toBe(4);
+    expect(all.dataQuality.duplicates).toBe(2);
+    expect(all.dataQuality.rejected).toEqual([{ reason: 'invalid_event', count: 4 }]);
+    expect((await summary(a, '?traffic=live')).statusCode).toBe(400);
+  });
+
   it('answers 404 for a version that does not exist and 400 for a bad filter', async () => {
     const a = await start();
     expect((await summary(a, '?version=9')).statusCode).toBe(404);

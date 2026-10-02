@@ -10,7 +10,10 @@
 // two independent computations of the same definition. Every check is limited to the
 // run's time window on the server's own clock: it opens at the exact creation time of
 // the first session (`createdAt` of the session response) and closes one second after
-// the last Date header, so traffic just before or after the run is not counted.
+// the last Date header, so traffic just before or after the run is not counted. Every
+// check also asks for `traffic=generator`: on a public URL real visitors can start
+// sessions, re-send beacons or send rejected events inside the window, and the server
+// counts only rows written with the generator key, all of which are in the journal.
 import {
   aggregate,
   AnalyticsFiltersSchema,
@@ -272,7 +275,7 @@ async function groundTruth(
   const to = new Date(window.last + SECOND).toISOString();
   const touched = [...new Set(visitors.map((v) => v.version))].sort((a, b) => a - b);
   const checks = touched.flatMap((version) => {
-    const base = { version: String(version), from, to };
+    const base = { version: String(version), from, to, traffic: 'generator' };
     const name = `v${String(version)}`;
     return [
       { name, query: base },
