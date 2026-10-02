@@ -68,18 +68,6 @@
   flex-wrap: wrap;
 }
 
-.k {
-  font-family: var(--font);
-  font-weight: 500;
-  font-size: 11px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: var(--r-key);
-  padding: 1px 6px;
-  color: var(--ink-2);
-  background: var(--card);
-}
-
 @media (hover: none), (width <= 720px) {
   .hint {
     display: none;
