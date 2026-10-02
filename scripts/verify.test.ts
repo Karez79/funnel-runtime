@@ -84,9 +84,13 @@ describe('pnpm verify after pnpm generate --publish-next', () => {
     const call = createClient({ baseUrl, ...secrets });
 
     // The visitor is inside the run's window: unscoped, v2 counts one session more.
-    const [, , , , v2] = await verifyGroundTruth(call, unscoped(truth));
-    expect(v2?.differences).toContain(
-      `kpis.all.started: expected ${String(truth.checks[4]?.expected.kpis.all.started)}, got ${String((truth.checks[4]?.expected.kpis.all.started ?? 0) + 1)}`,
+    const expectedV2 = truth.checks.find((c) => c.name === 'v2')?.expected.kpis.all.started;
+    if (expectedV2 === undefined) throw new Error('a v2 check');
+    const unscopedV2 = (await verifyGroundTruth(call, unscoped(truth))).find(
+      (r) => r.name === 'v2',
+    );
+    expect(unscopedV2?.differences).toContain(
+      `kpis.all.started: expected ${String(expectedV2)}, got ${String(expectedV2 + 1)}`,
     );
 
     const results = await verifyGroundTruth(call, truth);
