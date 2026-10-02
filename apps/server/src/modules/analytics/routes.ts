@@ -6,4 +6,5 @@ import type { AnalyticsService } from './service.ts';
 export function analyticsRoutes(app: App, service: AnalyticsService): void {
   route(app, contract.analyticsFilters, () => service.filters());
   route(app, contract.analyticsSummary, (req) => service.summary(req.query));
+  route(app, contract.uploadGroundTruth, (req) => service.uploadGroundTruth(req.body));
 }

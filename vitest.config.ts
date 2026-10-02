@@ -4,7 +4,14 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    projects: ['packages/shared', 'apps/server', 'apps/web'],
+    projects: [
+      'packages/shared',
+      'apps/server',
+      'apps/web',
+      // The generator and verify start a real server in-process and talk to it over HTTP,
+      // like the scripts do against prod (CLAUDE.md 12, integration).
+      { test: { name: 'scripts', include: ['scripts/**/*.test.ts'], testTimeout: 60_000 } },
+    ],
     passWithNoTests: true,
     coverage: {
       provider: 'v8',

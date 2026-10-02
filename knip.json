@@ -8,8 +8,7 @@
       }
     },
     "packages/shared": {
-      "project": ["src/**/*.ts"],
-      "includeEntryExports": false
+      "project": ["src/**/*.ts"]
     },
     "apps/server": {
       "project": ["src/**/*.ts"]

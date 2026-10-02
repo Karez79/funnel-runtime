@@ -58,7 +58,7 @@ export function createEventsRepo(db: Db) {
     writeBatch(
       rows: NewEvent[],
       rejected: NewRejected[],
-      batch: { batchId: string | null; receivedAt: string },
+      batch: { batchId: string | null; receivedAt: string; generated: boolean },
     ): boolean[] {
       return db.transaction((tx) => {
         const inserted = rows.map(

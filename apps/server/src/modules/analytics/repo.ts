@@ -2,17 +2,43 @@
 // filters that live on the session row (funnel, QA, campaign, period); every metric is
 // computed by the shared aggregator, never here. Raw answers (`state_json`) are never
 // selected: analytics has no use for them (5, privacy).
-import { and, asc, count, eq, gte, isNotNull, lte, ne, sql, sum, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  lte,
+  max,
+  ne,
+  sql,
+  sum,
+  type SQL,
+} from 'drizzle-orm';
 import type { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { Db } from '../../db/client.ts';
-import { events, ingestLog, rejectedEvents, sessions } from '../../db/schema.ts';
+import {
+  events,
+  funnelActivations,
+  groundTruth,
+  ingestLog,
+  rejectedEvents,
+  sessions,
+} from '../../db/schema.ts';
 
 export interface Period {
   from?: string | undefined;
   to?: string | undefined;
 }
 
-export interface SessionScope extends Period {
+/** Ingest rows of one period; `generatedOnly`: only batches sent with the generator key. */
+export interface IngestScope extends Period {
+  generatedOnly: boolean;
+}
+
+export interface SessionScope extends IngestScope {
   funnelId: string;
   includeQa: boolean;
   campaign?: string | undefined;
@@ -29,6 +55,7 @@ function sessionWhere(scope: SessionScope): SQL | undefined {
   return and(
     eq(sessions.funnelId, scope.funnelId),
     scope.includeQa ? undefined : ne(sessions.trafficType, 'qa'),
+    scope.generatedOnly ? eq(sessions.generated, true) : undefined,
     scope.campaign === undefined ? undefined : eq(sessions.utmCampaign, scope.campaign),
     within(sessions.createdAt, scope),
   );
@@ -71,20 +98,30 @@ export function createAnalyticsRepo(db: Db) {
         .all();
     },
 
-    duplicates(period: Period): number {
+    duplicates(scope: IngestScope): number {
       const row = db
         .select({ n: sum(ingestLog.duplicates) })
         .from(ingestLog)
-        .where(within(ingestLog.receivedAt, period))
+        .where(
+          and(
+            within(ingestLog.receivedAt, scope),
+            scope.generatedOnly ? eq(ingestLog.generated, true) : undefined,
+          ),
+        )
         .get();
       return Number(row?.n ?? 0);
     },
 
-    rejectedByReason(period: Period) {
+    rejectedByReason(scope: IngestScope) {
       return db
         .select({ reason: rejectedEvents.reason, count: count() })
         .from(rejectedEvents)
-        .where(within(rejectedEvents.receivedAt, period))
+        .where(
+          and(
+            within(rejectedEvents.receivedAt, scope),
+            scope.generatedOnly ? eq(rejectedEvents.generated, true) : undefined,
+          ),
+        )
         .groupBy(rejectedEvents.reason)
         .orderBy(asc(rejectedEvents.reason))
         .all();
@@ -105,6 +142,49 @@ export function createAnalyticsRepo(db: Db) {
         .orderBy(asc(field))
         .all()
         .map((row) => row.value);
+    },
+
+    saveGroundTruth(json: string, createdAt: string): void {
+      db.insert(groundTruth).values({ json, createdAt }).run();
+    },
+
+    /**
+     * Changes whenever anything an analytics number depends on changes: rows are only
+     * appended, except sessions, whose results and states are counted and timestamped.
+     */
+    fingerprint(): string {
+      const s = db
+        .select({ n: count(), results: count(sessions.resultId), at: max(sessions.updatedAt) })
+        .from(sessions)
+        .get();
+      const e = db.select({ n: count() }).from(events).get();
+      const i = db
+        .select({ id: max(ingestLog.id) })
+        .from(ingestLog)
+        .get();
+      const r = db
+        .select({ id: max(rejectedEvents.id) })
+        .from(rejectedEvents)
+        .get();
+      const a = db
+        .select({ id: max(funnelActivations.id) })
+        .from(funnelActivations)
+        .get();
+      const g = db
+        .select({ id: max(groundTruth.id) })
+        .from(groundTruth)
+        .get();
+      return JSON.stringify([s, e?.n, i?.id, r?.id, a?.id, g?.id]);
+    },
+
+    /** The newest uploaded ground truth as stored, or undefined before the first upload. */
+    latestGroundTruth(): string | undefined {
+      return db
+        .select({ json: groundTruth.json })
+        .from(groundTruth)
+        .orderBy(desc(groundTruth.id))
+        .limit(1)
+        .get()?.json;
     },
   };
 }

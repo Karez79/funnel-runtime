@@ -279,9 +279,183 @@ describe('analytics API', () => {
     });
   });
 
+  it('with traffic=generator counts only rows written with the generator key', async () => {
+    const a = await start();
+    const create = async (body: Record<string, unknown>, headers = {}) => {
+      const res = await a.app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        payload: { funnelId: FUNNEL, ...body },
+        headers,
+      });
+      expect(res.statusCode).toBe(201);
+      return contract.createSession.response.parse(res.json()).session;
+    };
+    const synthetic = { trafficType: 'synthetic' };
+    const gen = await create(synthetic, generatorHeaders);
+    await create({ ...synthetic, variantOverride: 'B' }, generatorHeaders);
+    // A real visitor and a reviewer's ?variant=B session arrive during the run.
+    const visitor = await create({});
+    await create({ variantOverride: 'A' });
+
+    const batch = (s: typeof gen) => ({
+      events: [
+        {
+          event_id: uuidv7(),
+          session_id: s.id,
+          name: 'step_viewed',
+          client_timestamp: '2026-10-01T12:00:00.000Z',
+          client_seq: 1,
+          funnel_id: FUNNEL,
+          funnel_version: s.funnelVersion,
+          experiment_id: s.experimentId,
+          variant: s.variant,
+          step_id: 'intro',
+          properties: {},
+        },
+        { name: 'broken' },
+      ],
+    });
+    const send = async (payload: ReturnType<typeof batch>, headers = {}) => {
+      const res = await a.app.inject({
+        method: 'POST',
+        url: '/api/events/batch',
+        payload,
+        headers,
+      });
+      expect(res.statusCode).toBe(200);
+    };
+    const genBatch = batch(gen);
+    await send(genBatch, generatorHeaders);
+    await send(genBatch, generatorHeaders);
+    // The visitor's beacon is sent twice, and a wrong key does not make a batch the generator's.
+    const visitorBatch = batch(visitor);
+    await send(visitorBatch);
+    await send(visitorBatch, { 'x-generator-key': 'guess' });
+
+    const scoped = await okSummary(a, '?traffic=generator');
+    expect(scoped.kpis.all.started).toBe(1);
+    expect(scoped.steps.find((s) => s.stepId === 'intro')?.metrics.all.reached).toBe(1);
+    expect(scoped.dataQuality.duplicates).toBe(1);
+    expect(scoped.dataQuality.rejected).toEqual([{ reason: 'invalid_event', count: 2 }]);
+    expect((await okSummary(a, '?traffic=generator&includeQa=true')).kpis.all.started).toBe(2);
+
+    const all = await okSummary(a, '?includeQa=true');
+    expect(all.kpis.all.started).toBe(4);
+    expect(all.dataQuality.duplicates).toBe(2);
+    expect(all.dataQuality.rejected).toEqual([{ reason: 'invalid_event', count: 4 }]);
+    expect((await summary(a, '?traffic=live')).statusCode).toBe(400);
+  });
+
   it('answers 404 for a version that does not exist and 400 for a bad filter', async () => {
     const a = await start();
     expect((await summary(a, '?version=9')).statusCode).toBe(404);
     expect((await summary(a, '?variant=C')).statusCode).toBe(400);
+  });
+});
+
+describe('generator ground truth', () => {
+  async function upload(a: TestApp, body: unknown, auth = true) {
+    return a.app.inject({
+      method: 'PUT',
+      url: '/api/admin/ground-truth',
+      headers: auth ? { authorization: adminAuth } : {},
+      payload: body as Record<string, unknown>,
+    });
+  }
+
+  const truth = (checks: unknown[]) => ({
+    generatedAt: '2026-10-01T12:00:00.000Z',
+    seed: 42,
+    sessions: 2,
+    checks,
+  });
+
+  it('requires admin auth and a valid file', async () => {
+    const a = await start();
+    expect((await upload(a, truth([]), false)).statusCode).toBe(401);
+    expect((await upload(a, truth([]))).statusCode).toBe(400);
+  });
+
+  it('answers and shows whether the stored checks match the server numbers', async () => {
+    const a = await start();
+    const one = await newSession(a, { utm: { campaign: 'spring_launch' } });
+    await newSession(a);
+    insertEvent(a, one, 'result_viewed', 'result', { props: { result_id: 'balanced' } });
+    const expected = await okSummary(a, '?version=1');
+    const campaign = await okSummary(a, '?version=1&campaign=spring_launch');
+
+    const res = await upload(
+      a,
+      truth([
+        { name: 'v1', query: { version: '1' }, expected },
+        {
+          name: 'v1 · spring_launch',
+          query: { version: '1', campaign: 'spring_launch' },
+          expected: campaign,
+        },
+      ]),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(contract.uploadGroundTruth.response.parse(res.json())).toEqual({
+      matches: true,
+      differences: [],
+    });
+    expect((await okSummary(a)).groundTruthMatches).toBe(true);
+
+    // New data inside the checked scope breaks the match.
+    insertEvent(a, one, 'cta_clicked', 'result', { props: { result_id: 'balanced', action: 'x' } });
+    expect((await okSummary(a)).groundTruthMatches).toBe(false);
+  });
+
+  it('lists the differences and treats an unknown version as a mismatch', async () => {
+    const a = await start();
+    await newSession(a);
+    const expected = await okSummary(a, '?version=1');
+    const wrong = structuredClone(expected);
+    wrong.kpis.all.started = 5;
+    const res = await upload(
+      a,
+      truth([
+        { name: 'v1', query: { version: '1' }, expected: wrong },
+        { name: 'v9', query: { version: '9' }, expected },
+      ]),
+    );
+    const body = contract.uploadGroundTruth.response.parse(res.json());
+    expect(body.matches).toBe(false);
+    expect(body.differences).toEqual([
+      'v1: kpis.all.started: expected 5, got 1',
+      'v9: Version 9 not found',
+    ]);
+    expect((await okSummary(a)).groundTruthMatches).toBe(false);
+  });
+
+  it('refuses checks that cover no session or do not pin valid filters', async () => {
+    const a = await start();
+    const empty = await okSummary(a, '?version=1');
+    await newSession(a);
+    const expected = await okSummary(a, '?version=1');
+    for (const check of [
+      // An empty expectation would match an empty server: a vacuous "Yes".
+      { name: 'empty', query: { version: '1' }, expected: empty },
+      // Without a version the check would follow whichever version is active later.
+      { name: 'unpinned', query: {}, expected },
+      { name: 'bad', query: { version: '1', variant: 'C' }, expected },
+    ]) {
+      expect((await upload(a, truth([check]))).statusCode).toBe(400);
+    }
+    expect((await okSummary(a)).groundTruthMatches).toBeNull();
+  });
+
+  it('uses the newest upload', async () => {
+    const a = await start();
+    await newSession(a);
+    const expected = await okSummary(a, '?version=1');
+    const wrong = structuredClone(expected);
+    wrong.kpis.all.started = 5;
+    await upload(a, truth([{ name: 'v1', query: { version: '1' }, expected: wrong }]));
+    expect((await okSummary(a)).groundTruthMatches).toBe(false);
+    await upload(a, truth([{ name: 'v1', query: { version: '1' }, expected }]));
+    expect((await okSummary(a)).groundTruthMatches).toBe(true);
   });
 });

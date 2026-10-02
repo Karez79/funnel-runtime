@@ -22,6 +22,14 @@ export const AnalyticsFiltersSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /**
+   * `generator`: only rows written with a valid GENERATOR_KEY (its sessions, QA overrides
+   * included with includeQa, and the duplicates and rejections of its batches). The
+   * generator's ground-truth checks set it so that real visitors during a run on the
+   * public URL do not change the numbers; the dashboard does not offer it. Applied by
+   * the server when it selects rows: the aggregator never sees anyone else's.
+   */
+  traffic: z.enum(['generator']).optional(),
 });
 export type AnalyticsFilters = z.output<typeof AnalyticsFiltersSchema>;
 
