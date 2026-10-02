@@ -66,6 +66,8 @@ test('publishing v2 moves new sessions only, and rolling back returns to v1', as
   expect(onV1.funnelVersion).toBe(1);
 
   await page.goto('/admin/versions');
+  // Chosen with the row button, so the choice must lapse once v2 is published.
+  await page.getByRole('button', { name: 'Review changes' }).click();
   await expect(page.getByRole('heading', { name: 'Changes in version 2' })).toBeVisible();
   await page.getByRole('button', { name: 'Publish version 2' }).click();
   const publish = page.getByRole('dialog', { name: 'Publish version 2?' });
@@ -89,7 +91,13 @@ test('publishing v2 moves new sessions only, and rolling back returns to v1', as
   expect((await newSession(request)).funnelVersion).toBe(1);
   expect(await pinnedVersion(request, onV2.id)).toBe(2);
   await expect(page.getByRole('list').getByText('Rolled back to version 1')).toBeVisible();
-  // v2 is published now, so nothing is left to review.
+  // v2 is published now (and no longer active), so nothing is left to review.
+  await expect(page.getByText(/^No drafts\. Upload a config/)).toBeVisible();
+  // Uploading it again is idempotent: a toast says so, and no stale diff of v2 opens.
+  await page.locator('input[type="file"]').setInputFiles('configs/funnel-v2.json');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Version 2 is already stored' }),
+  ).toBeVisible();
   await expect(page.getByText(/^No drafts\. Upload a config/)).toBeVisible();
 });
 
