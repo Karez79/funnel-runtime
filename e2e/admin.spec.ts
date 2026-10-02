@@ -63,6 +63,19 @@ test('publishing v2 moves new sessions only, and rolling back returns to v1', as
   expect((await newSession(request)).funnelVersion).toBe(1);
   expect(await pinnedVersion(request, onV2.id)).toBe(2);
   await expect(page.getByRole('list').getByText('Rolled back to version 1')).toBeVisible();
+  // v2 is published now, so nothing is left to review.
+  await expect(page.getByText(/^No drafts\. Upload a config/)).toBeVisible();
+});
+
+test('empty states say what to do instead of showing a blank panel', async ({ page }) => {
+  await page.goto('/admin?campaign=no-such-campaign');
+  await expect(page.getByText(/^No sessions for these filters yet\./)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open the funnel' })).toBeVisible();
+
+  await page.goto(`/admin/live?session=${randomUUID()}`);
+  await expect(page.getByText(/^Streaming/)).toBeVisible();
+  // "No events yet" when this spec runs alone on a fresh database, otherwise the filter text.
+  await expect(page.getByText(/^No events (yet|match these filters)\./)).toBeVisible();
 });
 
 test('the dashboard shows the active version and its numbers', async ({ page }) => {

@@ -17,13 +17,12 @@ import { Toast } from '../../ui/Toast.tsx';
 import { ActivationHistory } from './ActivationHistory.tsx';
 import { DiffPanel } from './DiffPanel.tsx';
 import { useVersionActions } from './useVersionActions.ts';
+import { formatSessions } from '../../lib/format.ts';
 import styles from './VersionsPage.module.css';
 import { VersionsTable } from './VersionsTable.tsx';
 
 /** A rollback always targets the journal's previous version at the time it is shown. */
 type Pending = { kind: 'publish' | 'activate'; version: number } | { kind: 'rollback' };
-
-const sessions = (n: number) => `${String(n)} ${n === 1 ? 'session' : 'sessions'}`;
 
 /** What happens to sessions in progress: the sentence of every confirmation (6.1). */
 function stayingText(active: VersionSummary | undefined, target: number): string {
@@ -31,7 +30,7 @@ function stayingText(active: VersionSummary | undefined, target: number): string
   const from = String(active.version);
   return (
     `New sessions will start on version ${String(target)}. ` +
-    `The ${sessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`
+    `The ${formatSessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`
   );
 }
 
