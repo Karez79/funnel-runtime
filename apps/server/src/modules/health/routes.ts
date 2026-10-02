@@ -5,4 +5,5 @@ import type { HealthService } from './service.ts';
 
 export function healthRoutes(app: App, service: HealthService): void {
   route(app, contract.health, () => service.status());
+  route(app, contract.dbSchema, () => service.schema());
 }
