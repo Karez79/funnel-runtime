@@ -7,7 +7,8 @@ import type { FastifyReply } from 'fastify';
 import type { App } from './route.ts';
 
 export interface SseStream {
-  send: (data: unknown) => void;
+  /** A `data:` message; with `event`, a named SSE event instead of a plain message. */
+  send: (data: unknown, event?: string) => void;
   /** Called once when the client goes away or the server shuts down. */
   onClose: (listener: () => void) => void;
 }
@@ -63,8 +64,8 @@ export function sseStreams(app: App, heartbeatMs: number) {
     });
 
     return {
-      send: (data) => {
-        write(`data: ${JSON.stringify(data)}\n\n`);
+      send: (data, event) => {
+        write(`${event === undefined ? '' : `event: ${event}\n`}data: ${JSON.stringify(data)}\n\n`);
       },
       onClose: (listener) => {
         listeners.push(listener);

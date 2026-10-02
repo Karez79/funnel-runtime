@@ -2,6 +2,7 @@
 // only the last few entries so a page that (re)connects sees recent traffic at once;
 // the durable record is the events, rejected_events and ingest_log tables. Memory is
 // enough because there is exactly one server instance (CLAUDE.md 2).
+import { randomUUID } from 'node:crypto';
 import type { LiveEntry, LiveEntryDraft } from '@funnel/shared';
 
 type Listener = (entry: LiveEntry) => void;
@@ -12,10 +13,13 @@ type Listener = (entry: LiveEntry) => void;
  * that reconnects can tell the replayed backlog from new entries.
  */
 export function createLiveBus(capacity: number, now: () => number) {
+  /** This process: a client seeing another boot after a reconnect drops its rows. */
+  const boot = randomUUID();
   const recent: LiveEntry[] = [];
   const listeners = new Set<Listener>();
   let seq = 0;
   return {
+    boot,
     publish(drafts: readonly LiveEntryDraft[]): void {
       for (const draft of drafts) {
         seq = Math.max(seq + 1, now() * 1000);

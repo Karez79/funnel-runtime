@@ -8,6 +8,7 @@ import type { LiveBus } from './bus.ts';
 export function liveRoutes(app: App, bus: LiveBus, start: SseStart): void {
   app.get(LIVE_STREAM.path, { onRequest: app.adminGuard }, (_req, reply) => {
     const stream = start(reply);
+    stream.send({ boot: bus.boot }, LIVE_STREAM.helloEvent);
     for (const entry of bus.recent()) stream.send(entry);
     stream.onClose(bus.subscribe(stream.send));
   });

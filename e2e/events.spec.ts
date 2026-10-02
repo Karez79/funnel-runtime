@@ -25,11 +25,13 @@ async function openLive(): Promise<{ entries: LiveEntry[]; stop: () => void }> {
     try {
       for await (const chunk of body) {
         buffer += decoder.decode(chunk, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            entries.push(LiveEntrySchema.parse(JSON.parse(line.slice('data: '.length))));
+        // One SSE message per blank-line block; named events (`hello`) are not entries,
+        // just as EventSource keeps them out of `onmessage`.
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() ?? '';
+        for (const block of blocks) {
+          if (block.startsWith('data: ')) {
+            entries.push(LiveEntrySchema.parse(JSON.parse(block.slice('data: '.length))));
           }
         }
       }

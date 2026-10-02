@@ -18,6 +18,7 @@ import {
   ClientEventSchema,
   filterProperties,
   isServerOnly,
+  LiveEntrySchema,
   type BatchResponseSchema,
   type ClientEvent,
   type LiveEntryDraft,
@@ -102,6 +103,28 @@ function mismatch(event: ClientEvent, session: IngestSession): boolean {
   );
 }
 
+/** What the Live feed shows about a rejected item: its untrusted fields, cut short. */
+function rejectedAbout(item: unknown, sessionOf: (id: string) => IngestSession | undefined) {
+  const sessionId = stringField(item, 'session_id');
+  const session = sessionId === null ? undefined : sessionOf(sessionId);
+  return {
+    sessionId,
+    name: stringField(item, 'name'),
+    stepId: stringField(item, 'step_id'),
+    version: session?.funnelVersion ?? null,
+    variant: session?.variant ?? null,
+  };
+}
+
+const parseStored = (raw: string): unknown => {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Cut at 4 KB, the stored item may not be whole JSON: only its event_id column is left.
+    return null;
+  }
+};
+
 /**
  * `publish` receives one Live events entry per item (11.1) after the batch is committed,
  * so the stream never shows an event that was rolled back.
@@ -114,6 +137,42 @@ export function createEventsService(
   generatorKey: string,
 ) {
   return {
+    /**
+     * The Live feed as the tables remember it (11.1): the newest stored client events and
+     * rejections, oldest first, so a restart or a redeploy does not open an empty page.
+     */
+    liveBacklog(limit: number): LiveEntryDraft[] {
+      const { stored, rejected } = repo.recentForLive(limit);
+      const variant = (value: string | null) => {
+        const parsed = LiveEntrySchema.shape.variant.safeParse(value);
+        return parsed.success ? parsed.data : null;
+      };
+      const entries: LiveEntryDraft[] = [
+        ...rejected.map((row) => {
+          const reason = LiveEntrySchema.shape.reason.safeParse(row.reason);
+          return {
+            receivedAt: row.receivedAt,
+            eventId: row.eventId,
+            ...rejectedAbout(parseStored(row.rawJson), (id) => repo.session(id)),
+            status: 'rejected' as const,
+            reason: reason.success ? reason.data : null,
+          };
+        }),
+        ...stored.map((row) => ({
+          ...row,
+          variant: variant(row.variant),
+          status: 'accepted' as const,
+          reason: null,
+        })),
+      ];
+      // Both lists are newest first; the stable sort keeps that order within one receive
+      // time, rejections first, so once reversed a batch reads stored, then rejected. That
+      // is an approximation: the live feed followed the order of items in the batch, and
+      // the tables keep no position for it.
+      entries.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+      return entries.slice(0, limit).reverse();
+    },
+
     ingest(
       envelope: { batch_id?: string | undefined; events: unknown[] },
       key?: string,
@@ -210,23 +269,12 @@ export function createEventsService(
       let next = 0;
       const outcomes = items.map((i) => {
         if (!i.ok) {
-          const sessionId = stringField(i.item, 'session_id');
-          const session = sessionId === null ? undefined : sessionOf(sessionId);
           const result: EventResult = {
             event_id: stringField(i.item, 'event_id'),
             status: 'rejected',
             reason: i.reason,
           };
-          return {
-            result,
-            about: {
-              sessionId,
-              name: stringField(i.item, 'name'),
-              stepId: stringField(i.item, 'step_id'),
-              version: session?.funnelVersion ?? null,
-              variant: session?.variant ?? null,
-            },
-          };
+          return { result, about: rejectedAbout(i.item, sessionOf) };
         }
         const { event, session } = i.checked;
         const result: EventResult = {

@@ -362,5 +362,16 @@ export const contract = {
   },
 } as const satisfies Record<string, RouteDef>;
 
-/** Server-sent events stream of ingest results; every `data:` line is a LiveEntry. */
-export const LIVE_STREAM = { path: '/api/live', auth: 'admin', backlog: 50 } as const;
+/**
+ * Server-sent events stream of ingest results; every plain `data:` line is a LiveEntry.
+ * The first message of a connection is a `hello` event naming the server process
+ * (`boot`): a client that reconnects to a new process (a redeploy) drops its rows, since
+ * the new process numbers its backlog afresh and the same results would show twice.
+ */
+export const LIVE_STREAM = {
+  path: '/api/live',
+  auth: 'admin',
+  backlog: 50,
+  helloEvent: 'hello',
+} as const;
+export const LiveHelloSchema = z.object({ boot: z.string().min(1) });

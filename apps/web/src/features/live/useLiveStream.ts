@@ -2,11 +2,13 @@
 // EventSource reconnects by itself and the server replays its backlog on every connect;
 // rows are identified by the server's `seq`, so the replay merges away while repeated
 // results of one event stay separate rows. Pausing keeps receiving into a buffer (merged
-// the same way), and resuming shows what arrived meanwhile.
+// the same way), and resuming shows what arrived meanwhile. A reconnect to another server
+// process (its `hello` names a new boot, as after a redeploy) starts the rows over: the new
+// process numbers its backlog afresh, so merging would show those results twice.
 import { LIVE_STREAM, type LiveEntry } from '@funnel/shared';
 import { useEffect, useRef, useState } from 'react';
-import { parseLiveEntry } from '../../lib/liveEntry.ts';
-import { mergeRows } from './rows.ts';
+import { parseLiveBoot, parseLiveEntry } from '../../lib/liveEntry.ts';
+import { isNewProcess, mergeRows, resumeRows } from './rows.ts';
 
 export type Connection = 'connecting' | 'open' | 'reconnecting';
 
@@ -17,11 +19,16 @@ export function useLiveStream() {
   const [connection, setConnection] = useState<Connection>('connecting');
   // Read by the EventSource listener, which is set up once.
   const pausedRef = useRef(false);
+  const bootRef = useRef<string | null>(null);
+  // A new process seen while paused: the frozen rows give way to the buffer on Resume.
+  const resetOnResume = useRef(false);
 
   const togglePause = () => {
     pausedRef.current = !paused;
     if (paused) {
-      setRows((current) => mergeRows(current, buffer));
+      const newProcess = resetOnResume.current;
+      resetOnResume.current = false;
+      setRows((current) => resumeRows(current, buffer, newProcess));
       setBuffer([]);
     }
     setPaused(!paused);
@@ -35,6 +42,16 @@ export function useLiveStream() {
     source.onerror = () => {
       setConnection('reconnecting');
     };
+    source.addEventListener(LIVE_STREAM.helloEvent, (message: MessageEvent<string>) => {
+      const boot = parseLiveBoot(message.data);
+      if (boot === null) return;
+      if (isNewProcess(bootRef.current, boot)) {
+        setBuffer([]);
+        if (pausedRef.current) resetOnResume.current = true;
+        else setRows([]);
+      }
+      bootRef.current = boot;
+    });
     source.onmessage = (message: MessageEvent<string>) => {
       const entry = parseLiveEntry(message.data);
       if (!entry) return;

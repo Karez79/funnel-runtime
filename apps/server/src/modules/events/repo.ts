@@ -2,7 +2,7 @@
 // DO NOTHING` makes a replayed event a no-op, and `changes` tells the service whether the
 // row was new. A batch, its rejections and its ingest_log row are written in one
 // transaction, so a crash never leaves half a batch stored.
-import { eq, max } from 'drizzle-orm';
+import { desc, eq, max, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { events, ingestLog, rejectedEvents, sessions } from '../../db/schema.ts';
 
@@ -39,6 +39,40 @@ export function createEventsRepo(db: Db) {
         .from(sessions)
         .where(eq(sessions.id, id))
         .get();
+    },
+
+    /**
+     * The newest client events and rejections, newest first, for the Live feed after a
+     * restart. Duplicates are not rows (only counts in ingest_log), so they cannot return.
+     */
+    recentForLive(limit: number) {
+      const stored = db
+        .select({
+          eventId: events.eventId,
+          sessionId: events.sessionId,
+          name: events.name,
+          stepId: events.stepId,
+          version: events.funnelVersion,
+          variant: events.variant,
+          receivedAt: events.serverTs,
+        })
+        .from(events)
+        .where(eq(events.origin, 'client'))
+        .orderBy(desc(sql`rowid`))
+        .limit(limit)
+        .all();
+      const rejected = db
+        .select({
+          eventId: rejectedEvents.eventId,
+          reason: rejectedEvents.reason,
+          rawJson: rejectedEvents.rawJson,
+          receivedAt: rejectedEvents.receivedAt,
+        })
+        .from(rejectedEvents)
+        .orderBy(desc(rejectedEvents.id))
+        .limit(limit)
+        .all();
+      return { stored, rejected };
     },
 
     /** Highest `client_seq` stored for the session; null before its first client event. */
