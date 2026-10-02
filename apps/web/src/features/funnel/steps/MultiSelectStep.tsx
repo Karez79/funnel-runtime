@@ -38,7 +38,7 @@ export function MultiSelectStep({ step, value, onChange, error }: StepProps<Mult
         {options.map((option, index) => {
           const checked = selected.includes(option.value);
           return (
-            <li key={option.value}>
+            <li key={option.value} role="none">
               <button
                 type="button"
                 role="checkbox"

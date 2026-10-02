@@ -3,7 +3,9 @@
 // A table wider than its panel scrolls inside it (CLAUDE.md 10, 360px without page
 // scroll); the edge where more columns hide fades out under a soft shadow, so a cut-off
 // column reads as "scroll for more" instead of looking clipped. The flags are set on the element
-// directly: scrolling must not re-render the table.
+// directly: scrolling must not re-render the table. A scroller with hidden columns is a
+// named, focusable region, so keyboard users can scroll it too (WCAG 2.1.1, axe
+// `scrollable-region-focusable`); a table that fits stays out of the tab order.
 import {
   useEffect,
   useRef,
@@ -13,7 +15,7 @@ import {
 } from 'react';
 import styles from './Table.module.css';
 
-function useOverflowEdges() {
+function useOverflowEdges(label: string) {
   const frameRef = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -24,6 +26,15 @@ function useOverflowEdges() {
       // 1px of slack for fractional widths at non-integer zoom.
       frame.toggleAttribute('data-more-start', el.scrollLeft > 1);
       frame.toggleAttribute('data-more-end', el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+      if (el.scrollWidth - el.clientWidth > 1) {
+        el.tabIndex = 0;
+        el.setAttribute('role', 'region');
+        el.setAttribute('aria-label', label);
+      } else {
+        el.removeAttribute('tabindex');
+        el.removeAttribute('role');
+        el.removeAttribute('aria-label');
+      }
     };
     update();
     el.addEventListener('scroll', update, { passive: true });
@@ -35,12 +46,12 @@ function useOverflowEdges() {
       el.removeEventListener('scroll', update);
       observer.disconnect();
     };
-  }, []);
+  }, [label]);
   return { frameRef, ref };
 }
 
 export function Table({ label, children }: { label: string; children: ReactNode }) {
-  const { frameRef, ref } = useOverflowEdges();
+  const { frameRef, ref } = useOverflowEdges(label);
   return (
     <div ref={frameRef} className={styles.frame}>
       <div ref={ref} className={styles.tbl}>
