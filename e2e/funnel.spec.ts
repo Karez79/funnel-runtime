@@ -168,7 +168,9 @@ test('rapid browser Back presses land on the step the URL says', async ({ page, 
   await expect(page.locator('[data-step]')).toHaveAttribute('data-step', 'intro');
 });
 
-test('a quick Back and Forward leave URL, screen and saved state on one step', async ({
+// A consistency guard for the cancel path, not a reproduction of the race: the base code
+// also passes it.
+test('a quick Back and Forward keep URL, screen and saved state together', async ({
   page,
   request,
 }) => {
@@ -198,6 +200,40 @@ test('a quick Back and Forward leave URL, screen and saved state on one step', a
       { intervals: [200] },
     )
     .toMatch(/^(priorities|work_mode)$/);
+});
+
+test('a browser Back during a Continue move cancels it and goes back', async ({
+  page,
+  request,
+}) => {
+  await start(page, 'A');
+  await number(page, 7, /work_mode/);
+  await choose(page, 'Fully remote', /priorities/);
+  await page.getByRole('checkbox', { name: 'Decision speed' }).click();
+  // Enter starts the move to timezone_span; the Back lands before it renders.
+  await page.evaluate(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    history.back();
+  });
+  const id: unknown = JSON.parse(
+    (await page.evaluate(() => localStorage.getItem('funnel:workstyle-planner:session'))) ?? 'null',
+  );
+  await expect
+    .poll(
+      async () => {
+        const url = /\/s\/([a-z_]+)/.exec(page.url())?.[1] ?? '';
+        const rendered = (await page.locator('[data-step]').getAttribute('data-step')) ?? '';
+        const res = await request.get(`/api/sessions/${String(id)}`);
+        const server = contract.getSession.response.parse(await res.json()).session.state
+          .currentStepId;
+        return `${url}|${rendered}|${server}`;
+      },
+      { intervals: [200] },
+    )
+    .toBe('work_mode|work_mode|work_mode');
+  // The cancelled Continue saved nothing: the answer is still there, the entry is intact.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/s\/team_size/);
 });
 
 test('after a click on Back, a digit and Enter change the answer and continue', async ({
