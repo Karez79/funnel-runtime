@@ -1,0 +1,206 @@
+/* Step screens (reference .fq, .fh, .opts, .opt, .num, .range, .err). */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--a-soft);
+  color: var(--a-ink);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  margin-bottom: 14px;
+}
+
+.title {
+  font-size: clamp(24px, 4vw, 30px);
+  line-height: 1.15;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin: 0 0 10px;
+}
+
+.helper {
+  color: var(--ink-2);
+  margin: 0 0 28px;
+  font-size: 14.5px;
+}
+
+.options {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 32px;
+  display: grid;
+  gap: 8px;
+}
+
+.option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  background: var(--card);
+  border: 0;
+  box-shadow: var(--ring-line);
+  border-radius: var(--r-option);
+  padding: 15px 16px;
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.35s var(--spring);
+}
+
+.option[aria-disabled='true'] {
+  cursor: not-allowed;
+  color: var(--ink-3);
+}
+
+.option:hover:not([aria-disabled='true']) {
+  background: var(--panel);
+}
+
+.option:active:not([aria-disabled='true']) {
+  transform: scale(0.99);
+}
+
+.option[aria-checked='true'] {
+  background: color-mix(in srgb, var(--a) 7%, var(--card));
+  box-shadow: var(--ring-ink);
+  font-weight: 500;
+}
+
+.key {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-key);
+  background: var(--panel);
+  display: grid;
+  place-items: center;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--ink-2);
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.option[aria-checked='true'] .key {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.tick {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  flex: none;
+  transition:
+    box-shadow 0.3s var(--spring),
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.box {
+  border-radius: var(--r-key);
+}
+
+.option[aria-checked='true'] .tick {
+  border-color: var(--ink);
+  background: var(--card);
+  box-shadow: var(--ring-dot);
+}
+
+.counter {
+  margin: -20px 0 28px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.number {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  background: var(--card);
+  border-radius: var(--r-field);
+  padding: 14px 16px;
+  box-shadow: var(--ring-line);
+  transition: box-shadow 0.15s;
+}
+
+.field:focus-within {
+  box-shadow: var(--ring-ink);
+}
+
+.field:has(.input:user-invalid),
+.field:has(.input[aria-invalid='true']) {
+  box-shadow: var(--ring-error);
+}
+
+.input {
+  field-sizing: content;
+  min-width: 2ch;
+  width: 3.2ch;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  text-align: center;
+  font-family: var(--font);
+  font-size: 52px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+}
+
+.input::-webkit-inner-spin-button,
+.input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.input:focus {
+  outline: none;
+}
+
+.unit {
+  color: var(--ink-2);
+}
+
+.range {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 0 0 26px;
+}
+
+.error {
+  color: var(--b-ink);
+  font-size: 14px;
+  margin: -14px 0 22px;
+}
+
+.number ~ .error {
+  text-align: center;
+}

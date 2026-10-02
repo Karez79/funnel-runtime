@@ -1,4 +1,4 @@
-/* Funnel card over a soft colored glow (reference .fwrap / .fcard). */
+/* Funnel page: the glass card over a soft colored glow (reference .fwrap / .fcard). */
 .wrap {
   position: relative;
   isolation: isolate;
@@ -7,6 +7,8 @@
   min-height: 100dvh;
   display: grid;
   place-items: start center;
+  align-content: start;
+  gap: 16px;
   padding: 48px 16px 72px;
 }
 
@@ -45,16 +47,41 @@
   view-transition-name: funnel-body;
 }
 
-.title {
-  font-size: clamp(24px, 4vw, 30px);
-  line-height: 1.15;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  margin: 0 0 10px;
+/* Focused by script after a move (FunnelView); it is not a control, so no ring. */
+.body:focus {
+  outline: none;
 }
 
-.text {
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.hint {
+  font-size: 12.5px;
   color: var(--ink-2);
-  margin: 0 0 28px;
-  font-size: 14.5px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.k {
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--r-key);
+  padding: 1px 6px;
+  color: var(--ink-2);
+  background: var(--card);
+}
+
+@media (hover: none), (width <= 720px) {
+  .hint {
+    display: none;
+  }
 }

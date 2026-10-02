@@ -147,4 +147,14 @@ describe('stepBack', () => {
   it('returns null on the first step', () => {
     expect(stepBack([])).toBeNull();
   });
+
+  it('pops down to a visited step, the latest visit of it', () => {
+    const history = ['intro', 'team_size', 'work_mode', 'team_size', 'priorities'];
+    expect(stepBack(history, 'team_size')).toEqual({
+      stepId: 'team_size',
+      history: ['intro', 'team_size', 'work_mode'],
+    });
+    expect(stepBack(history, 'intro')).toEqual({ stepId: 'intro', history: [] });
+    expect(stepBack(history, 'office_days')).toBeNull();
+  });
 });

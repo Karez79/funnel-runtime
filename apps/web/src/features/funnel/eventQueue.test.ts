@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClientEventSchema, type ClientEvent } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
+import { z } from 'zod';
 import {
   createEventQueue,
   type BatchBody,
@@ -17,7 +18,6 @@ const CONTEXT: EventQueueContext = {
   funnelVersion: 1,
   experimentId: 'question-order-and-result-framing-v1',
   variant: 'B',
-  utm: { source: 'linkedin', medium: null, campaign: 'spring_launch' },
 };
 
 function memoryStorage(): StorageLike & { data: Map<string, string> } {
@@ -152,11 +152,10 @@ describe('event shape and client_seq', () => {
       experiment_id: 'question-order-and-result-framing-v1',
       variant: 'B',
       step_id: 'team_size',
-      utm_source: 'linkedin',
-      utm_campaign: 'spring_launch',
       properties: { answer_kind: 'number' },
     });
-    expect(parsed).not.toHaveProperty('utm_medium');
+    // UTM is the session's (6.3): the server fills it in, the client does not claim it.
+    expect(parsed).not.toHaveProperty('utm_source');
     expect(queue.pending()).toBe(1);
   });
 
@@ -601,5 +600,81 @@ describe('outboxes of other sessions', () => {
       storedEvents(storage.data.get(`funnel:events:${id}`)).map((e) => e.event_id);
     expect(left(OLD)).toEqual(oldIds);
     expect(left(OLDER)).toEqual(olderIds);
+  });
+});
+
+describe('default send through lib/api.ts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  it('maps a network error and 503 to retries and a 400 to a dropped event, keeping the id', async () => {
+    const bodies: string[] = [];
+    const replies: (() => Response)[] = [
+      () => {
+        throw new TypeError('Failed to fetch');
+      },
+      () => json(503, { error: { code: 'unavailable', message: 'down' } }),
+      () => json(400, { error: { code: 'invalid_request', message: 'bad' } }),
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init: RequestInit) => {
+        bodies.push(z.string().parse(init.body));
+        const reply = replies.shift();
+        if (!reply) throw new Error('unexpected request');
+        return Promise.resolve().then(reply);
+      }),
+    );
+    const queue = createEventQueue(CONTEXT, {
+      beacon: () => true,
+      storage,
+      now: () => Date.parse('2026-10-02T10:00:00.000Z'),
+      uuid: () => uuidv7(),
+      onHidden: () => () => undefined,
+      warn,
+    });
+    queues.push(queue);
+    queue.push('step_viewed', 'intro', {});
+    await queue.flush();
+    expect(queue.pending()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(queue.pending()).toBe(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(bodies).toHaveLength(3);
+    const ids = bodies.map((body) =>
+      z
+        .object({ events: ClientEventSchema.array() })
+        .parse(JSON.parse(body))
+        .events.map((e) => e.event_id),
+    );
+    expect(new Set(ids.flat()).size).toBe(1);
+    expect(queue.pending()).toBe(0);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes events the server accepted', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init: RequestInit) => {
+        const { events } = z
+          .object({ events: ClientEventSchema.array() })
+          .parse(JSON.parse(z.string().parse(init.body)));
+        return Promise.resolve(json(200, ack(events, () => 'accepted').json));
+      }),
+    );
+    const queue = createEventQueue(CONTEXT, {
+      beacon: () => true,
+      storage,
+      onHidden: () => () => undefined,
+      warn,
+    });
+    queues.push(queue);
+    queue.push('step_viewed', 'intro', {});
+    await queue.flush();
+    expect(queue.pending()).toBe(0);
   });
 });

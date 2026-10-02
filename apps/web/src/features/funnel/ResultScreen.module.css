@@ -1,0 +1,213 @@
+/* Result (reference .rkicker, .rtitle, .rsum, .week, .wk, .recs, .plan). */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--a-soft);
+  color: var(--a-ink);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  margin-bottom: 14px;
+}
+
+.title {
+  font-size: clamp(28px, 5vw, 34px);
+  line-height: 1.1;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  margin: 0 0 12px;
+}
+
+.summary {
+  color: var(--ink-2);
+  font-size: 15px;
+  margin: 0 0 24px;
+}
+
+.week {
+  background: var(--panel);
+  border-radius: var(--r-tile);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.weekTitle {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+
+.grid {
+  border-collapse: separate;
+  border-spacing: 5px;
+  margin: -5px;
+  width: calc(100% + 10px);
+  font-size: 12px;
+  color: var(--ink-2);
+  table-layout: fixed;
+}
+
+.grid th {
+  font-weight: 400;
+  text-align: center;
+}
+
+.grid tbody th {
+  width: 30px;
+  text-align: left;
+}
+
+.grid td {
+  padding: 0;
+}
+
+.cell {
+  display: block;
+  height: 26px;
+  border-radius: var(--r-key);
+  background: var(--card);
+  animation: pop 0.5s var(--spring) both;
+  animation-delay: calc(var(--col, 0) * 45ms + var(--row, 0) * 225ms + 150ms);
+}
+
+.grid td:nth-child(3) .cell {
+  --col: 1;
+}
+
+.grid td:nth-child(4) .cell {
+  --col: 2;
+}
+
+.grid td:nth-child(5) .cell {
+  --col: 3;
+}
+
+.grid td:nth-child(6) .cell {
+  --col: 4;
+}
+
+.grid tr:nth-child(2) .cell {
+  --row: 1;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.office {
+  background: var(--ink);
+}
+
+.focus {
+  background: var(--a);
+}
+
+.async {
+  background: color-mix(in oklch, var(--b) 38%, var(--card));
+}
+
+.free {
+  background: var(--card);
+  box-shadow: var(--ring-line);
+}
+
+.legend {
+  display: flex;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-dot);
+  margin-right: 6px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.recs {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.recs li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 14.5px;
+}
+
+.recIcon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.recIcon svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3;
+}
+
+.plan {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.45s var(--ease-out);
+}
+
+.plan > div {
+  overflow: hidden;
+}
+
+.plan[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.planList {
+  margin: 20px 0 0;
+  padding: 16px 16px 16px 20px;
+  background: var(--panel);
+  border-radius: var(--r-card);
+  display: grid;
+  gap: 10px;
+  font-size: 14.5px;
+  list-style: none;
+}
+
+.planList li {
+  display: grid;
+  gap: 2px;
+}
+
+.planList strong {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink-2);
+}
