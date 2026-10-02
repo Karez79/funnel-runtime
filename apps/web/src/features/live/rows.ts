@@ -22,3 +22,13 @@ export function mergeRows(rows: readonly LiveEntry[], incoming: readonly LiveEnt
  */
 export const isNewProcess = (previousBoot: string | null, boot: string): boolean =>
   previousBoot !== null && previousBoot !== boot;
+
+/**
+ * Rows after Resume: the buffer merged onto what was on screen, or onto nothing when the
+ * server process changed during the pause (the frozen rows stay until then).
+ */
+export const resumeRows = (
+  rows: readonly LiveEntry[],
+  buffer: readonly LiveEntry[],
+  newProcess: boolean,
+): LiveEntry[] => mergeRows(newProcess ? [] : rows, buffer);

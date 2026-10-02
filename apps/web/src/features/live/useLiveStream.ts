@@ -8,7 +8,7 @@
 import { LIVE_STREAM, type LiveEntry } from '@funnel/shared';
 import { useEffect, useRef, useState } from 'react';
 import { parseLiveBoot, parseLiveEntry } from '../../lib/liveEntry.ts';
-import { isNewProcess, mergeRows } from './rows.ts';
+import { isNewProcess, mergeRows, resumeRows } from './rows.ts';
 
 export type Connection = 'connecting' | 'open' | 'reconnecting';
 
@@ -20,11 +20,15 @@ export function useLiveStream() {
   // Read by the EventSource listener, which is set up once.
   const pausedRef = useRef(false);
   const bootRef = useRef<string | null>(null);
+  // A new process seen while paused: the frozen rows give way to the buffer on Resume.
+  const resetOnResume = useRef(false);
 
   const togglePause = () => {
     pausedRef.current = !paused;
     if (paused) {
-      setRows((current) => mergeRows(current, buffer));
+      const newProcess = resetOnResume.current;
+      resetOnResume.current = false;
+      setRows((current) => resumeRows(current, buffer, newProcess));
       setBuffer([]);
     }
     setPaused(!paused);
@@ -42,8 +46,9 @@ export function useLiveStream() {
       const boot = parseLiveBoot(message.data);
       if (boot === null) return;
       if (isNewProcess(bootRef.current, boot)) {
-        setRows([]);
         setBuffer([]);
+        if (pausedRef.current) resetOnResume.current = true;
+        else setRows([]);
       }
       bootRef.current = boot;
     });

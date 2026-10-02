@@ -1,6 +1,6 @@
 import type { LiveEntry } from '@funnel/shared';
 import { describe, expect, it } from 'vitest';
-import { isNewProcess, KEEP_ROWS, mergeRows } from './rows.ts';
+import { isNewProcess, KEEP_ROWS, mergeRows, resumeRows } from './rows.ts';
 
 const entry = (seq: number, status: LiveEntry['status'] = 'duplicate'): LiveEntry => ({
   seq,
@@ -40,5 +40,14 @@ describe('isNewProcess', () => {
     expect(isNewProcess(null, 'boot-1')).toBe(false); // the first connect
     expect(isNewProcess('boot-1', 'boot-1')).toBe(false); // a reconnect to the same process
     expect(isNewProcess('boot-1', 'boot-2')).toBe(true); // a redeploy
+  });
+});
+
+describe('resumeRows', () => {
+  it('adds the buffer to the frozen rows, or replaces them after a new process', () => {
+    const frozen = [entry(2), entry(1)];
+    const buffer = [entry(3)];
+    expect(resumeRows(frozen, buffer, false).map((r) => r.seq)).toEqual([3, 2, 1]);
+    expect(resumeRows(frozen, buffer, true).map((r) => r.seq)).toEqual([3]);
   });
 });
