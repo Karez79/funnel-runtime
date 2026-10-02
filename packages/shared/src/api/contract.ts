@@ -87,7 +87,7 @@ export type SessionResponse = z.infer<typeof SessionResponse>;
 const SessionParams = z.object({ id: z.string().min(1).max(100) });
 
 /** `error.details` of a 409 on saveState: the server's state, which the client adopts. */
-export const StateConflictDetailsSchema = z.object({
+const StateConflictDetailsSchema = z.object({
   state: SessionStateSchema,
   stateRev: z.number().int().nonnegative(),
 });

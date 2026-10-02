@@ -22,7 +22,7 @@ import type { AnalyticsFilters, AnalyticsSummary } from './summary.ts';
  * A live session without a result counts as dropped only after this much inactivity;
  * until then it is "in progress". Synthetic and QA sessions are final at once.
  */
-export const IN_PROGRESS_WINDOW_MS = 30 * 60 * 1000;
+const IN_PROGRESS_WINDOW_MS = 30 * 60 * 1000;
 
 export interface AnalyticsSession {
   readonly id: string;
