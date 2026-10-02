@@ -1,6 +1,6 @@
 // Test fixtures: the real v1/v2/v3 configs plus a helper to derive variations from them.
 // v3 was kept out of every test until Phase 7 (CLAUDE.md 1); it is used only by the
-// second-iteration tests (v3.test.ts), which check the existing code against it.
+// second-iteration tests (src/iteration2.test.ts), which check the existing code against it.
 import v1Json from '../../../configs/funnel-v1.json' with { type: 'json' };
 import v2Json from '../../../configs/funnel-v2.json' with { type: 'json' };
 import v3Json from '../../../configs/funnel-v3.json' with { type: 'json' };

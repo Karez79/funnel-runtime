@@ -3,7 +3,7 @@
 // use the titles of the result step from the config. The CTA with
 // `action: expand_recommendation` opens a 30-day plan built from the recommendations
 // (`grid-template-rows: 0fr → 1fr`, no height measured in JS).
-import type { Result, Step } from '@funnel/shared';
+import { EXPAND_RECOMMENDATION, type Result, type Step } from '@funnel/shared';
 import { useEffect, useEffectEvent, useId, useState } from 'react';
 import { Button } from '../../ui/Button.tsx';
 import { Icon } from '../../ui/Icon.tsx';
@@ -16,9 +16,6 @@ export type ResultOutcome =
   | { readonly status: 'error'; readonly retry: () => void }
   | { readonly status: 'ready'; readonly resultId: string; readonly result: Result };
 
-const EXPAND = 'expand_recommendation';
-/** `recommendation_expanded.properties.source` (EVENTS.md): the plan opened from the result CTA. */
-const EXPAND_SOURCE = 'result_cta';
 const WEEKS_IN_PLAN = 4;
 
 /** Recommendations spread over four weeks, in order; UI adds only the week labels. */
@@ -42,7 +39,7 @@ function ReadyResult({
 }) {
   const [open, setOpen] = useState(false);
   const planId = useId();
-  const expands = result.cta.action === EXPAND;
+  const expands = result.cta.action === EXPAND_RECOMMENDATION.action;
 
   const onShown = useEffectEvent(() => {
     track('result_viewed', 'result', { result_id: resultId });
@@ -80,7 +77,7 @@ function ReadyResult({
             track('recommendation_expanded', 'result', {
               result_id: resultId,
               action: result.cta.action,
-              source: EXPAND_SOURCE,
+              source: EXPAND_RECOMMENDATION.source,
             });
           }
           setOpen(!open);

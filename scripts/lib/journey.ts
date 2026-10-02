@@ -12,6 +12,7 @@ import {
   answerKey,
   answerKind,
   computeResult,
+  EXPAND_RECOMMENDATION,
   isInteractive,
   nextStep,
   progress,
@@ -84,10 +85,6 @@ const BEHAVIOUR = {
   copySame: 0.075,
   copyNext: 0.075,
 } as const;
-
-/** The CTA action that opens the 30-day plan and what the web client sends with it. */
-const EXPAND_ACTION = 'expand_recommendation';
-const EXPAND_SOURCE = 'result_cta';
 
 export interface Plan {
   readonly index: number;
@@ -302,11 +299,11 @@ async function finish(ctx: Context, visitor: Visitor, stepId: string): Promise<v
     await track(ctx, visitor, 'cta_clicked', stepId, { result_id: expected, action });
     // As the result screen does: this CTA opens the plan, and the event goes out only
     // where the session's catalog lists it (v3 on), so older versions are unchanged.
-    if (action === EXPAND_ACTION) {
+    if (action === EXPAND_RECOMMENDATION.action) {
       await track(ctx, visitor, 'recommendation_expanded', stepId, {
         result_id: expected,
         action,
-        source: EXPAND_SOURCE,
+        source: EXPAND_RECOMMENDATION.source,
       });
     }
   }
