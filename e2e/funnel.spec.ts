@@ -136,6 +136,70 @@ test('rapid Enter presses move one step at a time and stay consistent', async ({
   await expect(heading(page)).toHaveText(shown ?? 'missing');
 });
 
+test('rapid browser Back presses land on the step the URL says', async ({ page, request }) => {
+  await start(page, 'A');
+  await number(page, 7, /work_mode/);
+  await choose(page, 'Fully remote', /priorities/);
+  await page.getByRole('checkbox', { name: 'Decision speed' }).click();
+  await next(page, /timezone_span/);
+  // Three Backs a few milliseconds apart: each arrives while the previous move renders.
+  await page.evaluate(async () => {
+    for (let i = 0; i < 3; i += 1) {
+      history.back();
+      await new Promise((resolve) => setTimeout(resolve, 3));
+    }
+  });
+  await expect(page).toHaveURL(/\/s\/team_size/);
+  await expect(page.locator('[data-step]')).toHaveAttribute('data-step', 'team_size');
+  await expect(page.getByRole('spinbutton')).toHaveValue('7');
+  const id: unknown = JSON.parse(
+    (await page.evaluate(() => localStorage.getItem('funnel:workstyle-planner:session'))) ?? 'null',
+  );
+  await expect
+    .poll(async () => {
+      const res = await request.get(`/api/sessions/${String(id)}`);
+      return contract.getSession.response.parse(await res.json()).session.state.currentStepId;
+    })
+    .toBe('team_size');
+  await expect(page).toHaveURL(/\/s\/team_size/);
+  // The history entries were not rewritten: the one before team_size is still intro.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/s\/intro/);
+  await expect(page.locator('[data-step]')).toHaveAttribute('data-step', 'intro');
+});
+
+test('a quick Back and Forward leave URL, screen and saved state on one step', async ({
+  page,
+  request,
+}) => {
+  await start(page, 'A');
+  await number(page, 7, /work_mode/);
+  await choose(page, 'Fully remote', /priorities/);
+  await page.evaluate(async () => {
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 3));
+    history.forward();
+  });
+  const id: unknown = JSON.parse(
+    (await page.evaluate(() => localStorage.getItem('funnel:workstyle-planner:session'))) ?? 'null',
+  );
+  // Either the Back is cancelled by the Forward (priorities) or it finished first and the
+  // Forward is replaced by the current step (work_mode); never a split between the three.
+  await expect
+    .poll(
+      async () => {
+        const url = /\/s\/([a-z_]+)/.exec(page.url())?.[1] ?? '';
+        const rendered = (await page.locator('[data-step]').getAttribute('data-step')) ?? '';
+        const res = await request.get(`/api/sessions/${String(id)}`);
+        const server = contract.getSession.response.parse(await res.json()).session.state
+          .currentStepId;
+        return url === rendered && rendered === server ? url : `${url}|${rendered}|${server}`;
+      },
+      { intervals: [200] },
+    )
+    .toMatch(/^(priorities|work_mode)$/);
+});
+
 test('after a click on Back, a digit and Enter change the answer and continue', async ({
   page,
 }) => {
@@ -193,6 +257,9 @@ test('Back returns to the previous visible step, also with the browser button', 
   );
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/work_mode/);
+  // The URL changes before the move renders; a Forward during the move would cancel it
+  // and stay on priorities (the step the URL shows), see the rapid Back test.
+  await expect(heading(page)).toHaveText('Where does the team work most of the time?');
   // Forward does not skip ahead: the URL returns to the current step.
   await page.goForward();
   await expect(page).toHaveURL(/work_mode/);

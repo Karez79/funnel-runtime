@@ -7,6 +7,9 @@
 // computed from the step the user is leaving. Actions arriving meanwhile are dropped, and
 // the transition commits exactly the state that was saved and tracked (`set`), so the
 // screen, the saved state, the URL and the events always describe the same step.
+// The browser's history is the exception: a Back/Forward during a move already changed the
+// URL and cannot be dropped, so it cancels the move (`supersede`) and the caller then
+// moves once from the uncommitted state to wherever the URL ended up.
 import type { SessionState } from '@funnel/shared';
 import { useReducer, useRef } from 'react';
 import { withViewTransition } from '../../lib/viewTransition.ts';
@@ -37,6 +40,8 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
   const moving = useRef(false);
   /** Bumped when the server's state is adopted: a move computed before it is dropped. */
   const epoch = useRef(0);
+  /** Runs once the cancelled move has finished rendering (see `supersede`). */
+  const afterCancel = useRef<(() => void) | null>(null);
 
   function act(action: FunnelAction, options: MoveOptions = {}) {
     if (moving.current) return;
@@ -52,8 +57,14 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
     withViewTransition(
       () => {
         moving.current = false;
-        // A 409 adopted meanwhile cancels the move: no commit, no save, no events.
-        if (startedAt !== epoch.current) return;
+        // A 409 adopted or a history move meanwhile cancels the move: no commit, no save,
+        // no events.
+        if (startedAt !== epoch.current) {
+          const then = afterCancel.current;
+          afterCancel.current = null;
+          then?.();
+          return;
+        }
         dispatch({ type: 'set', state: next });
         for (const event of events) track(event.name, event.stepId, event.properties);
         onMove?.(next, options);
@@ -65,11 +76,24 @@ export function useFunnelMachine(init: () => FunnelState, { track, onMove }: Mac
   /** A move is being rendered; callers that start moves another way wait for it. */
   const isMoving = () => moving.current;
 
+  /**
+   * Cancels the move being rendered and calls `then` once it is idle again, with nothing
+   * committed; without a move `then` runs at once.
+   */
+  const supersede = (then: () => void) => {
+    if (!moving.current) {
+      then();
+      return;
+    }
+    epoch.current += 1;
+    afterCancel.current = then;
+  };
+
   /** Show the server's state (409), cancelling a move that is still rendering. */
   const adopt = (saved: SessionState) => {
     epoch.current += 1;
     dispatch({ type: 'adopt', state: saved });
   };
 
-  return { state, act, adopt, isMoving };
+  return { state, act, adopt, isMoving, supersede };
 }
