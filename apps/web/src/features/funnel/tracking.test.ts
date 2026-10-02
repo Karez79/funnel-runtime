@@ -78,22 +78,40 @@ describe('live sink', () => {
     closeAgain();
   });
 
-  it('a push after close is stored but leaves no running queue behind', () => {
+  it('a push after close only appends to the stored outbox', () => {
+    const fetchSpy = vi.fn(() => new Promise<never>(() => undefined));
+    vi.stubGlobal('fetch', fetchSpy);
+    // Another session's leftovers: a full queue would start draining them over the network.
+    data.set('funnel:events:01900000-0000-7000-8000-0000000000ff', '[]');
     const sink = createEventSink(response);
     const close = sink.open();
+    sink.push('step_viewed', 'intro', {});
     close();
+    fetchSpy.mockClear();
+    const doc = z
+      .object({ addEventListener: z.custom<ReturnType<typeof vi.fn>>() })
+      .parse(document);
+    doc.addEventListener.mockClear();
+    vi.clearAllTimers();
+    const beacon = vi.fn(() => true);
+    vi.stubGlobal('navigator', { sendBeacon: beacon });
+
     sink.push('step_completed', 'intro', { next_step_id: 'team_size' });
+
     expect(sink.pending()).toBe(0);
     const stored = ClientEventSchema.array().parse(
       JSON.parse(data.get(`funnel:events:${SESSION_ID}`) ?? '[]'),
     );
-    expect(stored.map((e) => e.name)).toEqual(['step_completed']);
-    const doc = z
-      .object({
-        addEventListener: z.custom<ReturnType<typeof vi.fn>>(),
-        removeEventListener: z.custom<ReturnType<typeof vi.fn>>(),
-      })
-      .parse(document);
-    expect(doc.addEventListener.mock.calls.length).toBe(doc.removeEventListener.mock.calls.length);
+    expect(stored.map((e) => [e.name, e.client_seq])).toEqual([
+      ['step_viewed', 0],
+      ['step_completed', 1],
+    ]);
+    expect(stored[1]).toMatchObject({ variant: 'B', funnel_version: 1, step_id: 'intro' });
+    expect(data.get(`funnel:seq:${SESSION_ID}`)).toBe('2');
+    // No queue was started for the late event: no request, no timer, no listener, no beacon.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(doc.addEventListener).not.toHaveBeenCalled();
+    expect(beacon).not.toHaveBeenCalled();
   });
 });

@@ -204,6 +204,62 @@ function classify(status: number, json: unknown): Outcome {
   return { kind: 'retry' };
 }
 
+/** The counter as stored; another tab of the same session may have moved it on. */
+function storedSeq(storage: StorageLike | null, sessionId: string): number {
+  const value = Number(readStorage(storage, seqKey(sessionId)));
+  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+function buildEvent(
+  context: EventQueueContext,
+  deps: Pick<EventQueueDeps, 'now' | 'uuid'>,
+  seq: number,
+  name: string,
+  stepId: string | null,
+  properties: EventProperties,
+): ClientEvent {
+  return {
+    event_id: deps.uuid(),
+    session_id: context.sessionId,
+    name,
+    client_timestamp: new Date(deps.now()).toISOString(),
+    client_seq: seq,
+    funnel_id: context.funnelId,
+    funnel_version: context.funnelVersion,
+    experiment_id: context.experimentId,
+    variant: context.variant,
+    step_id: stepId,
+    properties: { ...properties },
+  };
+}
+
+/**
+ * Stores one event in the session's outbox and nothing else: no request, timer, listener
+ * or beacon. For an event that arrives after its queue was stopped (a move finishing after
+ * unmount); the next queue of the session sends it.
+ */
+export function appendToOutbox(
+  context: EventQueueContext,
+  name: string,
+  stepId: string | null,
+  properties: EventProperties,
+  overrides: Partial<Pick<EventQueueDeps, 'storage' | 'now' | 'uuid'>> = {},
+): void {
+  const deps = { ...defaultDeps(), ...overrides };
+  const { sessionId } = context;
+  const stored = loadOutbox(deps.storage, sessionId);
+  const seq = Math.max(storedSeq(deps.storage, sessionId), ...stored.map((e) => e.client_seq + 1));
+  try {
+    deps.storage?.setItem(seqKey(sessionId), String(seq + 1));
+    deps.storage?.setItem(
+      outboxKey(sessionId),
+      JSON.stringify([...stored, buildEvent(context, deps, seq, name, stepId, properties)]),
+    );
+  } catch {
+    // Quota or blocked storage: the late event is lost, the funnel keeps working.
+  }
+}
+
 export function createEventQueue(
   context: EventQueueContext,
   overrides: Partial<EventQueueDeps> = {},
@@ -211,14 +267,10 @@ export function createEventQueue(
   const deps: EventQueueDeps = { ...defaultDeps(), ...overrides };
   const { sessionId } = context;
 
-  /** The counter as stored; another tab of the same session may have moved it on. */
-  const storedSeq = (): number => {
-    const value = Number(readStorage(deps.storage, seqKey(sessionId)));
-    return Number.isSafeInteger(value) && value > 0 ? value : 0;
-  };
+  const storedSeqNow = (): number => storedSeq(deps.storage, sessionId);
 
   let outbox = loadOutbox(deps.storage, sessionId);
-  let nextSeq = Math.max(storedSeq(), ...outbox.map((event) => event.client_seq + 1));
+  let nextSeq = Math.max(storedSeqNow(), ...outbox.map((event) => event.client_seq + 1));
   /** Ids this queue removed: a merge with storage must not bring them back. */
   const removed = new Set<string>();
 
@@ -236,7 +288,7 @@ export function createEventQueue(
     if (disposed) return;
     try {
       // The counter goes first: if the outbox write hits the quota, seq still never repeats.
-      deps.storage?.setItem(seqKey(sessionId), String(Math.max(nextSeq, storedSeq())));
+      deps.storage?.setItem(seqKey(sessionId), String(Math.max(nextSeq, storedSeqNow())));
       // Two tabs share the session (8.1): keep stored events of the other tab, so one tab's
       // write never erases what only the other tab has stored.
       const own = new Set(outbox.map((event) => event.event_id));
@@ -334,20 +386,8 @@ export function createEventQueue(
 
   function push(name: string, stepId: string | null, properties: EventProperties): void {
     if (disposed) return;
-    nextSeq = Math.max(nextSeq, storedSeq());
-    outbox.push({
-      event_id: deps.uuid(),
-      session_id: sessionId,
-      name,
-      client_timestamp: new Date(deps.now()).toISOString(),
-      client_seq: nextSeq,
-      funnel_id: context.funnelId,
-      funnel_version: context.funnelVersion,
-      experiment_id: context.experimentId,
-      variant: context.variant,
-      step_id: stepId,
-      properties: { ...properties },
-    });
+    nextSeq = Math.max(nextSeq, storedSeqNow());
+    outbox.push(buildEvent(context, deps, nextSeq, name, stepId, properties));
     nextSeq += 1;
     persist();
     planNext();

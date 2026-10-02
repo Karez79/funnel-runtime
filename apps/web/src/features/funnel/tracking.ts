@@ -8,7 +8,12 @@ import {
   type EventProperties,
   type SessionResponse,
 } from '@funnel/shared';
-import { createEventQueue, type EventQueue } from './eventQueue.ts';
+import {
+  appendToOutbox,
+  createEventQueue,
+  type EventQueue,
+  type EventQueueContext,
+} from './eventQueue.ts';
 
 /** Where the funnel hands events; the event queue implements it. */
 export interface EventSink {
@@ -46,8 +51,8 @@ type SinkSession = Pick<
  * The event queue of a live session (7.4). The queue is created on first use rather than
  * once: React may stop and start effects again (StrictMode, remounts), and children's
  * effects track before the parent's effect opens the sink. A push after the sink was
- * closed (a move that finishes after unmount) still lands in the stored outbox through a
- * queue that is stopped right away, so no queue outlives the component.
+ * closed (a move that finishes after unmount) is only appended to the stored outbox: no
+ * queue, request or timer outlives the component, and the next queue sends the event.
  */
 export function createEventSink({
   session,
@@ -58,24 +63,18 @@ export function createEventSink({
 }): LiveSink {
   let queue: EventQueue | null = null;
   let closed = false;
-  const create = (): EventQueue =>
-    createEventQueue({
-      sessionId: session.id,
-      funnelId: funnel.meta.funnelId,
-      funnelVersion: session.funnelVersion,
-      experimentId: session.experimentId,
-      variant: session.variant,
-    });
-  const current = (): EventQueue => (queue ??= create());
+  const context: EventQueueContext = {
+    sessionId: session.id,
+    funnelId: funnel.meta.funnelId,
+    funnelVersion: session.funnelVersion,
+    experimentId: session.experimentId,
+    variant: session.variant,
+  };
+  const current = (): EventQueue => (queue ??= createEventQueue(context));
   return {
     push: (name, stepId, properties) => {
-      if (!closed) {
-        current().push(name, stepId, properties);
-        return;
-      }
-      const late = create();
-      late.push(name, stepId, properties);
-      late.dispose();
+      if (closed) appendToOutbox(context, name, stepId, properties);
+      else current().push(name, stepId, properties);
     },
     pending: () => queue?.pending() ?? 0,
     open: () => {
