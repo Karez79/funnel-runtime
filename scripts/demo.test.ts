@@ -5,7 +5,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { systemClock } from '../apps/server/src/clock.ts';
 import {
   configJson,
@@ -89,6 +89,18 @@ describe('pnpm demo:iteration2', () => {
     expect((await call('activeVersion')).data.version.version).toBe(2);
   });
 
+  it('publishes v3 that is already stored as a draft, as on prod after step 1', async () => {
+    const { baseUrl, call } = await prodLike();
+    await call('uploadVersion', { query: {}, body: configJson('funnel-v3.json') });
+    const checks = await runIterationDemo({ baseUrl, ...secrets });
+    expect(failures(checks)).toEqual([]);
+    expect(checks.find((c) => c.label.startsWith('v3 uploaded'))?.detail).toBe(
+      'already stored (same hash), draft; lint: 0 errors, 3 warnings',
+    );
+    expect(checks.map((c) => c.label)).toContain('v3 published without a redeploy');
+    expect((await call('activeVersion')).data.version.version).toBe(2);
+  });
+
   it('starts from the previous version when an earlier run left v3 active', async () => {
     const { baseUrl, call } = await prodLike();
     await call('uploadVersion', { query: {}, body: configJson('funnel-v3.json') });
@@ -109,6 +121,33 @@ describe('pnpm demo:iteration2', () => {
       'v3 uploaded through POST /api/admin/versions',
     );
     expect(failures(checks).at(-1)?.label).toBe('The demo ran to the end');
+    expect((await call('activeVersion')).data.version.version).toBe(2);
+  });
+
+  it('does not roll back twice when the answer to its rollback is lost', async () => {
+    const { baseUrl, call } = await prodLike();
+    const realFetch = globalThis.fetch;
+    let lost = false;
+    // The rollback reaches the server, but the script never sees the answer.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const res = await realFetch(input, init);
+      const url = input instanceof Request ? input.url : input.toString();
+      if (!lost && url.endsWith('/api/admin/rollback')) {
+        lost = true;
+        throw new TypeError('fetch failed');
+      }
+      return res;
+    });
+    const checks = await runIterationDemo({ baseUrl, ...secrets });
+    vi.restoreAllMocks();
+    expect(failures(checks).map((c) => [c.label, c.detail])).toEqual([
+      ['The demo ran to the end', 'fetch failed'],
+    ]);
+    expect(checks.at(-1)).toEqual({
+      label: 'v3 is not left active',
+      ok: true,
+      detail: 'already off v3: v2 is active',
+    });
     expect((await call('activeVersion')).data.version.version).toBe(2);
   });
 

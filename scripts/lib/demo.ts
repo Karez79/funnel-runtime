@@ -17,7 +17,7 @@ import { parseConfig, type VariantKey } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { createDelivery } from './delivery.ts';
 import { secretHint } from './env.ts';
-import { createClient } from './http.ts';
+import { createClient, type Client } from './http.ts';
 import {
   resumeVisitor,
   startVisitor,
@@ -342,12 +342,25 @@ export async function runIterationDemo(options: DemoOptions): Promise<DemoCheck[
     const reason = secretHint(error) ?? (error instanceof Error ? error.message : String(error));
     check('The demo ran to the end', false, reason);
     if (activatedTarget) {
-      // Leave the server as it was found: the new version must not stay active by accident.
-      const undo = await call('rollback', { body: { note: `${NOTE}: undo after a failure` } })
-        .then(() => 'rolled back')
-        .catch((e: unknown) => `rollback failed: ${e instanceof Error ? e.message : String(e)}`);
-      check(`v${String(target)} is not left active`, undo === 'rolled back', undo);
+      // Leave the server as it was found: the new version must not stay active by
+      // accident. Only if it still is: a rollback that reached the server but whose
+      // answer was lost must not be followed by a second one, which would move the
+      // server off the previous version too.
+      const undo = await undoActivation(call, target);
+      check(`v${String(target)} is not left active`, !undo.startsWith('failed'), undo);
     }
   }
   return checks;
+}
+
+/** Rolls back only while `target` is the active version; says what it did. */
+async function undoActivation(call: Client, target: number): Promise<string> {
+  try {
+    const active = (await call('activeVersion')).data.version.version;
+    if (active !== target) return `already off v${String(target)}: v${String(active)} is active`;
+    await call('rollback', { body: { note: `${NOTE}: undo after a failure` } });
+    return 'rolled back';
+  } catch (e) {
+    return `failed: ${e instanceof Error ? e.message : String(e)}`;
+  }
 }
