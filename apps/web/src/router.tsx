@@ -1,5 +1,6 @@
 // Route table (React Router data mode). Funnel at / and /s/:stepId, admin under /admin.
 import { createBrowserRouter } from 'react-router';
+import { AdminError } from './features/admin-shell/AdminError.tsx';
 import { FunnelPage } from './features/funnel/FunnelPage.tsx';
 import { PreviewPage } from './features/funnel/PreviewPage.tsx';
 
@@ -17,27 +18,36 @@ export const router = createBrowserRouter([
     path: '/admin',
     // The admin is loaded on demand: the funnel bundle never carries the dashboard.
     HydrateFallback: AdminLoading,
+    // Catches a failure of the layout itself (its chunk gone after a redeploy).
+    errorElement: <AdminError />,
     lazy: async () => ({
       Component: (await import('./features/admin-shell/AdminLayout.tsx')).AdminLayout,
     }),
     children: [
       {
-        index: true,
-        lazy: async () => ({
-          Component: (await import('./features/dashboard/DashboardPage.tsx')).DashboardPage,
-        }),
-      },
-      {
-        path: 'versions',
-        lazy: async () => ({
-          Component: (await import('./features/versions/VersionsPage.tsx')).VersionsPage,
-        }),
-      },
-      {
-        path: 'live',
-        lazy: async () => ({
-          Component: (await import('./features/live/LiveEventsPage.tsx')).LiveEventsPage,
-        }),
+        // Page errors and unknown paths render inside the layout, so the nav stays.
+        errorElement: <AdminError />,
+        children: [
+          {
+            index: true,
+            lazy: async () => ({
+              Component: (await import('./features/dashboard/DashboardPage.tsx')).DashboardPage,
+            }),
+          },
+          {
+            path: 'versions',
+            lazy: async () => ({
+              Component: (await import('./features/versions/VersionsPage.tsx')).VersionsPage,
+            }),
+          },
+          {
+            path: 'live',
+            lazy: async () => ({
+              Component: (await import('./features/live/LiveEventsPage.tsx')).LiveEventsPage,
+            }),
+          },
+          { path: '*', element: <AdminError notFound /> },
+        ],
       },
     ],
   },

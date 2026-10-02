@@ -2,12 +2,14 @@
 // actually arrive on the live stream (one in the last minute), says "Listening" when the
 // stream is open but quiet and "Offline" when it is not. The pulse is the one ambient
 // animation the design allows; reduced motion stops it.
-import { LIVE_STREAM, LiveEntrySchema } from '@funnel/shared';
+import { LIVE_STREAM } from '@funnel/shared';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router';
+import { parseLiveEntry } from '../../lib/liveEntry.ts';
 import styles from './AdminLayout.module.css';
 
 const RECENT_MS = 60_000;
+const LABELS = ['Receiving events', 'Listening', 'Offline'] as const;
 /** Below this width the top bar has no room for the indicator (reference: ≤860px). */
 const NARROW = '(width <= 860px)';
 
@@ -39,13 +41,9 @@ function Indicator() {
       setOpen(false);
     };
     source.onmessage = (message: MessageEvent<string>) => {
-      try {
-        const entry = LiveEntrySchema.safeParse(JSON.parse(message.data));
-        // The replayed backlog carries old receive times, so it does not count as "now".
-        if (entry.success) setLastAt((t) => Math.max(t, Date.parse(entry.data.receivedAt)));
-      } catch {
-        // Not JSON: ignore, the stream only sends entries.
-      }
+      const entry = parseLiveEntry(message.data);
+      // The replayed backlog carries old receive times, so it does not count as "now".
+      if (entry) setLastAt((t) => Math.max(t, Date.parse(entry.receivedAt)));
     };
     const timer = window.setInterval(() => {
       setNow(Date.now());
@@ -61,7 +59,15 @@ function Indicator() {
   return (
     <Link to="/admin/live" className={styles.live} viewTransition>
       <span className={receiving ? `${styles.dot} ${styles.pulse}` : styles.dot} />
-      {label}
+      {/* Every label sits in one grid cell, only the current one visible: the indicator
+          keeps the width of the longest, so the centered tabs never shift. */}
+      <span className={styles.liveLabels}>
+        {LABELS.map((l) => (
+          <span key={l} aria-hidden={l !== label}>
+            {l}
+          </span>
+        ))}
+      </span>
     </Link>
   );
 }

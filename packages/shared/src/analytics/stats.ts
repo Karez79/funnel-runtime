@@ -3,6 +3,8 @@
 // difference significant. Closed-form and dependency-free, so the dashboard, `verify`
 // and tests get identical numbers. Pure: counts in, numbers out.
 
+/** Two-sided significance level of the A/B test: the one definition of "significant". */
+const SIGNIFICANCE_ALPHA = 0.05;
 /** z for a two-sided 95% interval (alpha = .05). */
 const Z_ALPHA = 1.959963984540054;
 /** z for power .8 (one-sided beta = .2). */
@@ -89,4 +91,12 @@ export function requiredPerVariant(pa: number, pb: number): number | null {
   const root =
     Z_ALPHA * Math.sqrt(2 * mean * (1 - mean)) + Z_BETA * Math.sqrt(pa * (1 - pa) + pb * (1 - pb));
   return Math.ceil((root * root) / (delta * delta));
+}
+
+/**
+ * Whether a p-value counts as significant at SIGNIFICANCE_ALPHA. The aggregator's verdict
+ * and the dashboard badge both ask this, so they can never disagree.
+ */
+export function isSignificant(pValue: number | null): boolean {
+  return pValue !== null && pValue < SIGNIFICANCE_ALPHA;
 }

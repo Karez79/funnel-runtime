@@ -38,24 +38,29 @@ export function sseStreams(app: App, heartbeatMs: number) {
     const listeners: (() => void)[] = [];
     let closed = false;
     // A client that stops reading (a stalled tab) would make every entry pile up in
-    // memory; past the cap the stream is ended and EventSource reconnects with the backlog.
+    // memory; past the cap the stream is dropped and EventSource reconnects with the
+    // backlog. It is destroyed, not ended: `end()` would only queue a FIN behind the
+    // buffered megabyte, and a hijacked response has no timeout to free it.
     const write = (chunk: string) => {
       if (closed) return;
-      if (!res.write(chunk) && res.writableLength > MAX_BUFFERED_BYTES) end();
+      if (!res.write(chunk) && res.writableLength > MAX_BUFFERED_BYTES) end('destroy');
     };
     const heartbeat = setInterval(() => {
       write(': heartbeat\n\n');
     }, heartbeatMs);
-    const end = () => {
+    const end = (how: 'end' | 'destroy' = 'end') => {
       if (closed) return;
       closed = true;
       clearInterval(heartbeat);
       open.delete(end);
+      if (how === 'destroy') res.destroy();
+      else if (!res.writableEnded) res.end();
       for (const listener of listeners) listener();
-      if (!res.writableEnded) res.end();
     };
     open.add(end);
-    res.on('close', end);
+    res.on('close', () => {
+      end();
+    });
 
     return {
       send: (data) => {
