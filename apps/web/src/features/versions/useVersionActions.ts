@@ -84,7 +84,9 @@ export function useVersionActions({ onRollbackRequest, onPublished, onUploaded }
     },
     onSuccess: ({ version, created }) => {
       done();
-      onUploaded(version.version);
+      // Only a draft is reviewed: re-uploading a published config (idempotent) must not
+      // open the diff of a version there is nothing to do with.
+      if (version.state === 'draft') onUploaded(version.version);
       const v = String(version.version);
       say(created ? `Uploaded version ${v} as a draft` : `Version ${v} is already stored`);
     },

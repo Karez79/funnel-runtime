@@ -16,12 +16,10 @@ function marker(change: ConfigChange): { sign: string; tone: string | undefined 
 
 export function DiffPanel({
   version,
-  draft,
   staying,
   onPublish,
 }: {
   version: number | null;
-  draft: boolean;
   staying: string;
   onPublish: (version: number) => void;
 }) {
@@ -105,23 +103,19 @@ export function DiffPanel({
               </ul>
             </div>
           )}
-          {draft && (
-            <>
-              <p className={styles.note}>
-                {errors.length === 0
-                  ? `All checks passed. ${staying}`
-                  : 'Fix the errors and upload the config again.'}
-              </p>
-              <Button
-                disabled={errors.length > 0}
-                onClick={() => {
-                  onPublish(version);
-                }}
-              >
-                Publish version {v}
-              </Button>
-            </>
-          )}
+          <p className={styles.note}>
+            {errors.length === 0
+              ? `All checks passed. ${staying}`
+              : 'Fix the errors and upload the config again.'}
+          </p>
+          <Button
+            disabled={errors.length > 0}
+            onClick={() => {
+              onPublish(version);
+            }}
+          >
+            Publish version {v}
+          </Button>
         </>
       )}
     </Card>

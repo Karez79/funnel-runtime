@@ -176,7 +176,6 @@ export function VersionsPage() {
 
         <DiffPanel
           version={reviewed}
-          draft={versions.find((v) => v.version === reviewed)?.state === 'draft'}
           staying={reviewed === null ? '' : stayingText(active, reviewed)}
           onPublish={(version) => {
             ask({ kind: 'publish', version });
