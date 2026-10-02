@@ -10,3 +10,4 @@ docs/design/reference.html
 CLAUDE.md
 configs
 .playwright-mcp
+.claude/worktrees/
