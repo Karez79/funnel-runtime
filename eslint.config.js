@@ -15,6 +15,8 @@ export default tseslint.config(
       'test-results/**',
       '.generated/**',
       'docs/**',
+      // Claude Code agent worktrees (isolation: worktree) live inside the repo folder.
+      '.claude/worktrees/**',
     ],
   },
   js.configs.recommended,
