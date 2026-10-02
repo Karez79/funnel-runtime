@@ -219,7 +219,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | `pnpm e2e`             | Playwright smoke против собранного приложения на временной базе |
 | `pnpm typecheck`       | `tsc --noEmit` по всем пакетам                                  |
 | `pnpm lint`            | ESLint, Prettier, Stylelint, dependency-cruiser, knip, jscpd    |
-| `pnpm check`           | typecheck + lint + test + build — ворота CI и Stop-хука         |
+| `pnpm check`           | typecheck + lint + test + build — проверки CI и Stop-хука       |
 | `pnpm db:generate`     | SQL-миграция из изменений `db/schema.ts` (drizzle-kit)          |
 | `pnpm seed`            | v1 опубликована, v2 черновиком                                  |
 | `pnpm generate`        | генератор синтетического трафика                                |
@@ -231,7 +231,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 ## Качество
 
-`pnpm check` — одни и те же ворота локально, в Stop-хуке Claude Code и в CI на каждом PR; CI дополнительно гоняет `pnpm e2e`.
+`pnpm check` — одни и те же автоматические проверки локально, в Stop-хуке Claude Code и в CI на каждом PR; CI дополнительно гоняет `pnpm e2e`.
 
 | Что гарантируется       | Чем                                                                                                                       |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -250,7 +250,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 | Фаза                                     | Начало             | Конец              | Итог                                                                                                                  |
 | ---------------------------------------- | ------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| 0 — каркас, ворота, деплой               | 2026-10-01 16:16   | 2026-10-01 17:48   | монорепо, ворота качества, CI, Docker, Railway, прод `/api/health`                                                    |
+| 0 — каркас, проверки, деплой             | 2026-10-01 16:16   | 2026-10-01 17:48   | монорепо, автоматические проверки, CI, Docker, Railway, прод `/api/health`                                            |
 | 1 — shared-движок                        | 2026-10-01 19:09   | 2026-10-01 20:45   | конфиг, условия, resolve, навигация, валидация, результат, линт, diff, контракт                                       |
 | 2 — сервер: версии и сессии              | 2026-10-01 22:18   | 2026-10-01 23:47   | версии и журнал активаций, сессии с закреплением, тесты 1, 2, 4                                                       |
 | 3 — воронка на фронте                    | 2026-10-02 00:03   | 2026-10-02 02:15 ¹ | все типы шагов, URL и Back, прогресс, результат, debug-оверлей, предпросмотр                                          |
@@ -271,7 +271,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 ## Работа с агентами
 
-Код писали и проверяли агенты Claude Code; человек код не читал. Проверку делали ворота качества (`pnpm check`), e2e, CI и субагент `reviewer` (`.claude/agents/reviewer.md`, только чтение), который оставлял в каждом PR комментарий с находками `blocker` / `major` / `minor`. Журнал — [`docs/AGENT_LOG.md`](docs/AGENT_LOG.md), решения вне спецификации — [`docs/DECISIONS.md`](docs/DECISIONS.md).
+Код писали и проверяли агенты Claude Code; человек код не читал. Проверку делали автоматические проверки (`pnpm check`), e2e, CI и субагент `reviewer` (`.claude/agents/reviewer.md`, только чтение), который оставлял в каждом PR комментарий с находками `blocker` / `major` / `minor`. Журнал — [`docs/AGENT_LOG.md`](docs/AGENT_LOG.md), решения вне спецификации — [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 - **Декомпозиция.** На каждую фазу — [milestone](https://github.com/Karez79/funnel-runtime/milestones?state=all), на каждую задачу — issue, ветка `task/N.M-*` и PR в ветку фазы; фаза вливается в `main` merge-коммитом. Все PR — [закрытые pull request'ы](https://github.com/Karez79/funnel-runtime/pulls?q=is%3Apr+is%3Aclosed).
 - **Параллельность.** Фаза 1 (контракт) шла последовательно. Фазы 3, 4 и 5 вели три агента-лида в отдельных `git worktree` одновременно; PR внутри фазы открывались стеком, ревьюеры работали параллельно с разработкой.

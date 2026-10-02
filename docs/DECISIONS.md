@@ -7,7 +7,7 @@
 - `@funnel/shared` экспортирует исходники (`exports: ./src/index.ts`): его потребляют Vite, Vitest и Node с type stripping, отдельная сборка пакета не нужна.
 - pnpm 11: build-скрипты разрешаются через `allowBuilds` в `pnpm-workspace.yaml` (замена `onlyBuiltDependencies`): разрешены только `esbuild` и `lefthook`, `better-sqlite3` запрещён явно (см. ниже про готовые N-API бинарники).
 - Корневой `vitest.config.ts` с `test.projects` вместо `vitest.workspace.ts`: workspace-файл в Vitest 4+ удалён, `projects` — его замена; пороги покрытия заданы по glob на пакет.
-- Зависимости добавляются в той же задаче, что и код, который их использует: `knip` падает на неиспользуемых зависимостях, так что заранее установленный «набор на будущее» ломал бы ворота.
+- Зависимости добавляются в той же задаче, что и код, который их использует: `knip` падает на неиспользуемых зависимостях, так что заранее установленный «набор на будущее» ломал бы `pnpm check`.
 - Stylelint `declaration-strict-value`: функции (`color-mix()`, `linear-gradient()`) разрешены, но сырые литералы цветов, радиусов, теней и шрифтов вне `tokens.css` запрещены.
 - Сырые цвета запрещены Stylelint в любом свойстве и внутри любой функции (`color-no-hex`, `color-named`, `function-disallowed-list` для rgb/hsl/oklch/…); `color-mix()` и градиенты разрешены, но только поверх `var(--…)`. Шорткат `font` запрещён вне `tokens.css`, чтобы `font-family` всегда проверялся.
 - `apps/server/src/main.ts` исключён из покрытия: это только склейка процесса (env → БД → listen → сигналы), его поведение проверяют e2e и healthcheck на Railway.
