@@ -78,7 +78,7 @@ describe('live sink', () => {
     closeAgain();
   });
 
-  it('a push after close only appends to the stored outbox', () => {
+  it('a push after close is stored and beaconed alone, with no queue', async () => {
     const fetchSpy = vi.fn(() => new Promise<never>(() => undefined));
     vi.stubGlobal('fetch', fetchSpy);
     // Another session's leftovers: a full queue would start draining them over the network.
@@ -93,7 +93,7 @@ describe('live sink', () => {
       .parse(document);
     doc.addEventListener.mockClear();
     vi.clearAllTimers();
-    const beacon = vi.fn(() => true);
+    const beacon = vi.fn<(url: string, body: unknown) => boolean>(() => true);
     vi.stubGlobal('navigator', { sendBeacon: beacon });
 
     sink.push('step_completed', 'intro', { next_step_id: 'team_size' });
@@ -108,10 +108,17 @@ describe('live sink', () => {
     ]);
     expect(stored[1]).toMatchObject({ variant: 'B', funnel_version: 1, step_id: 'intro' });
     expect(data.get(`funnel:seq:${SESSION_ID}`)).toBe('2');
-    // No queue was started for the late event: no request, no timer, no listener, no beacon.
+    // No queue was started for the late event: no request, no timer, no listener.
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
     expect(doc.addEventListener).not.toHaveBeenCalled();
-    expect(beacon).not.toHaveBeenCalled();
+    // Only the late event is beaconed (the stored outbox is not sent again).
+    expect(beacon).toHaveBeenCalledTimes(1);
+    const body = beacon.mock.calls[0]?.[1];
+    if (!(body instanceof Blob)) throw new Error('beacon body is not a Blob');
+    const sent = z
+      .object({ events: ClientEventSchema.array() })
+      .parse(JSON.parse(await body.text()));
+    expect(sent.events.map((e) => e.event_id)).toEqual([stored[1]?.event_id]);
   });
 });

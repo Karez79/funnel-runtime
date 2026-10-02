@@ -51,8 +51,8 @@ type SinkSession = Pick<
  * The event queue of a live session (7.4). The queue is created on first use rather than
  * once: React may stop and start effects again (StrictMode, remounts), and children's
  * effects track before the parent's effect opens the sink. A push after the sink was
- * closed (a move that finishes after unmount) is only appended to the stored outbox: no
- * queue, request or timer outlives the component, and the next queue sends the event.
+ * closed (a move that finishes after unmount) is appended to the stored outbox and
+ * beaconed alone (`appendToOutbox`): no queue, request or timer outlives the component.
  */
 export function createEventSink({
   session,

@@ -234,30 +234,32 @@ function buildEvent(
 }
 
 /**
- * Stores one event in the session's outbox and nothing else: no request, timer, listener
- * or beacon. For an event that arrives after its queue was stopped (a move finishing after
- * unmount); the next queue of the session sends it.
+ * Stores one event in the session's outbox and beacons just that event; no request,
+ * timer or listener. For an event that arrives after its queue was stopped (a move
+ * finishing after unmount). The beacon has no response, so the event also stays stored
+ * until the next queue created for the session sends it (dedup makes that harmless); a
+ * queue that is already open does not pick it up, so without a beacon or a later visit it
+ * is not delivered.
  */
 export function appendToOutbox(
   context: EventQueueContext,
   name: string,
   stepId: string | null,
   properties: EventProperties,
-  overrides: Partial<Pick<EventQueueDeps, 'storage' | 'now' | 'uuid'>> = {},
+  overrides: Partial<Pick<EventQueueDeps, 'storage' | 'now' | 'uuid' | 'beacon'>> = {},
 ): void {
   const deps = { ...defaultDeps(), ...overrides };
   const { sessionId } = context;
   const stored = loadOutbox(deps.storage, sessionId);
   const seq = Math.max(storedSeq(deps.storage, sessionId), ...stored.map((e) => e.client_seq + 1));
+  const event = buildEvent(context, deps, seq, name, stepId, properties);
   try {
     deps.storage?.setItem(seqKey(sessionId), String(seq + 1));
-    deps.storage?.setItem(
-      outboxKey(sessionId),
-      JSON.stringify([...stored, buildEvent(context, deps, seq, name, stepId, properties)]),
-    );
+    deps.storage?.setItem(outboxKey(sessionId), JSON.stringify([...stored, event]));
   } catch {
-    // Quota or blocked storage: the late event is lost, the funnel keeps working.
+    // Quota or blocked storage: only the beacon below carries the event.
   }
+  deps.beacon({ events: [event] });
 }
 
 export function createEventQueue(
