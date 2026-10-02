@@ -42,7 +42,12 @@ export {
   REJECT_REASONS,
 } from './events/schema.ts';
 export type { ClientEvent, EventProperties } from './events/schema.ts';
-export { catalogEvent, filterProperties, isServerOnly } from './events/catalog.ts';
+export {
+  catalogEvent,
+  EXPAND_RECOMMENDATION,
+  filterProperties,
+  isServerOnly,
+} from './events/catalog.ts';
 export { answerKind } from './events/answerKind.ts';
 
 export {

@@ -1,8 +1,8 @@
 // `pnpm screenshots` (CLAUDE.md 15.1): the README images are produced by a script, not
 // by hand, so they can be re-created after any UI change. It starts the production build
 // on a fresh temporary SQLite file (as the e2e config does) on a free port, fills it with
-// the traffic generator (`--publish-next`: v1 → v2), uploads a small draft built from
-// funnel-v2.json for the Versions diff, then drives Chromium through the admin and the
+// the traffic generator (`--publish-next`: v1 → v2), uploads configs/funnel-v3.json as a
+// draft (not published) for the Versions diff, then drives Chromium through the admin and the
 // funnel and writes PNGs plus a short animated WebP of a walk to docs/images/.
 // Reduced motion keeps the stills stable; the animation keeps motion on, since showing
 // the step transitions is its point. The server and the temp DB are removed on any exit.
@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Browser, type BrowserContextOptions, type Page } from '@playwright/test';
 import { v7 as uuidv7 } from 'uuid';
-import { z } from 'zod';
 import { generateTraffic } from './lib/generator.ts';
 import { createClient } from './lib/http.ts';
 
@@ -90,33 +89,14 @@ function startServer(port: number, databasePath: string): ChildProcess {
   });
 }
 
-/** A draft for the Versions diff: v2 with the next version number and one changed text. */
+/** The real second-iteration config as a draft, never published here: the Versions diff. */
 async function uploadDraft(baseUrl: string): Promise<number> {
-  const v2 = z
-    .looseObject({
-      version: z.number(),
-      steps: z.looseObject({
-        intro: z.looseObject({ content: z.looseObject({ title: z.string() }) }),
-      }),
-    })
-    .parse(JSON.parse(readFileSync(join(ROOT, 'configs/funnel-v2.json'), 'utf8')));
-  const draft = {
-    ...v2,
-    version: v2.version + 1,
-    releaseNote: 'Shorter intro title.',
-    steps: {
-      ...v2.steps,
-      intro: {
-        ...v2.steps.intro,
-        content: { ...v2.steps.intro.content, title: 'Find a work model your team will follow' },
-      },
-    },
-  };
+  const config: unknown = JSON.parse(readFileSync(join(ROOT, 'configs/funnel-v3.json'), 'utf8'));
   const call = createClient({
     baseUrl,
     admin: { user: ADMIN.username, password: ADMIN.password },
   });
-  const { data } = await call('uploadVersion', { body: draft });
+  const { data } = await call('uploadVersion', { query: {}, body: config });
   return data.version.version;
 }
 

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DomainError, type RouteDef } from '@funnel/shared';
+import { contract, DomainError, type RouteDef } from '@funnel/shared';
 import { z } from 'zod';
 import { route } from './plugins/route.ts';
 import { loadEnv } from './env.ts';
@@ -41,6 +41,30 @@ describe('GET /api/health', () => {
     t = await createTestApp();
     const res = await t.app.inject({ method: 'GET', url: '/api/health' });
     expect(res.headers['content-security-policy']).toContain("default-src 'self'");
+  });
+});
+
+describe('GET /api/admin/schema', () => {
+  it('fingerprints the schema for admins: stable on reads, different after any DDL', async () => {
+    t = await createTestApp();
+    const app = t.app;
+    const read = async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/schema',
+        headers: { authorization: adminAuth },
+      });
+      expect(res.statusCode).toBe(200);
+      return contract.dbSchema.response.parse(res.json());
+    };
+    expect((await app.inject({ method: 'GET', url: '/api/admin/schema' })).statusCode).toBe(401);
+    const first = await read();
+    expect(first.migrations).toBeGreaterThan(0);
+    expect(await read()).toEqual(first);
+    t.handle.db.run(sql`create index sessions_result_idx on sessions(result_id)`);
+    const after = await read();
+    expect(after.hash).not.toBe(first.hash);
+    expect(after.objects).toBe(first.objects + 1);
   });
 });
 

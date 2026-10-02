@@ -12,6 +12,7 @@ import {
   answerKey,
   answerKind,
   computeResult,
+  EXPAND_RECOMMENDATION,
   isInteractive,
   nextStep,
   progress,
@@ -283,7 +284,12 @@ export async function resumeVisitor(ctx: Context, visitor: Visitor): Promise<voi
   visitor.resumed = true;
 }
 
-async function finish(ctx: Context, visitor: Visitor, stepId: string): Promise<void> {
+async function finish(
+  ctx: Context,
+  visitor: Visitor,
+  stepId: string,
+  clickCta: boolean,
+): Promise<void> {
   const { plan } = visitor;
   const expected = computeResult(visitor.funnel, visitor.state.answers);
   const { data, date } = await ctx.call('completeSession', { params: { id: visitor.id } });
@@ -293,20 +299,40 @@ async function finish(ctx: Context, visitor: Visitor, stepId: string): Promise<v
   }
   visitor.resultId = expected;
   await track(ctx, visitor, 'result_viewed', stepId, { result_id: expected });
-  if (chance(plan.rng, BEHAVIOUR.cta[visitor.variant])) {
-    await track(ctx, visitor, 'cta_clicked', stepId, {
-      result_id: expected,
-      action: data.result.cta.action,
-    });
+  if (clickCta || chance(plan.rng, BEHAVIOUR.cta[visitor.variant])) {
+    const { action } = data.result.cta;
+    await track(ctx, visitor, 'cta_clicked', stepId, { result_id: expected, action });
+    // As the result screen does: this CTA opens the plan, and the event goes out only
+    // where the session's catalog lists it (v3 on), so older versions are unchanged.
+    if (action === EXPAND_RECOMMENDATION.action) {
+      await track(ctx, visitor, 'recommendation_expanded', stepId, {
+        result_id: expected,
+        action,
+        source: EXPAND_RECOMMENDATION.source,
+      });
+    }
   }
   visitor.outcome = 'result';
+}
+
+export interface WalkOptions {
+  /** false for a visitor who came back to finish: no drop-off and no pause. */
+  readonly mayDrop?: boolean;
+  /** Pause when this step is shown, before answering it (a scripted pause point). */
+  readonly stopAt?: string;
+  /** Click the result CTA for sure instead of by chance. */
+  readonly clickCta?: boolean;
 }
 
 /**
  * Walks from the current step until the result, a drop-off, or the pause point. A
  * resumed visitor (`mayDrop: false`) always finishes: it came back to finish.
  */
-export async function walk(ctx: Context, visitor: Visitor, mayDrop = true): Promise<void> {
+export async function walk(
+  ctx: Context,
+  visitor: Visitor,
+  { mayDrop = true, stopAt, clickCta = false }: WalkOptions = {},
+): Promise<void> {
   const { plan } = visitor;
   for (;;) {
     const { state, funnel } = visitor;
@@ -320,12 +346,15 @@ export async function walk(ctx: Context, visitor: Visitor, mayDrop = true): Prom
       visible_step_count: shown.total,
     });
     if (step.type === 'result') {
-      await finish(ctx, visitor, stepId);
+      await finish(ctx, visitor, stepId, clickCta);
       break;
     }
     const firstVisit = !visitor.seen.has(stepId);
     visitor.seen.add(stepId);
-    if (plan.pauseAfter !== null && mayDrop && visitor.answered >= plan.pauseAfter) {
+    const pauseHere =
+      stepId === stopAt ||
+      (plan.pauseAfter !== null && mayDrop && visitor.answered >= plan.pauseAfter);
+    if (pauseHere) {
       visitor.outcome = 'paused';
       break;
     }
