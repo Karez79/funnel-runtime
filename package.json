@@ -26,9 +26,11 @@
     "review:stats": "node scripts/review-stats.ts",
     "generate": "node --env-file-if-exists=.env scripts/generate-traffic.ts",
     "verify": "node --env-file-if-exists=.env scripts/verify.ts",
+    "screenshots": "node scripts/screenshots.ts",
     "demo:iteration2": "node --env-file-if-exists=.env scripts/demo-iteration2.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@funnel/shared": "workspace:*",
     "@playwright/test": "^1.63.0",

@@ -4,6 +4,73 @@
   overflow-x: auto;
 }
 
+/* Edge hints of a table wider than its panel (Table.tsx sets the flags on the frame):
+   the cut-off content fades out and a soft shade sits on that edge. A mask and a shade,
+   not a cover gradient: the panels are translucent, so no cover color would match. */
+.frame {
+  position: relative;
+  min-width: 0;
+}
+
+.frame::before,
+.frame::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  width: 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.frame::before {
+  left: 0;
+  background: linear-gradient(
+    to right,
+    color-mix(in oklch, var(--ink) 9%, transparent),
+    transparent
+  );
+}
+
+.frame::after {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    color-mix(in oklch, var(--ink) 9%, transparent),
+    transparent
+  );
+}
+
+.frame[data-more-start]::before,
+.frame[data-more-end]::after {
+  opacity: 1;
+}
+
+.frame[data-more-end] .tbl {
+  mask-image: linear-gradient(to right, var(--ink) calc(100% - 40px), transparent);
+}
+
+.frame[data-more-start] .tbl {
+  mask-image: linear-gradient(to left, var(--ink) calc(100% - 40px), transparent);
+}
+
+.frame[data-more-start][data-more-end] .tbl {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    var(--ink) 40px,
+    var(--ink) calc(100% - 40px),
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame::before,
+  .frame::after {
+    transition: none;
+  }
+}
+
 .tbl table {
   width: 100%;
   border-collapse: collapse;
@@ -14,7 +81,7 @@
 .tbl th {
   text-align: left;
   font-weight: 500;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: 11px;
   padding: 8px 12px;
   white-space: nowrap;

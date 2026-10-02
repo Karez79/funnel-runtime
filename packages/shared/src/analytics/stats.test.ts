@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { compareProportions, normalCdf, requiredPerVariant, wilsonInterval } from './stats.ts';
+import {
+  compareProportions,
+  isSignificant,
+  normalCdf,
+  requiredPerVariant,
+  wilsonInterval,
+} from './stats.ts';
 
 describe('normalCdf', () => {
   it('matches standard normal table values', () => {
@@ -82,5 +88,17 @@ describe('requiredPerVariant', () => {
 
   it('is null when there is no difference to detect', () => {
     expect(requiredPerVariant(0.3, 0.3)).toBeNull();
+  });
+});
+
+describe('isSignificant', () => {
+  it('is true only strictly below alpha .05', () => {
+    expect(isSignificant(0.049)).toBe(true);
+    expect(isSignificant(0.05)).toBe(false);
+    expect(isSignificant(0.2)).toBe(false);
+  });
+
+  it('is false without a p-value', () => {
+    expect(isSignificant(null)).toBe(false);
   });
 });

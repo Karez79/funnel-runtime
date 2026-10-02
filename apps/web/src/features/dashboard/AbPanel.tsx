@@ -1,7 +1,7 @@
 // A/B on the main metric, started → CTA (CLAUDE.md 11.2): half donuts in the variant
 // colors with the 95% Wilson interval, and the verdict exactly as the aggregator words
-// it. A difference is called significant only at p < 0.05.
-import type { AnalyticsSummary } from '@funnel/shared';
+// it. Significance is the shared `isSignificant`, the same test the verdict uses.
+import { isSignificant, type AnalyticsSummary } from '@funnel/shared';
 import { formatCount } from '../../lib/format.ts';
 import { HalfDonut } from '../../ui/HalfDonut.tsx';
 import styles from './Dashboard.module.css';
@@ -28,7 +28,7 @@ function Gauge({ variant, p }: { variant: 'A' | 'B'; p: Experiment['A'] }) {
 }
 
 export function AbPanel({ experiment }: { experiment: Experiment }) {
-  const significant = experiment.pValue !== null && experiment.pValue < 0.05;
+  const significant = isSignificant(experiment.pValue);
   const enough = experiment.A.sessions > 0 && experiment.B.sessions > 0;
   const badge = !enough ? 'Not enough data' : significant ? 'Significant' : 'Not significant';
   const needed =

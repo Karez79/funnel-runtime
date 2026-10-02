@@ -1,0 +1,43 @@
+/* Error state of the admin: one panel, centered in the page or in the layout outlet. */
+.wrap {
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+}
+
+.panel {
+  width: 100%;
+  max-width: 480px;
+}
+
+.panel h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.panel p {
+  margin: 0 0 18px;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.link {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.link:hover {
+  color: var(--ink);
+}

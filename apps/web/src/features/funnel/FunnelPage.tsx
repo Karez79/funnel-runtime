@@ -85,11 +85,11 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
     onMove: (next, { url = 'push' }) => {
       save(sessionState(next));
       completeIfResult(next.currentStepId);
-      const there = window.location.pathname === `/s/${next.currentStepId}`;
-      // After a browser Back the URL is normally there already; if the user moved through
-      // history again meanwhile (the transition is async), the URL follows the state.
+      // After a browser Back the URL is already there (`none`). A history move during the
+      // transition cancels it (see syncFromUrl), so a committed move never rewrites the
+      // entry the user went to.
       if (url === 'push') toStep(next.currentStepId, false, state.currentStepId);
-      else if (url === 'replace' || !there) toStep(next.currentStepId, true);
+      else if (url === 'replace') toStep(next.currentStepId, true);
     },
   });
   const { state } = machine;
@@ -136,8 +136,18 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
   // URL → state: the browser's Back to a visited step is a Back; a Back started in the
   // card that landed on another URL still goes one step back; anything else (first load
   // on `/`, a stale or typed URL, Forward) is replaced by the current step.
+  // A history move while a move renders (Back pressed rapidly) cancels that move; the sync
+  // then runs again from the uncommitted state, so several quick Backs end as one move to
+  // the step the URL shows and no history entry is replaced.
   const firstSync = useRef(true);
+  const [resync, setResync] = useState(0);
   const syncFromUrl = useEffectEvent(() => {
+    if (machine.isMoving()) {
+      machine.supersede(() => {
+        setResync((n) => n + 1);
+      });
+      return;
+    }
     const first = firstSync.current;
     const expected = expectBack.current;
     firstSync.current = false;
@@ -156,7 +166,7 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
   });
   useEffect(() => {
     syncFromUrl();
-  }, [location.key]);
+  }, [location.key, resync]);
 
   return (
     <>

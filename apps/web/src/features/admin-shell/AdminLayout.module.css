@@ -96,6 +96,18 @@
   color: var(--ink);
 }
 
+.liveLabels {
+  display: grid;
+}
+
+.liveLabels > span {
+  grid-area: 1 / 1;
+}
+
+.liveLabels > [aria-hidden='true'] {
+  visibility: hidden;
+}
+
 .dot {
   position: relative;
   width: 7px;

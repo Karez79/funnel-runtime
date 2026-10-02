@@ -4,7 +4,7 @@ import type { AnalyticsSummary } from '@funnel/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { formatCount } from '../../lib/format.ts';
+import { formatSessions } from '../../lib/format.ts';
 import { apiQuery } from '../../lib/query.ts';
 import { Card } from '../../ui/Card.tsx';
 import { Icon, type IconName } from '../../ui/Icon.tsx';
@@ -122,7 +122,7 @@ function Sources({ summary, filters }: { summary: AnalyticsSummary; filters: Das
         <NotchButton
           key={source ?? 'none'}
           short={source === null ? '—' : source.charAt(0).toUpperCase()}
-          title={`${source ?? 'No UTM source'}, ${formatCount(sessions)} sessions`}
+          title={`${source ?? 'No UTM source'}, ${formatSessions(sessions)}`}
           count={sessions}
           pressed={source !== null && source === filters.source}
           muted={source === null}

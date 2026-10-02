@@ -35,7 +35,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: var(--ink-3);
+  color: var(--ink-2);
   margin-top: 6px;
   font-variant-numeric: tabular-nums;
 }

@@ -57,7 +57,7 @@
 }
 
 .muted {
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 .src:disabled {
@@ -74,7 +74,9 @@
   font-weight: 600;
   display: grid;
   place-items: center;
-  color: var(--on-ink);
+
+  /* Dark text: white on --a / --b is below AA at this size (2.7:1). */
+  color: var(--ink);
   background: var(--a);
   outline: 2px solid var(--bg);
   font-variant-numeric: tabular-nums;

@@ -15,7 +15,7 @@ import type { ResolvedFunnel } from '../engine/resolve.ts';
 import { BASE_EVENTS } from '../events/catalog.ts';
 import type { REJECT_REASONS } from '../events/schema.ts';
 import { describeCondition } from './condition.ts';
-import { compareProportions, requiredPerVariant, wilsonInterval } from './stats.ts';
+import { compareProportions, isSignificant, requiredPerVariant, wilsonInterval } from './stats.ts';
 import type { AnalyticsFilters, AnalyticsSummary } from './summary.ts';
 
 /**
@@ -253,7 +253,7 @@ function verdict(summary: Pick<Summary['experiment'], 'A' | 'B' | 'diffPoints' |
   const leader = diffPoints > 0 ? 'B' : 'A';
   const points = Math.abs(diffPoints).toFixed(1);
   const p = pValue < 0.001 ? 'p < 0.001' : `p = ${pValue.toFixed(3)}`;
-  if (pValue < 0.05)
+  if (isSignificant(pValue))
     return `${leader} is ahead by ${points} points, and the difference is significant (${p}).`;
   return `${leader} is ahead by ${points} points, but the difference is not significant yet (${p}).`;
 }

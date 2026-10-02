@@ -41,7 +41,7 @@
 
 .group {
   font-size: 12px;
-  color: var(--ink-3);
+  color: var(--ink-2);
   padding: 10px 12px 4px;
 }
 
@@ -77,14 +77,14 @@
 
 .hint {
   margin-left: auto;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: 12.5px;
 }
 
 .empty {
   margin: 0;
   padding: 8px 20px 16px;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 .foot {
@@ -93,5 +93,5 @@
   padding: 10px 20px;
   border-top: 1px solid var(--line);
   font-size: 12px;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }

@@ -81,6 +81,7 @@ export {
 export { aggregate } from './analytics/aggregate.ts';
 export { compareSummaries, coversSessions, GroundTruthSchema } from './analytics/groundTruth.ts';
 export type { GroundTruth } from './analytics/groundTruth.ts';
+export { isSignificant } from './analytics/stats.ts';
 export type {
   AnalyticsEvent,
   AnalyticsSession,

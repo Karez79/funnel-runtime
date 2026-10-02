@@ -8,7 +8,19 @@
 
 Демо-доступ к админке (Basic Auth): `admin` / `demo-875b44c4`
 
-<!-- Скриншоты: docs/images/*, появятся в Фазе 8 (pnpm screenshots) -->
+![Дашборд: KPI, Funnel journey, качество данных, A/B](docs/images/dashboard.png)
+
+<p align="center">
+  <img src="docs/images/funnel-question-390.png" width="300" alt="Вопрос воронки на мобильном (390px)">
+  &nbsp;&nbsp;
+  <img src="docs/images/funnel-result-390.png" width="300" alt="Результат воронки на мобильном (390px)">
+</p>
+
+<p align="center">
+  <img src="docs/images/funnel-walkthrough.webp" width="300" alt="Прохождение воронки: ответ, Continue, результат">
+</p>
+
+Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора; нужен `ffmpeg` с кодеком `libwebp_anim`); остальные скриншоты — в [`docs/images/`](docs/images/). На скриншоте Versions — diff черновика `configs/funnel-v3.json` против активной v2 перед публикацией.
 
 ## Проверить за 5 минут
 
@@ -17,10 +29,10 @@
 3. **Back и ветвление.** Кнопка Back, `Esc` или браузерная «назад» возвращают на предыдущий видимый шаг. В вопросе о формате работы выберите `hybrid`: в пути появится шаг `office_days`, и «N of M» в прогрессе вырастет. Вернитесь назад и смените ответ на `remote`: шаг исчезнет, total уменьшится.
 4. **Вариант B.** Откройте [`/?variant=B`](https://app-production-183d.up.railway.app/?variant=B): порядок вопросов и тексты варианта B. Override действует только при создании сессии и помечает её как QA.
 5. **Debug.** Добавьте [`?debug=1`](https://app-production-183d.up.railway.app/?debug=1) (или Shift+D): id сессии, версия, вариант и его источник, видимый путь, `stateRev`, длина outbox, кнопка «Reset session».
-6. **Публикация и откат.** Откройте [Versions](https://app-production-183d.up.railway.app/admin/versions). Если v2 ещё черновик, нажмите у неё «Review changes»: откроются diff и линт относительно активной версии. Затем нажмите «Publish version 2». Если v2 уже опубликована (это делает прогон генератора на проде с `--publish-next` при выкатке Фазы 6), нажмите «Roll back to version 1», а потом «Roll back to version 2». Откат возвращает к предыдущей версии по журналу активаций, поэтому второй откат возвращает v2. В подтверждении видно, сколько сессий останется на текущей версии. Новые сессии стартуют на активной версии, начатые остаются на своей.
+6. **Публикация и откат.** Откройте [Versions](https://app-production-183d.up.railway.app/admin/versions). На проде опубликованы все три версии: v2 активна, v3 опубликована во второй итерации и откачена (последние строки журнала активаций: publish 3, rollback 3 → 2). У v3 есть кнопка «Roll back to version 3» (откат отменяет последнее переключение по журналу, поэтому он вернёт v3), у v1 — «Activate version 1», у каждой версии — «Preview» (прохождение в памяти, без сессии и событий). В подтверждении видно, сколько сессий в процессе останется на текущей версии; после действия появляется тост «Rolled back to version N» или «Activated version N». Новые сессии стартуют на активной версии, начатые остаются на своей. Diff и линт черновика перед публикацией («Review changes», затем «Publish version 2») удобнее смотреть локально: после `pnpm seed` v2 — черновик; на проде загружать конфиги не нужно.
 7. **Live events.** Откройте [Live events](https://app-production-183d.up.railway.app/admin/live) и пройдите воронку в соседней вкладке: строки `accepted` появляются в реальном времени, повторно отправленные события — `duplicate`, отклонённые — `rejected` с причиной.
-8. **Сверка с генератором.** Откройте [Dashboard](https://app-production-183d.up.railway.app/admin) и найдите в панели Data quality строку «Matches generator ground truth (last run, any filter)». После прогона генератора на проде, который выполняется при выкатке Фазы 6, она показывает **Yes**: сервер пересчитывает проверки этого прогона и сравнивает их с его ground truth. До прогона там стоит «Not run». Повторить локально: `pnpm dev`, затем `pnpm generate --publish-next` и `pnpm verify` (см. [ниже](#локальный-запуск)).
-9. **Вторая итерация (v3).** На [Versions](https://app-production-183d.up.railway.app/admin/versions) v3 загружена через `POST /api/admin/versions` на работающий прод, без передеплоя. После прогона `pnpm demo:iteration2` на проде (его выполняет оркестратор после слияния Фазы 7) v3 опубликована, а активной снова стала v2: так демо проверяет и публикацию, и откат. «Preview» у v3 с вариантом B покажет путь без `tool_count`; если в вопросе о приоритетах выбрать `Compliance and access control`, появится новый шаг `security_constraints`, а ответ `Strict separation and audit trails` или `Industry or legal requirements` в нём даёт новый результат `regulated_scale`. В [Dashboard](https://app-production-183d.up.railway.app/admin) с фильтром версии 3 панель Other events показывает `recommendation_expanded`; фильтры версий 1 и 2 по-прежнему отдают свою аналитику.
+8. **Сверка с генератором.** Откройте [Dashboard](https://app-production-183d.up.railway.app/admin) и найдите в панели Data quality строку «Matches generator ground truth (last run, any filter)». Она показывает **Yes**: сервер пересчитывает проверки последнего прогона генератора на проде (2026-10-02 05:17 MSK, 150 сессий) и сравнивает их с его ground truth. На базе, где генератор не запускался, там стоит «Not run». Повторить локально: `pnpm dev`, затем `pnpm generate --publish-next` и `pnpm verify` (см. [ниже](#локальный-запуск)).
+9. **Вторая итерация (v3).** На [Versions](https://app-production-183d.up.railway.app/admin/versions) v3 загружена через `POST /api/admin/versions` на работающий прод, без передеплоя. Прогон `pnpm demo:iteration2` на проде (2026-10-02 07:48–07:49 MSK, 18 из 18 проверок) опубликовал v3, а затем откатил на v2: так демо проверяет и публикацию, и откат. Поэтому у v3 в Versions кнопка «Roll back to version 3»: откат идёт по журналу активаций. «Preview» у v3 с вариантом B покажет путь без `tool_count`; если в вопросе о приоритетах выбрать `Compliance and access control`, появится новый шаг `security_constraints`, а ответ `Strict separation and audit trails` или `Industry or legal requirements` в нём даёт новый результат `regulated_scale`. В [Dashboard](https://app-production-183d.up.railway.app/admin) с фильтром версии 3 панель Other events показывает `recommendation_expanded`; фильтры версий 1 и 2 по-прежнему отдают свою аналитику. Числа v3 на проде дают сценарные синтетические посетители демо (4 сессии на v3), поэтому 100% в долях и все результаты `regulated_scale` — ожидаемы, это не продуктовый вывод.
 
 ## Соответствие заданию
 
@@ -232,19 +244,19 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | `pnpm e2e`             | Playwright smoke против собранного приложения на временной базе |
 | `pnpm typecheck`       | `tsc --noEmit` по всем пакетам                                  |
 | `pnpm lint`            | ESLint, Prettier, Stylelint, dependency-cruiser, knip, jscpd    |
-| `pnpm check`           | typecheck + lint + test + build — ворота CI и Stop-хука         |
+| `pnpm check`           | typecheck + lint + test + build — проверки CI и Stop-хука       |
 | `pnpm db:generate`     | SQL-миграция из изменений `db/schema.ts` (drizzle-kit)          |
 | `pnpm seed`            | v1 опубликована, v2 черновиком                                  |
 | `pnpm generate`        | генератор синтетического трафика                                |
 | `pnpm verify`          | сверка аналитики с ground truth                                 |
 | `pnpm demo:iteration2` | сценарий второй итерации (Фаза 7)                               |
-| `pnpm screenshots`     | скриншоты и анимация для README (Фаза 8)                        |
+| `pnpm screenshots`     | скриншоты и анимация для README (нужен `ffmpeg`)                |
 
 </details>
 
 ## Качество
 
-`pnpm check` — одни и те же ворота локально, в Stop-хуке Claude Code и в CI на каждом PR; CI дополнительно гоняет `pnpm e2e`.
+`pnpm check` — одни и те же автоматические проверки локально, в Stop-хуке Claude Code и в CI на каждом PR; CI дополнительно гоняет `pnpm e2e`.
 
 | Что гарантируется       | Чем                                                                                                                       |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -255,6 +267,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | стили только из токенов | Stylelint: цвета, радиусы, тени, шрифты только через `var(--…)`                                                           |
 | покрытие                | `packages/shared` ≥ 90% строк, `apps/server` ≥ 80%                                                                        |
 | поведение в браузере    | Playwright e2e: воронка, админка, Live events                                                                             |
+| доступность             | axe (`@axe-core/playwright`) в e2e: WCAG 2.x A/AA, ни одного нарушения serious и critical                                 |
 | прод после деплоя       | `verify-deploy.yml` ждёт `/api/health` с версией задеплоенного коммита                                                    |
 
 ## Таймлайн
@@ -263,7 +276,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 | Фаза                                     | Начало             | Конец              | Итог                                                                                                                  |
 | ---------------------------------------- | ------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| 0 — каркас, ворота, деплой               | 2026-10-01 16:16   | 2026-10-01 17:48   | монорепо, ворота качества, CI, Docker, Railway, прод `/api/health`                                                    |
+| 0 — каркас, проверки, деплой             | 2026-10-01 16:16   | 2026-10-01 17:48   | монорепо, автоматические проверки, CI, Docker, Railway, прод `/api/health`                                            |
 | 1 — shared-движок                        | 2026-10-01 19:09   | 2026-10-01 20:45   | конфиг, условия, resolve, навигация, валидация, результат, линт, diff, контракт                                       |
 | 2 — сервер: версии и сессии              | 2026-10-01 22:18   | 2026-10-01 23:47   | версии и журнал активаций, сессии с закреплением, тесты 1, 2, 4                                                       |
 | 3 — воронка на фронте                    | 2026-10-02 00:03   | 2026-10-02 02:15 ¹ | все типы шагов, URL и Back, прогресс, результат, debug-оверлей, предпросмотр                                          |
@@ -272,7 +285,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | 6 — генератор, verify, документация      | 2026-10-02 02:02 ² | 2026-10-02 04:28 ³ | генератор и ground truth, `pnpm verify`, строка сверки в дашборде, документы                                          |
 | 6b — сверка, устойчивая к живому трафику | 2026-10-02 04:37   | 2026-10-02 04:59 ⁴ | проверки генератора считают только его трафик (`traffic=generator`): на проде в окно прогона попали посетители (#137) |
 | 7 — вторая итерация (v3)                 | 2026-10-02 05:20   | 2026-10-02 07:21 ⁵ | v3 через админский API без передеплоя и миграций, `pnpm demo:iteration2`, тесты схемы и совместимости                 |
-| 8 — полировка                            | —                  | впереди            |                                                                                                                       |
+| 8 — полировка                            | 2026-10-02 05:22   | 2026-10-02 07:32 ⁶ | EXPLAIN.md, `pnpm screenshots` и картинки, axe в e2e и контраст AA, пустые состояния админки                          |
 
 ¹ Фазы 3–5 шли параллельно. Конец — слияние последнего PR задачи в ветку фазы; в `main` фазы вливаются позже, по очереди (Фаза 5 — в 03:50).
 
@@ -282,15 +295,17 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 ⁴ Слияние последнего PR задачи (#145) в ветку фазы; слияние в `main` и повторный прогон генератора на проде — после (#137).
 
-⁵ Слияние последнего PR задачи кода (#164) в ветку фазы; PR документов — после; слияние в `main`, прогон `pnpm demo:iteration2` на проде и тег `iteration-2` — после, оркестратором.
+⁵ Слияние последнего PR задачи кода (#164) в ветку фазы. Фаза влита в `main` в 07:45 (#168, `20c9d6a`); `pnpm demo:iteration2` на проде — 07:48–07:49 (18 из 18 проверок), тег `iteration-2` и Release — 07:49.
+
+⁶ Слияние последнего PR задачи (#163) в ветку фазы; около часа простоя из-за лимита аккаунта (с 06:00).
 
 ## Работа с агентами
 
-Код писали и проверяли агенты Claude Code; человек код не читал. Проверку делали ворота качества (`pnpm check`), e2e, CI и субагент `reviewer` (`.claude/agents/reviewer.md`, только чтение), который оставлял в каждом PR комментарий с находками `blocker` / `major` / `minor`. Журнал — [`docs/AGENT_LOG.md`](docs/AGENT_LOG.md), решения вне спецификации — [`docs/DECISIONS.md`](docs/DECISIONS.md).
+Роли распределены так. Автор написал спецификацию (`CLAUDE.md`: архитектура, инварианты, правила качества кода, процесс PR и ревью) и принимал ключевые решения: процесс работы, доступы, хостинг на Railway, демо-доступ, правило «найденное исправляется сразу». Код писали агенты Claude Code. Построчное ревью кода автор делегировал автоматическим проверкам (`pnpm check`, e2e, CI) и субагенту `reviewer` (`.claude/agents/reviewer.md`, только чтение), который оставлял в каждом PR комментарий с находками `blocker` / `major` / `minor`. Результат автор проверял через работающий продукт и метрики: прод, дашборд, `pnpm verify`, демо второй итерации. За реализацию отвечает автор; [`docs/EXPLAIN.md`](docs/EXPLAIN.md) — его опора для разговора о коде. Журнал — [`docs/AGENT_LOG.md`](docs/AGENT_LOG.md), решения вне спецификации — [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 - **Декомпозиция.** На каждую фазу — [milestone](https://github.com/Karez79/funnel-runtime/milestones?state=all), на каждую задачу — issue, ветка `task/N.M-*` и PR в ветку фазы; фаза вливается в `main` merge-коммитом. Все PR — [закрытые pull request'ы](https://github.com/Karez79/funnel-runtime/pulls?q=is%3Apr+is%3Aclosed).
 - **Параллельность.** Фаза 1 (контракт) шла последовательно. Фазы 3, 4 и 5 вели три агента-лида в отдельных `git worktree` одновременно; PR внутри фазы открывались стеком, ревьюеры работали параллельно с разработкой.
-- **Что нашёл ревьюер (фазы 0–6, по `pnpm review:stats`).** Фаза 0: 1 blocker, 8 major — например, Stop-хук молча пропускал `pnpm check` после `cd`, правила dependency-cruiser не срабатывали. Фаза 1: 13 major, в итоговом ревью — имена из `Object.prototype` (`toString`) проходили линт как существующие шаги. Фаза 2: 3 major, среди них неограниченный рост кеша по публичному `funnelId` и обход rate limit подменой `X-Forwarded-For`. Фаза 3: 6 major, гонки быстрых нажатий во время view transition, воспроизведённые на прод-билде и закрытые e2e. Фаза 4: 0 major, 23 minor. Фаза 5: 5 major — например, Live events склеивал три копии события в одной пачке в одну строку. Фаза 6: 3 major — «Matches generator ground truth: Yes» мог быть пустым (проверка без сессий совпадала с пустым сервером), неверное время в таймлайне README и будущий прогон генератора на проде, описанный в README как уже состоявшийся; ещё e2e генератора поймал окно сверки, захватывавшее трафик предыдущей спеки.
+- **Что нашёл ревьюер (по `pnpm review:stats`).** Фаза 0: 1 blocker, 8 major — например, Stop-хук молча пропускал `pnpm check` после `cd`, правила dependency-cruiser не срабатывали. Фаза 1: 13 major, в итоговом ревью — имена из `Object.prototype` (`toString`) проходили линт как существующие шаги. Фаза 2: 3 major, среди них неограниченный рост кеша по публичному `funnelId` и обход rate limit подменой `X-Forwarded-For`. Фаза 3: 6 major, гонки быстрых нажатий во время view transition, воспроизведённые на прод-билде и закрытые e2e. Фаза 4: 0 major, 23 minor. Фаза 5: 5 major — например, Live events склеивал три копии события в одной пачке в одну строку. Фаза 6: 3 major — «Matches generator ground truth: Yes» мог быть пустым (проверка без сессий совпадала с пустым сервером), неверное время в таймлайне README и будущий прогон генератора на проде, описанный в README как уже состоявшийся; ещё e2e генератора поймал окно сверки, захватывавшее трафик предыдущей спеки. Фаза 8: 2 major — axe проверял почти пустой дашборд (на данных генератора нашлись нарушения контраста), а шаг README предлагал загрузить конфиг на проде.
 - **Правила процесса.** PR с `blocker` или `major` вливается только после повторного ревью с APPROVE и зелёного CI; найденное исправляется сразу, в том же или следующем PR.
 - **Хуки.** После правки файла — Prettier и ESLint `--fix`; на Stop — `pnpm check` (с кешем по отпечатку дерева), красный результат не даёт агенту закончить.
 - **Ошибки процесса** записаны честно: стековый PR, закрытый GitHub при удалении базовой ветки; неверный диагноз ревьюера о сборке `better-sqlite3`, который исправил основной агент.
@@ -306,8 +321,9 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 funnel-runtime/
   CLAUDE.md                     спецификация проекта
   configs/                      funnel-v1.json, funnel-v2.json (итерация 1), funnel-v3.json (итерация 2)
-  docs/                         ARCHITECTURE, DATA_MODEL, EVENTS, ANALYTICS, EXPERIMENT, LIMITATIONS,
-                                TIMELINE, AGENT_LOG, DECISIONS, REQUIREMENTS, design/reference.html
+  docs/                         ARCHITECTURE, EXPLAIN, DATA_MODEL, EVENTS, ANALYTICS, EXPERIMENT, LIMITATIONS,
+                                TIMELINE, AGENT_LOG, DECISIONS, REQUIREMENTS, design/reference.html,
+                                images/ (pnpm screenshots)
   packages/shared/src/
     config/                     schema.ts (zod), lint.ts, diff.ts
     engine/                     conditions, resolve, navigation, validation, result
@@ -326,7 +342,7 @@ funnel-runtime/
     ui/                         Button, Pill, Panel, Ring, HalfDonut, Dialog, CommandPalette, Toast, …
     features/                   funnel, admin-shell, versions, dashboard, live
   scripts/                      generate-traffic.ts, verify.ts; demo-iteration2.ts (Фаза 7), screenshots.ts (Фаза 8)
-  e2e/                          Playwright smoke
+  e2e/                          Playwright smoke и axe (доступность)
   .claude/                      agents/reviewer.md, settings.json (хуки)
   .github/workflows/            ci.yml, verify-deploy.yml
   Dockerfile  railway.json  .env.example

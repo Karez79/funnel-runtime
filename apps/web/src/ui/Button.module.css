@@ -12,6 +12,7 @@
   letter-spacing: -0.005em;
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
   transition:
     transform 0.25s var(--spring),
     background 0.15s;

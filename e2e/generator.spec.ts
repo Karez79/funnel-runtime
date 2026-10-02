@@ -2,6 +2,7 @@
 // dashboard's Data quality panel says the numbers match its ground truth. The generator
 // uploads the ground truth itself, so this is the same path as on prod.
 import { generateTraffic } from '../scripts/lib/generator.ts';
+import { audit } from './axe.ts';
 import { E2E_ADMIN, E2E_BASE_URL, E2E_GENERATOR_KEY } from './env.ts';
 import { expect, test } from './fixtures.ts';
 
@@ -26,4 +27,15 @@ test('after the generator the dashboard matches its ground truth', async ({ page
   await expect(quality.getByRole('row', { name: /Matches generator ground truth/ })).toContainText(
     'Yes',
   );
+
+  // The dashboard full of data (deltas, source badges, the hot step, A/B numbers) passes
+  // axe too, on a desktop and on a phone; a11y.spec sees it almost empty.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload();
+  await expect(quality.getByRole('row', { name: /Matches generator ground truth/ })).toContainText(
+    'Yes',
+  );
+  await audit(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await audit(page);
 });
