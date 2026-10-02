@@ -156,8 +156,9 @@
 }
 
 .input {
-  /* Width is set inline from the number of digits shown (NumberStep.tsx). */
-  width: 3.2ch;
+  /* As wide as the digits shown (typed or placeholder), so the unit sits next to them. */
+  field-sizing: content;
+  min-width: 1ch;
   max-width: 100%;
   border: 0;
   padding: 0;
@@ -171,6 +172,13 @@
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   appearance: textfield;
+}
+
+/* Without field-sizing: width from the digit count NumberStep puts in --digits. */
+@supports not (field-sizing: content) {
+  .input {
+    width: calc(var(--digits, 3) * 1ch + 0.1em);
+  }
 }
 
 .input::placeholder {

@@ -456,13 +456,25 @@ test('every number step shows its lower bound as a placeholder next to the unit'
       await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
       const unit = page.locator('label', { has: field }).locator('span');
       await expect(unit).toBeVisible();
-      const [box, unitBox] = await Promise.all([field.boundingBox(), unit.boundingBox()]);
-      if (!box || !unitBox) throw new Error('no layout');
-      // Number and unit form one group: the unit starts right after the digits.
-      expect(unitBox.x - (box.x + box.width)).toBeLessThan(16);
+      const label = page.locator('label', { has: field });
+      const [box, unitBox, labelBox] = await Promise.all([
+        field.boundingBox(),
+        unit.boundingBox(),
+        label.boundingBox(),
+      ]);
+      if (!box || !unitBox || !labelBox) throw new Error('no layout');
+      // The field is as wide as its one-digit placeholder (52px digits), not a wide box…
+      expect(box.width).toBeLessThan(48);
+      // …so number and unit form one group centred in the field.
+      const groupCentre = (box.x + unitBox.x + unitBox.width) / 2;
+      expect(Math.abs(groupCentre - (labelBox.x + labelBox.width / 2))).toBeLessThan(2);
       // −/+ on an empty field start from the placeholder.
       await page.getByRole('button', { name: 'Increase' }).click();
       await expect(field).toHaveValue(String(Number(min) + 1));
+      // Typing replaces it like any value.
+      await field.fill('3');
+      await expect(field).toHaveValue('3');
+      await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
     } else if (await page.getByRole('radio', { name: 'Hybrid' }).count()) {
       await page.getByRole('radio', { name: 'Hybrid' }).click();
     } else if (await page.getByRole('radio').count()) {

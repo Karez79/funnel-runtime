@@ -6,7 +6,7 @@
 // −/+ on an empty field start from that number. On devices with a fine pointer the field
 // takes focus at once; on touch screens it does not, so no keyboard covers the question.
 import type { NumberStep as NumberQuestion } from '@funnel/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { IconButton } from '../../../ui/IconButton.tsx';
 import { StepError, StepHeader } from './StepHeader.tsx';
 import type { StepProps } from './types.ts';
@@ -32,9 +32,16 @@ export function NumberStep({ step, value, onChange, error }: StepProps<NumberQue
   const [text, setText] = useState(typeof value === 'number' ? String(value) : '');
   const placeholder = suggestion(min, max);
   const input = useRef<HTMLInputElement>(null);
+  // Focus moves from the step body (FunnelView) to the field: its name is the title and
+  // the helper text and range are its description, so a screen reader still hears both.
   useEffect(() => {
     if (window.matchMedia(FINE_POINTER).matches) input.current?.focus({ preventScroll: true });
   }, [step.id]);
+  // Fallback width for browsers without `field-sizing` (steps.module.css).
+  const digits = Math.max(1, (text || String(placeholder)).length);
+  useLayoutEffect(() => {
+    input.current?.style.setProperty('--digits', String(digits));
+  }, [digits]);
 
   function set(next: number) {
     const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, next));
@@ -49,10 +56,11 @@ export function NumberStep({ step, value, onChange, error }: StepProps<NumberQue
 
   const range = rangeText(min, max);
   const rangeId = `${step.id}-range`;
+  const helperId = `${step.id}-helper`;
   const errorId = `${step.id}-error`;
   return (
     <>
-      <StepHeader step={step} />
+      <StepHeader step={step} describedBy={helperId} />
       <div className={styles.number}>
         <IconButton
           icon="minus"
@@ -71,17 +79,16 @@ export function NumberStep({ step, value, onChange, error }: StepProps<NumberQue
             className={styles.input}
             value={text}
             placeholder={String(placeholder)}
-            // Chromium ignores field-sizing on number inputs, so the width follows the
-            // digits shown (typed or placeholder) and the unit stays right next to them.
-            style={{
-              width: `calc(${String(Math.max(1, (text || String(placeholder)).length))}ch + 0.1em)`,
-            }}
             min={min}
             max={max}
             step={increment}
             aria-label={step.content.title}
             aria-invalid={error !== null}
-            aria-describedby={[range && rangeId, error !== null && errorId]
+            aria-describedby={[
+              step.content.helperText && helperId,
+              range && rangeId,
+              error !== null && errorId,
+            ]
               .filter(Boolean)
               .join(' ')}
             onChange={(event) => {
