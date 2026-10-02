@@ -151,8 +151,9 @@ test.describe('on a 360px phone', () => {
     const { full, batch } = await stepViewedBatch(request);
     expect((await request.post('/api/events/batch', { data: batch })).ok()).toBe(true);
     await page.goto(`/admin/live?session=${full.id}`);
-    await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeVisible();
-    await inView('Stored');
+    // Stacked, a cell reads with its column label: "Status Stored".
+    await expect(page.getByRole('cell', { name: 'Status Stored' })).toBeVisible();
+    await inView('Status Stored');
     await inView('Open funnel', 'link');
 
     await page.goto('/admin/versions');

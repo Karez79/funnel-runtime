@@ -150,10 +150,10 @@
     text-align: left;
   }
 
-  /* Empty alt text: screen readers already get the column from the (hidden) header. */
+  /* Read out too: WebKit can drop table semantics under display: block, and then this
+     label is the only column name a screen reader gets. */
   .stack td[data-label]::before {
     content: attr(data-label);
-    content: attr(data-label) / '';
     text-align: left;
     flex: 0 0 84px;
     font-size: 11px;

@@ -127,6 +127,8 @@ describe('unknown routes and static web', () => {
         expect(res.statusCode, url).toBe(404);
         expect(res.headers['content-type'], url).toContain('application/json');
       }
+      // A dot alone does not make a file: a step id like plan.v2 is still a page.
+      expect((await t.app.inject({ method: 'GET', url: '/s/plan.v2' })).statusCode).toBe(200);
     } finally {
       rmSync(dist, { recursive: true, force: true });
     }

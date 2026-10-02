@@ -48,9 +48,13 @@ test('variant A, hybrid branch: to the result and the CTA', async ({ page }) => 
   await expect(page.getByText('What a week could look like')).toBeVisible();
   const cta = page.getByRole('button', { name: 'View the action list' });
   await expect(cta).toHaveAttribute('aria-expanded', 'false');
+  // The plan opens in place: the week labels appear over the recommendations.
+  await expect(page.getByText('Week 1', { exact: true })).toBeHidden();
   await cta.click();
   await expect(cta).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByRole('list', { name: '30-day plan' })).toBeVisible();
+  const plan = page.getByRole('list', { name: '30-day plan' });
+  await expect(plan).toBeVisible();
+  await expect(plan.getByText('Week 1', { exact: true })).toBeVisible();
 });
 
 test('the result follows the answers after Back and a changed answer', async ({ page }) => {

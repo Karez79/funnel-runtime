@@ -43,7 +43,7 @@ export function AdminLayout() {
           setPaletteOpen(false);
         }}
         commands={commands}
-        placeholder="Search sessions, versions or actions"
+        placeholder="Command or session id"
       />
     </div>
   );

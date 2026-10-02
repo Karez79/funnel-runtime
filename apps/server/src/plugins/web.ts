@@ -8,9 +8,10 @@ import { errorBody } from './errors.ts';
 import type { App } from './route.ts';
 
 const ADMIN_PAGE = /^\/admin(?:\/|$)/;
-// A last segment with an extension names a file (Vite chunks, favicon): if it is missing,
-// that is a 404, not the SPA page. App routes (/s/:stepId, /admin/...) have no dots.
-const FILE_PATH = /\.[a-z0-9]+$/i;
+// A path ending in a static-file extension (Vite chunks, fonts, favicon) names a file: if
+// it is missing, that is a 404, not the SPA page. Only known extensions, so a step id with
+// a dot (`/s/plan.v2`) still gets the page.
+const FILE_PATH = /\.(?:js|mjs|css|map|json|ico|png|jpe?g|gif|svg|webp|avif|woff2?|ttf|txt)$/i;
 
 /** The SPA router decodes paths, matches them case-insensitively and tolerates doubled slashes. */
 function isAdminPage(url: string): boolean {
