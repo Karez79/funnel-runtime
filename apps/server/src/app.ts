@@ -26,7 +26,7 @@ import { eventsRoutes } from './modules/events/routes.ts';
 import { createEventsService } from './modules/events/service.ts';
 import { createLiveBus, type LiveBus } from './modules/live/bus.ts';
 import { liveRoutes } from './modules/live/routes.ts';
-import { basicAuth } from './plugins/auth.ts';
+import { adminGuard } from './plugins/auth.ts';
 import { errorsPlugin } from './plugins/errors.ts';
 import type { App } from './plugins/route.ts';
 import { securityPlugin } from './plugins/security.ts';
@@ -35,8 +35,7 @@ import { webPlugin } from './plugins/web.ts';
 
 export type AppEnv = Pick<
   Env,
-  | 'adminUser'
-  | 'adminPassword'
+  | 'adminAuth'
   | 'generatorKey'
   | 'buildVersion'
   | 'logLevel'
@@ -88,7 +87,10 @@ export async function buildApp(
   errorsPlugin(app);
 
   await securityPlugin(app, env.generatorKey, env.clientIpHeader);
-  app.decorate('adminGuard', basicAuth(env.adminUser, env.adminPassword));
+  app.decorate('adminGuard', adminGuard(env.adminAuth));
+  if (env.adminAuth.mode === 'off') {
+    app.log.warn('ADMIN_AUTH=off: admin pages and admin APIs are open without a password');
+  }
 
   healthRoutes(app, createHealthService(createHealthRepo(db), env.buildVersion));
   const { versions, live } = shared;

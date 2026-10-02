@@ -52,7 +52,7 @@ flowchart LR
 | `retention` | очистка ответов истёкших сессий при старте и раз в час                                                                 |
 | `health`    | `GET /api/health`: версия сборки и проверка БД                                                                         |
 
-Плагины: `auth.ts` (Basic Auth с `timingSafeEqual`), `security.ts` (helmet с CSP `default-src 'self'`, rate limit), `errors.ts` (единый формат `{ error: { code, message } }`), `route.ts` (регистрация маршрута из контракта), `sse.ts`, `web.ts` (раздача `apps/web/dist` и SPA-fallback).
+Плагины: `auth.ts` (Basic Auth с `timingSafeEqual` или открытый доступ при `ADMIN_AUTH=off`), `security.ts` (helmet с CSP `default-src 'self'`, rate limit), `errors.ts` (единый формат `{ error: { code, message } }`), `route.ts` (регистрация маршрута из контракта), `sse.ts`, `web.ts` (раздача `apps/web/dist` и SPA-fallback).
 
 ### `apps/web` — React 19
 

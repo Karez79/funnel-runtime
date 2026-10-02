@@ -159,6 +159,38 @@ describe('unknown routes and static web', () => {
   });
 });
 
+describe('ADMIN_AUTH=off', () => {
+  it('opens admin APIs and admin pages without credentials', async () => {
+    const dist = mkdtempSync(join(tmpdir(), 'funnel-web-'));
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>funnel</title>');
+    try {
+      t = await createTestApp({ env: { adminAuth: { mode: 'off' }, webDist: dist } });
+      for (const url of [
+        '/api/admin/schema',
+        '/api/admin/versions',
+        '/api/admin/versions/active',
+        '/api/admin/versions/2/preview?variant=B',
+        '/api/analytics/filters',
+        '/api/analytics/summary',
+        '/admin',
+        '/admin/versions',
+      ]) {
+        const res = await t.app.inject({ method: 'GET', url });
+        expect(res.statusCode, url).toBe(200);
+      }
+      // Credentials a script still sends are simply ignored.
+      const withCreds = await t.app.inject({
+        method: 'POST',
+        url: '/api/admin/versions/2/publish',
+        headers: { authorization: 'Basic d3Jvbmc6d3Jvbmc=' },
+      });
+      expect(withCreds.statusCode).toBe(200);
+    } finally {
+      rmSync(dist, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('contract routes', () => {
   const probe = {
     method: 'POST',
@@ -242,11 +274,22 @@ describe('contract routes', () => {
 describe('loadEnv', () => {
   it('uses local defaults outside production', () => {
     const env = loadEnv({});
-    expect(env).toMatchObject({ port: 3000, adminUser: 'admin', buildVersion: 'dev' });
+    expect(env).toMatchObject({ port: 3000, buildVersion: 'dev' });
   });
 
   it('refuses to start in production without secrets', () => {
     expect(() => loadEnv({ NODE_ENV: 'production' })).toThrow(/ADMIN_USER/);
+  });
+
+  it('keeps Basic Auth on by default and opens the admin only with ADMIN_AUTH=off', () => {
+    expect(loadEnv({}).adminAuth).toEqual({ mode: 'basic', user: 'admin', password: 'admin' });
+    expect(
+      loadEnv({ ADMIN_AUTH: 'basic', ADMIN_USER: 'u', ADMIN_PASSWORD: 'p' }).adminAuth,
+    ).toEqual({ mode: 'basic', user: 'u', password: 'p' });
+    // Production needs no admin credentials when the admin is deliberately open.
+    const open = loadEnv({ NODE_ENV: 'production', ADMIN_AUTH: 'off', GENERATOR_KEY: 'k' });
+    expect(open.adminAuth).toEqual({ mode: 'off' });
+    expect(() => loadEnv({ ADMIN_AUTH: 'none' })).toThrow(/ADMIN_AUTH/);
   });
 
   it('reads the client IP from X-Real-IP in production only, unless configured', () => {

@@ -1,9 +1,12 @@
-// Basic Auth for admin routes (CLAUDE.md 6). Credentials are compared in constant time.
+// Admin guard (CLAUDE.md 6): Basic Auth with constant-time comparison, or no guard at all
+// when ADMIN_AUTH=off opens the admin for review (docs/DECISIONS.md). The switch lives in
+// one place, so admin routes, the SSE stream and the /admin page change together.
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Env } from '../env.ts';
 import { sameSecret as same } from '../secrets.ts';
 import { errorBody } from './errors.ts';
 
-export function basicAuth(user: string, password: string) {
+function basicAuth(user: string, password: string) {
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const header = req.headers.authorization ?? '';
     const [scheme, encoded] = header.split(' ');
@@ -17,4 +20,14 @@ export function basicAuth(user: string, password: string) {
       .header('www-authenticate', 'Basic realm="funnel-admin", charset="UTF-8"')
       .send(errorBody('unauthorized', 'Admin credentials required'));
   };
+}
+
+type Guard = (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+const open: Guard = async () => {
+  // Nothing to check: ADMIN_AUTH=off lets every request through.
+};
+
+export function adminGuard(auth: Env['adminAuth']): Guard {
+  return auth.mode === 'off' ? open : basicAuth(auth.user, auth.password);
 }

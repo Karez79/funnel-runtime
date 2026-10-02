@@ -8,7 +8,7 @@
 flowchart LR
   user[Браузер: воронка] -->|"POST /api/sessions, PUT state, complete"| api
   user -->|"POST /api/events/batch"| api
-  admin[Браузер: админка] -->|"Basic Auth: versions, analytics, SSE /api/live"| api
+  admin[Браузер: админка] -->|"versions, analytics, SSE /api/live (ADMIN_AUTH)"| api
   gen[scripts: generate, verify] -->|HTTP по контракту| api
   subgraph server[apps/server · Fastify]
     api[routes] --> svc[service] --> repo[repo] --> db[(SQLite)]
@@ -75,4 +75,4 @@ flowchart LR
 7. **Можно ли создать сессию на черновике ради предпросмотра?** Нет. `GET /api/admin/versions/:v/preview` отдаёт резолвнутый конфиг, фронтенд проходит его в памяти, без строк в `sessions` и `events`.
 8. **Как работает `?variant=B`?** Override действует только при создании сессии: `variant_source='override'`, `traffic_type='qa'`. QA-сессии скрыты в дашборде, пока не включён «Include QA sessions».
 9. **Почему A/B не сравнивается между версиями?** У каждой версии свой `experiment.id`. Версии сравниваются отдельной панелью Versions compared. Значимость: интервал Уилсона и z-test в `stats.ts`; при p ≥ 0.05 вердикт не объявляет победителя.
-10. **Как защищены API?** Админка, аналитика и `/api/live` — Basic Auth с `timingSafeEqual`. Rate limit на IP: 30 созданий сессий и 120 пачек событий в минуту (по умолчанию, `env.ts`). Лимит пачки — 100 событий и 256 КБ, состояния сессии — 64 КБ. CSP `default-src 'self'`, внешних сервисов нет.
+10. **Как защищены API?** Админка, аналитика и `/api/live` закрываются Basic Auth с `timingSafeEqual` (`ADMIN_AUTH=basic`, по умолчанию). На демо-стенде по решению автора стоит `ADMIN_AUTH=off`: админка открыта, чтобы проверяющим не нужен был пароль; переключение — одна переменная Railway, без передеплоя кода. Rate limit на IP: 30 созданий сессий и 120 пачек событий в минуту (по умолчанию, `env.ts`). Лимит пачки — 100 событий и 256 КБ, состояния сессии — 64 КБ. CSP `default-src 'self'`, внешних сервисов нет.
