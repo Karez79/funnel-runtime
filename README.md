@@ -8,7 +8,19 @@
 
 Демо-доступ к админке (Basic Auth): `admin` / `demo-875b44c4`
 
-<!-- Скриншоты: docs/images/*, появятся в Фазе 8 (pnpm screenshots) -->
+![Дашборд: KPI, Funnel journey, качество данных, A/B](docs/images/dashboard.png)
+
+<p align="center">
+  <img src="docs/images/funnel-question-390.png" width="300" alt="Вопрос воронки на мобильном (390px)">
+  &nbsp;&nbsp;
+  <img src="docs/images/funnel-result-390.png" width="300" alt="Результат воронки на мобильном (390px)">
+</p>
+
+<p align="center">
+  <img src="docs/images/funnel-walkthrough.webp" width="300" alt="Прохождение воронки: ответ, Continue, результат">
+</p>
+
+Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора; нужен `ffmpeg` с кодеком `libwebp_anim`); остальные скриншоты — в [`docs/images/`](docs/images/). Diff на скриншоте Versions — демонстрационный черновик, собранный из v2, а не настоящий v3.
 
 ## Проверить за 5 минут
 
@@ -213,7 +225,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | `pnpm generate`        | генератор синтетического трафика                                |
 | `pnpm verify`          | сверка аналитики с ground truth                                 |
 | `pnpm demo:iteration2` | сценарий второй итерации (Фаза 7)                               |
-| `pnpm screenshots`     | скриншоты и анимация для README (Фаза 8)                        |
+| `pnpm screenshots`     | скриншоты и анимация для README (нужен `ffmpeg`)                |
 
 </details>
 
