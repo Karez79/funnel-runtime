@@ -74,6 +74,7 @@
   font-weight: 600;
   display: grid;
   place-items: center;
+
   /* Dark text: white on --a / --b is below AA at this size (2.7:1). */
   color: var(--ink);
   background: var(--a);
