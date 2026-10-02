@@ -4,11 +4,12 @@
 // server during the run (a session, a beacon sent twice, a broken event): the checks
 // count only the generator's own rows, so the visitor changes nothing they compare.
 import { afterEach, describe, expect, it } from 'vitest';
-import { contract, type GroundTruth } from '@funnel/shared';
+import { contract, DomainError, type GroundTruth } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { systemClock } from '../apps/server/src/clock.ts';
 import { createTestApp, TEST_ENV, type TestApp } from '../apps/server/src/test/harness.ts';
 import { generateTraffic } from './lib/generator.ts';
+import { secretHint } from './lib/env.ts';
 import { createClient } from './lib/http.ts';
 import { verifyGroundTruth } from './lib/verify.ts';
 
@@ -118,5 +119,19 @@ describe('pnpm verify after pnpm generate --publish-next', () => {
     expect(v1?.differences).toContain(
       `kpis.all.clickedCta: expected ${String(first.expected.kpis.all.clickedCta)}, got ${String(first.expected.kpis.all.clickedCta - 1)}`,
     );
+  });
+
+  it('names the variables to export when the server refuses the admin credentials', async () => {
+    t = await createTestApp({ clock: systemClock });
+    const baseUrl = await t.app.listen({ host: '127.0.0.1', port: 0 });
+    const call = createClient({ baseUrl, admin: { user: 'admin', password: 'wrong' } });
+    const error = await call('analyticsSummary', { query: {} }).catch((e: unknown) => e);
+    expect(secretHint(error)).toBe(
+      "GET /api/analytics/summary: Admin credentials required. Export ADMIN_USER and ADMIN_PASSWORD with the server's values.",
+    );
+    expect(secretHint(new DomainError('forbidden', 'POST /api/sessions: no'))).toBe(
+      "POST /api/sessions: no. Export GENERATOR_KEY with the server's value.",
+    );
+    expect(secretHint(new Error('network down'))).toBeUndefined();
   });
 });

@@ -9,7 +9,7 @@ import { parseArgs } from 'node:util';
 import type { AnalyticsSummary } from '@funnel/shared';
 import { z } from 'zod';
 import { generateTraffic, MIN_SESSIONS } from './lib/generator.ts';
-import { cliEnv } from './lib/env.ts';
+import { cliEnv, exitOnRefusedSecret } from './lib/env.ts';
 
 const { values } = parseArgs({
   options: {
@@ -39,7 +39,7 @@ const result = await generateTraffic({
   generatorKey: env.generatorKey,
   admin: env.admin,
   log: write,
-});
+}).catch(exitOnRefusedSecret);
 
 mkdirSync(dirname(values.out), { recursive: true });
 writeFileSync(values.out, `${JSON.stringify(result.truth, null, 2)}\n`);
