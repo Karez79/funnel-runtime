@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { systemClock } from '../apps/server/src/clock.ts';
-import { createTestApp, TEST_ENV, type TestApp } from '../apps/server/src/test/harness.ts';
+import {
+  configJson,
+  createTestApp,
+  TEST_ENV,
+  type TestApp,
+} from '../apps/server/src/test/harness.ts';
 import { generateTraffic, MIN_SESSIONS } from './lib/generator.ts';
+import { createClient } from './lib/http.ts';
 
 let t: TestApp | undefined;
 afterEach(async () => {
@@ -105,5 +111,30 @@ describe('pnpm generate', () => {
       'v1 · variant B',
     ]);
     expect(run.upload.matches).toBe(true);
+  });
+
+  it('sends recommendation_expanded only from sessions whose version lists it (v3)', async () => {
+    const baseUrl = await server();
+    const admin = createClient({ baseUrl, ...secrets });
+    await admin('publishVersion', { params: { v: 2 }, body: {} });
+    await admin('uploadVersion', { query: {}, body: configJson('funnel-v3.json') });
+    const run = await generateTraffic({
+      baseUrl,
+      sessions: 100,
+      seed: 3,
+      publishNext: true,
+      ...secrets,
+    });
+    expect(run.published).toBe(3);
+    const other = (name: string) =>
+      run.truth.checks.find((c) => c.name === name)?.expected.otherEvents;
+    expect(other('v2')).toEqual([]);
+    const [expanded] = other('v3') ?? [];
+    expect(expanded?.name).toBe('recommendation_expanded');
+    expect(expanded?.sessions).toBeGreaterThan(0);
+    // Sent right after every CTA click of a v3 session: one per clicking session.
+    expect(expanded?.shareOfCta).toBe(1);
+    expect(run.delivery.surprises).toEqual([]);
+    expect(run.upload).toEqual({ matches: true, differences: [] });
   });
 });
