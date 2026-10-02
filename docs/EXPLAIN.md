@@ -44,8 +44,9 @@ flowchart LR
 2. Состояние уходит в `PUT /api/sessions/:id/state` с `baseRev`. Сервер (`modules/sessions/service.ts`, `saveState`) повторяет проверку по закреплённой версии. Если `baseRev` устарел, ответ 409 с серверным состоянием. Сырые ответы хранятся только в `sessions.state_json`.
 3. `transitionEvents` в `funnelReducer.ts` формирует `answer_submitted` (только `answer_kind`, без значения) и `step_completed`. Трекер из `tracking.ts` пропускает событие, только если оно есть в каталоге версии сессии. Очередь `eventQueue.ts` кладёт его в outbox в `localStorage` с `event_id` (uuid v7) и `client_seq`.
 4. Очередь шлёт пачку каждые 2 с или при 10 событиях, при скрытии вкладки — через `sendBeacon`. При сети или 5xx повторяет с задержкой 1, 2, 4… до 30 с с тем же `event_id`.
-5. `modules/events/service.ts` проверяет каждое событие отдельно, берёт версию, вариант и UTM из строки сессии, отбрасывает свойства вне whitelist и вставляет пачку одной транзакцией с `onConflictDoNothing`. Итог виден в Live events.
-6. `GET /api/analytics/summary`: `modules/analytics/service.ts` выбирает сессии и события по фильтрам и вызывает `aggregate` из `shared`. Тот же `aggregate` считает ground truth генератора по его журналу намерений.
+5. `modules/events/service.ts` проверяет каждое событие отдельно, берёт версию, вариант и UTM из строки сессии и отбрасывает свойства вне whitelist; `modules/events/repo.ts` вставляет пачку одной транзакцией с `onConflictDoNothing`, и `changes === 0` означает `duplicate`. Итог виден в Live events.
+6. На последнем шаге `POST /api/sessions/:id/complete`: сервер (`complete` в `sessions/service.ts`) заново проверяет, что весь видимый путь отвечен, и сам считает результат `computeResult` по закреплённой версии. Клиент вызывает ту же функцию только для мгновенной отрисовки, подменить результат сессии он не может.
+7. `GET /api/analytics/summary`: `modules/analytics/service.ts` выбирает сессии и события по фильтрам и вызывает `aggregate` из `shared`. Тот же `aggregate` считает ground truth генератора по его журналу намерений.
 
 ## Почему SQLite
 
@@ -70,7 +71,7 @@ flowchart LR
 3. **Как считается отвал, если пользователь нажал Back?** По `furthestIndex` — самой дальней позиции в `stepSequence`, а не по последнему событию. Повторный просмотр шага не увеличивает reached.
 4. **Почему живой пользователь не считается отвалившимся?** Сессия `live` без результата с активностью меньше 30 минут назад (`IN_PROGRESS_WINDOW_MS`) — In progress. Синтетика и QA этот порог не ждут.
 5. **Где гарантия, что ответы не утекают в аналитику?** В событии есть только `answer_kind`. Свойства фильтруются по whitelist каталога, лишние ключи отбрасываются в `flags_json.dropped_props`. Ответы истёкших сессий очищает `modules/retention` при старте и раз в час.
-6. **Как проверить, что дашборд считает правильно?** `pnpm generate` пишет ground truth той же функцией `aggregate`, но по своему журналу, а `pnpm verify` сверяет его с API. Дашборд показывает «Matches generator ground truth».
+6. **Как проверить, что дашборд считает правильно?** `pnpm generate` пишет ground truth той же функцией `aggregate`, но по своему журналу, а `pnpm verify` сверяет его с API. Генератор загружает ground truth на сервер (`PUT /api/admin/ground-truth`), и дашборд показывает «Matches generator ground truth». Проверки считают только трафик генератора (фильтр `traffic=generator`, строки с его ключом), поэтому настоящие посетители во время прогона сверку не ломают.
 7. **Можно ли создать сессию на черновике ради предпросмотра?** Нет. `GET /api/admin/versions/:v/preview` отдаёт резолвнутый конфиг, фронтенд проходит его в памяти, без строк в `sessions` и `events`.
 8. **Как работает `?variant=B`?** Override действует только при создании сессии: `variant_source='override'`, `traffic_type='qa'`. QA-сессии скрыты в дашборде, пока не включён «Include QA sessions».
 9. **Почему A/B не сравнивается между версиями?** У каждой версии свой `experiment.id`. Версии сравниваются отдельной панелью Versions compared. Значимость: интервал Уилсона и z-test в `stats.ts`; при p ≥ 0.05 вердикт не объявляет победителя.
