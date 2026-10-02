@@ -100,6 +100,7 @@ export {
 } from './api/domain.ts';
 
 export { aggregate, IN_PROGRESS_WINDOW_MS } from './analytics/aggregate.ts';
+export { isSignificant } from './analytics/stats.ts';
 export type {
   AggregateInput,
   AnalyticsEvent,
