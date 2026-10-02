@@ -2,33 +2,19 @@
 // result, the admin pages, the confirmation dialog and the command palette against WCAG 2.x
 // A/AA. Serious and critical violations fail the test; no rule is disabled. Reduced motion
 // is on so contrast is measured on settled screens, not mid-transition.
-import { AxeBuilder } from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
+import { z } from 'zod';
+import { audit } from './axe.ts';
 import { expect, test } from './fixtures.ts';
-
-const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-
-async function audit(page: Page, include?: string) {
-  const builder = new AxeBuilder({ page }).withTags(WCAG);
-  if (include !== undefined) builder.include(include);
-  const { violations } = await builder.analyze();
-  const blocking = violations
-    .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-    .map((v) => ({
-      rule: v.id,
-      impact: v.impact,
-      help: v.help,
-      nodes: v.nodes.map(
-        (node) => `${node.target.join(' ')}: ${node.html} ${node.failureSummary ?? ''}`,
-      ),
-    }));
-  expect(blocking).toEqual([]);
-}
 
 async function next(page: Page, path: RegExp) {
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page).toHaveURL(path);
 }
+
+const VersionList = z.object({
+  versions: z.array(z.object({ version: z.number(), state: z.enum(['draft', 'published']) })),
+});
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -100,16 +86,26 @@ test('admin dashboard, journey popover and table pass axe', async ({ page, reque
   await audit(page);
 });
 
-test('versions page and the publish dialog pass axe', async ({ page }) => {
+test('versions page and a confirmation dialog pass axe', async ({ page, request }) => {
   await page.goto('/admin/versions');
   await expect(page.getByRole('heading', { name: 'Versions', exact: true })).toBeVisible();
   await audit(page);
-  // The seed leaves v2 as a draft; this spec runs before admin.spec publishes it.
-  await page.getByRole('button', { name: 'Publish version 2' }).click();
-  await expect(page.getByRole('dialog', { name: 'Publish version 2?' })).toBeVisible();
+  // Whatever state earlier specs left: a draft opens "Publish version N?", otherwise a
+  // published version that is not active opens "Activate…?" or "Roll back to…?".
+  const res = await request.get('/api/admin/versions');
+  expect(res.ok()).toBe(true);
+  const { versions } = VersionList.parse(await res.json());
+  const draft = versions.find((v) => v.state === 'draft');
+  const action =
+    draft === undefined
+      ? page.getByRole('button', { name: /^(Activate|Roll back to) version \d+$/ }).first()
+      : page.getByRole('button', { name: `Publish version ${String(draft.version)}` });
+  await action.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
   await audit(page);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Publish version 2?' })).toBeHidden();
+  await expect(dialog).toBeHidden();
 });
 
 test('live events and the command palette pass axe', async ({ page }) => {
