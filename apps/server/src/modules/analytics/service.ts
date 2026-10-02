@@ -2,8 +2,16 @@
 // and hands them to the shared `aggregate`, the one definition of every metric that the
 // generator's ground truth and `verify` use as well. Version and variant of each event
 // come from its session row (the repo joins on it), never from the event.
+// "Matches generator ground truth" recomputes every check of the newest uploaded ground
+// truth from the database and compares it with the shared `compareSummaries`, the same
+// comparison `pnpm verify` makes, so the line means the same on prod and locally.
 import {
   aggregate,
+  AnalyticsFiltersSchema,
+  compareSummaries,
+  DomainError,
+  GroundTruthSchema,
+  type GroundTruth,
   REJECT_REASONS,
   resolveFunnel,
   type AnalyticsFilters,
@@ -24,6 +32,11 @@ const Flags = z.looseObject({
 });
 const Props = z.record(z.string(), z.unknown());
 const Reason = z.enum(REJECT_REASONS);
+/** A stored upload that no longer parses reads as "nothing uploaded". */
+const StoredTruth = GroundTruthSchema.optional();
+/** The upload answer lists at most this many differences; verify prints them all. */
+const MAX_DIFFERENCES = 100;
+const MINUTE = 60_000;
 
 /** Stored JSON is written by ingest; a malformed value reads as empty, not as a 500. */
 function parseJson<T>(schema: z.ZodType<T>, json: string, fallback: T): T {
@@ -56,59 +69,109 @@ export function createAnalyticsService(
     return funnel;
   }
 
+  function filters() {
+    const list = versions.published();
+    const funnelId = list[0]?.funnelId;
+    return {
+      versions: list.map((v) => ({ version: v.version, active: v.active })),
+      campaigns: funnelId === undefined ? [] : repo.utmValues(funnelId, 'utmCampaign'),
+      sources: funnelId === undefined ? [] : repo.utmValues(funnelId, 'utmSource'),
+    };
+  }
+
+  function compute(filters: AnalyticsFilters): AnalyticsSummary {
+    const list = versions.published();
+    const funnelId = list[0]?.funnelId ?? '';
+    const analyticsVersions: AnalyticsVersion[] = list.map((v) => ({
+      version: v.version,
+      active: v.active,
+      funnels: { A: resolve(funnelId, v.version, 'A'), B: resolve(funnelId, v.version, 'B') },
+    }));
+    const ingestScope = {
+      from: utc(filters.from),
+      to: utc(filters.to),
+      generatedOnly: filters.traffic === 'generator',
+    };
+    const scope = {
+      funnelId,
+      includeQa: filters.includeQa,
+      campaign: filters.campaign,
+      ...ingestScope,
+    };
+    const ingest: IngestQuality = {
+      duplicates: repo.duplicates(ingestScope),
+      rejected: repo.rejectedByReason(ingestScope).flatMap(({ reason, count }) => {
+        const known = Reason.safeParse(reason);
+        return known.success ? [{ reason: known.data, count }] : [];
+      }),
+    };
+    return aggregate({
+      sessions: repo.sessions(scope),
+      events: repo.events(scope).map((row) => {
+        const flags = parseJson(Flags, row.flagsJson, {});
+        return {
+          eventId: row.eventId,
+          sessionId: row.sessionId,
+          name: row.name,
+          stepId: row.stepId,
+          serverTs: row.serverTs,
+          properties: parseJson(Props, row.propsJson, {}),
+          outOfOrder: flags.out_of_order === true,
+          contextMismatch: flags.context_mismatch === true,
+        };
+      }),
+      versions: analyticsVersions,
+      ingest,
+      filters,
+      now: clock.now(),
+    });
+  }
+
+  /** Differences per check, prefixed with the check's name; empty when all match. */
+  function compareWith(truth: GroundTruth): string[] {
+    return truth.checks.flatMap((check) => {
+      try {
+        // GroundTruthSchema has already checked that the query is valid filters.
+        const filters = AnalyticsFiltersSchema.parse(check.query);
+        return compareSummaries(check.expected, compute(filters)).map(
+          (line) => `${check.name}: ${line}`,
+        );
+      } catch (error) {
+        // A version of the run that the server does not have is a mismatch, not a 500.
+        if (error instanceof DomainError) return [`${check.name}: ${error.message}`];
+        throw error;
+      }
+    });
+  }
+
+  // Recomputing every check costs one aggregate per check, so the answer is kept until
+  // the data, the stored ground truth or the minute changes (the minute: "in progress"
+  // of live sessions depends on time alone).
+  let cached: { key: string; matches: boolean | null } | undefined;
+  function matchesStored(): boolean | null {
+    const key = `${repo.fingerprint()}@${String(Math.floor(clock.now().getTime() / MINUTE))}`;
+    if (cached?.key === key) return cached.matches;
+    const json = repo.latestGroundTruth();
+    const truth = json === undefined ? undefined : parseJson(StoredTruth, json, undefined);
+    const matches = truth === undefined ? null : compareWith(truth).length === 0;
+    cached = { key, matches };
+    return matches;
+  }
+
   return {
-    filters() {
-      const list = versions.published();
-      const funnelId = list[0]?.funnelId;
-      return {
-        versions: list.map((v) => ({ version: v.version, active: v.active })),
-        campaigns: funnelId === undefined ? [] : repo.utmValues(funnelId, 'utmCampaign'),
-        sources: funnelId === undefined ? [] : repo.utmValues(funnelId, 'utmSource'),
-      };
+    filters,
+
+    summary(query: AnalyticsFilters): AnalyticsSummary {
+      return { ...compute(query), groundTruthMatches: matchesStored() };
     },
 
-    summary(filters: AnalyticsFilters): AnalyticsSummary {
-      const list = versions.published();
-      const funnelId = list[0]?.funnelId ?? '';
-      const analyticsVersions: AnalyticsVersion[] = list.map((v) => ({
-        version: v.version,
-        active: v.active,
-        funnels: { A: resolve(funnelId, v.version, 'A'), B: resolve(funnelId, v.version, 'B') },
-      }));
-      const period = { from: utc(filters.from), to: utc(filters.to) };
-      const scope = {
-        funnelId,
-        includeQa: filters.includeQa,
-        campaign: filters.campaign,
-        ...period,
+    uploadGroundTruth(truth: GroundTruth) {
+      repo.saveGroundTruth(JSON.stringify(truth), clock.now().toISOString());
+      const differences = compareWith(truth);
+      return {
+        matches: differences.length === 0,
+        differences: differences.slice(0, MAX_DIFFERENCES),
       };
-      const ingest: IngestQuality = {
-        duplicates: repo.duplicates(period),
-        rejected: repo.rejectedByReason(period).flatMap(({ reason, count }) => {
-          const known = Reason.safeParse(reason);
-          return known.success ? [{ reason: known.data, count }] : [];
-        }),
-      };
-      return aggregate({
-        sessions: repo.sessions(scope),
-        events: repo.events(scope).map((row) => {
-          const flags = parseJson(Flags, row.flagsJson, {});
-          return {
-            eventId: row.eventId,
-            sessionId: row.sessionId,
-            name: row.name,
-            stepId: row.stepId,
-            serverTs: row.serverTs,
-            properties: parseJson(Props, row.propsJson, {}),
-            outOfOrder: flags.out_of_order === true,
-            contextMismatch: flags.context_mismatch === true,
-          };
-        }),
-        versions: analyticsVersions,
-        ingest,
-        filters,
-        now: clock.now(),
-      });
     },
   };
 }

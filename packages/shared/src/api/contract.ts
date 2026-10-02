@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { ErrorCode } from './errors.ts';
 import { ACTIVATION_ACTIONS, VARIANT_SOURCES, VERSION_STATES } from './domain.ts';
+import { GroundTruthSchema } from '../analytics/groundTruth.ts';
 import { AnalyticsFiltersSchema, AnalyticsSummarySchema } from '../analytics/summary.ts';
 import { ConfigChangeSchema } from '../config/diff.ts';
 import { LintReportSchema } from '../config/lint.ts';
@@ -75,6 +76,8 @@ const SessionSchema = z.object({
   state: SessionStateSchema,
   stateRev: z.number().int().nonnegative(),
   resultId: z.string().nullable(),
+  /** Server time of creation; the generator's ground truth window starts here (9.1). */
+  createdAt: Timestamp,
   expiresAt: Timestamp,
 });
 
@@ -84,7 +87,7 @@ export type SessionResponse = z.infer<typeof SessionResponse>;
 const SessionParams = z.object({ id: z.string().min(1).max(100) });
 
 /** `error.details` of a 409 on saveState: the server's state, which the client adopts. */
-export const StateConflictDetailsSchema = z.object({
+const StateConflictDetailsSchema = z.object({
   state: SessionStateSchema,
   stateRev: z.number().int().nonnegative(),
 });
@@ -324,6 +327,18 @@ export const contract = {
     auth: 'admin',
     query: AnalyticsFiltersSchema,
     response: AnalyticsSummarySchema,
+  },
+  /**
+   * Stores the generator's ground truth (9.1); `groundTruthMatches` of the summary then
+   * compares it with the server's own numbers. The answer is that comparison right away.
+   */
+  uploadGroundTruth: {
+    method: 'PUT',
+    path: '/api/admin/ground-truth',
+    auth: 'admin',
+    bodyLimit: 1024 * KB,
+    body: GroundTruthSchema,
+    response: z.object({ matches: z.boolean(), differences: z.array(z.string()) }),
   },
 } as const satisfies Record<string, RouteDef>;
 

@@ -78,7 +78,7 @@ const StepContent = z.looseObject({
 });
 
 const Option = z.looseObject({ value: z.string().min(1), label: z.string() });
-export type Option = z.infer<typeof Option>;
+type Option = z.infer<typeof Option>;
 
 const Validation = z.looseObject({
   required: z.boolean().optional(),
