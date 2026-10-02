@@ -1,6 +1,8 @@
 // Details popover anchored to the element that opened it (CLAUDE.md 10.1): Popover API
 // for the top layer and light dismiss, CSS anchor positioning to sit under the anchor.
-// Without anchor positioning the position is computed once from getBoundingClientRect.
+// Without anchor positioning the position comes from getBoundingClientRect and is
+// recomputed on every scroll (of any scroller, hence capture) and resize, so the popover
+// stays with its node instead of floating where it was opened.
 import { useEffect, useEffectEvent, useRef, type ReactNode } from 'react';
 import styles from './Popover.module.css';
 
@@ -29,15 +31,26 @@ export function Popover({
       return;
     }
     anchor.style.setProperty('anchor-name', ANCHOR);
-    if (!CSS.supports('anchor-name', ANCHOR)) {
+    const fallback = !CSS.supports('anchor-name', ANCHOR);
+    const place = () => {
       const rect = anchor.getBoundingClientRect();
-      el.style.position = 'fixed';
       el.style.left = `${String(Math.max(8, Math.min(rect.left, window.innerWidth - 296)))}px`;
-      el.style.top = `${String(rect.bottom + 8)}px`;
+      // The 8px gap under the anchor is the stylesheet's margin-top, in both branches.
+      el.style.top = `${String(rect.bottom)}px`;
+    };
+    if (fallback) {
+      el.style.position = 'fixed';
+      place();
+      window.addEventListener('scroll', place, { capture: true, passive: true });
+      window.addEventListener('resize', place);
     }
     if (!el.matches(':popover-open')) el.showPopover();
     return () => {
       anchor.style.removeProperty('anchor-name');
+      if (fallback) {
+        window.removeEventListener('scroll', place, { capture: true });
+        window.removeEventListener('resize', place);
+      }
     };
   }, [anchor]);
 

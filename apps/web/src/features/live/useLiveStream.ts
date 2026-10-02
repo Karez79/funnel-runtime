@@ -3,20 +3,12 @@
 // rows are identified by the server's `seq`, so the replay merges away while repeated
 // results of one event stay separate rows. Pausing keeps receiving into a buffer (merged
 // the same way), and resuming shows what arrived meanwhile.
-import { LIVE_STREAM, LiveEntrySchema, type LiveEntry } from '@funnel/shared';
+import { LIVE_STREAM, type LiveEntry } from '@funnel/shared';
 import { useEffect, useRef, useState } from 'react';
+import { parseLiveEntry } from '../../lib/liveEntry.ts';
 import { mergeRows } from './rows.ts';
 
 export type Connection = 'connecting' | 'open' | 'reconnecting';
-
-function parse(data: string): LiveEntry | null {
-  try {
-    const parsed = LiveEntrySchema.safeParse(JSON.parse(data));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
 
 export function useLiveStream() {
   const [rows, setRows] = useState<LiveEntry[]>([]);
@@ -44,7 +36,7 @@ export function useLiveStream() {
       setConnection('reconnecting');
     };
     source.onmessage = (message: MessageEvent<string>) => {
-      const entry = parse(message.data);
+      const entry = parseLiveEntry(message.data);
       if (!entry) return;
       if (pausedRef.current) setBuffer((b) => mergeRows(b, [entry]));
       else setRows((current) => mergeRows(current, [entry]));
