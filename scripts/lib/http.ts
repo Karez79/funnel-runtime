@@ -1,7 +1,7 @@
 // HTTP client of the generator and `verify` (CLAUDE.md 9.1): every call goes through a
 // route of the shared contract, so the scripts test the real API with the same paths and
-// schemas the server registers. Admin routes get Basic Auth; the generator key goes with
-// every call (synthetic traffic, rate-limit exemption, the ground-truth upload). Each answer also carries the server's
+// schemas the server registers. Admin routes get Basic Auth; the generator key goes
+// with every call (synthetic traffic, rate-limit exemption, the ground-truth upload). Each answer also carries the server's
 // `Date` header: the ground truth's time window is taken from the server's clock, not
 // from the machine that runs the generator.
 import {
