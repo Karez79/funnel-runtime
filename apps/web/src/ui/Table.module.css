@@ -110,6 +110,57 @@
   text-align: right;
 }
 
+.tbl .wrap {
+  white-space: normal;
+  min-width: 120px;
+}
+
+/* Stacked rows of a `stack` table in a narrow panel (Table.tsx). */
+.stack {
+  container: tbl / inline-size;
+}
+
+@container tbl (width <= 560px) {
+  .stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .stack table,
+  .stack tbody,
+  .stack tr {
+    display: block;
+  }
+
+  .stack tbody tr {
+    padding: 10px 4px;
+    border-top: 1px solid color-mix(in oklch, var(--line) 70%, var(--card));
+  }
+
+  .stack .tbl td {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 3px 0;
+    border-top: 0;
+    white-space: normal;
+    text-align: left;
+  }
+
+  /* Empty alt text: screen readers already get the column from the (hidden) header. */
+  .stack td[data-label]::before {
+    content: attr(data-label);
+    content: attr(data-label) / '';
+    text-align: left;
+    flex: 0 0 84px;
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+}
+
 .mono {
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);

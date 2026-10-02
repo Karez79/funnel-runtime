@@ -99,7 +99,7 @@ export function LiveEventsPage() {
               : 'No events match these filters.'}
           </p>
         ) : (
-          <Table label="Incoming events, newest first">
+          <Table label="Incoming events, newest first" stack>
             <thead>
               <tr>
                 <Th>Received</Th>
@@ -114,21 +114,21 @@ export function LiveEventsPage() {
             <tbody className={styles.stream}>
               {shown.map((r) => (
                 <tr key={r.seq}>
-                  <Td>
+                  <Td label="Received">
                     <Mono>{formatTime(r.receivedAt)}</Mono>
                   </Td>
-                  <Td>
+                  <Td label="Session">
                     <Mono>
                       <span title={r.sessionId ?? undefined}>{r.sessionId?.slice(-8) ?? '–'}</span>
                     </Mono>
                   </Td>
-                  <Td>{r.name ?? '–'}</Td>
-                  <Td>{r.stepId ?? '–'}</Td>
-                  <Td>{r.version ?? '–'}</Td>
-                  <Td>
+                  <Td label="Event">{r.name ?? '–'}</Td>
+                  <Td label="Step">{r.stepId ?? '–'}</Td>
+                  <Td label="Version">{r.version ?? '–'}</Td>
+                  <Td label="Variant">
                     <VariantText variant={r.variant} />
                   </Td>
-                  <Td>
+                  <Td label="Status">
                     <Status row={r} />
                   </Td>
                 </tr>

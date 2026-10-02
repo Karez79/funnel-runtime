@@ -8,6 +8,9 @@ import { errorBody } from './errors.ts';
 import type { App } from './route.ts';
 
 const ADMIN_PAGE = /^\/admin(?:\/|$)/;
+// A last segment with an extension names a file (Vite chunks, favicon): if it is missing,
+// that is a 404, not the SPA page. App routes (/s/:stepId, /admin/...) have no dots.
+const FILE_PATH = /\.[a-z0-9]+$/i;
 
 /** The SPA router decodes paths, matches them case-insensitively and tolerates doubled slashes. */
 function isAdminPage(url: string): boolean {
@@ -31,7 +34,8 @@ export async function webPlugin(app: App, webDist: string | undefined): Promise<
   }
   app.setNotFoundHandler(async (req, reply) => {
     const isPage = req.method === 'GET' || req.method === 'HEAD';
-    if (!hasWeb || !isPage || req.url.startsWith('/api/')) {
+    const path = req.url.split(/[?#]/)[0] ?? '';
+    if (!hasWeb || !isPage || req.url.startsWith('/api/') || FILE_PATH.test(path)) {
       return reply.code(404).send(errorBody('not_found', 'Not found'));
     }
     // Admin pages ask for Basic Auth themselves: the browser prompts once on the page and

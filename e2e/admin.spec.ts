@@ -136,6 +136,32 @@ test('Live events shows a resent batch as ignored duplicates', async ({ page, re
   await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeHidden();
 });
 
+test.describe('on a 360px phone', () => {
+  test.use({ viewport: { width: 360, height: 800 } });
+
+  test('the key columns stay on screen: event status, version actions, all tabs', async ({
+    page,
+    request,
+  }) => {
+    const inView = async (name: string | RegExp, role: 'cell' | 'button' | 'link' = 'cell') => {
+      const box = await page.getByRole(role, { name, exact: true }).first().boundingBox();
+      expect(box, String(name)).not.toBeNull();
+      expect((box?.x ?? 0) + (box?.width ?? 0), String(name)).toBeLessThanOrEqual(360);
+    };
+    const { full, batch } = await stepViewedBatch(request);
+    expect((await request.post('/api/events/batch', { data: batch })).ok()).toBe(true);
+    await page.goto(`/admin/live?session=${full.id}`);
+    await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeVisible();
+    await inView('Stored');
+    await inView('Open funnel', 'link');
+
+    await page.goto('/admin/versions');
+    await expect(page.getByRole('heading', { name: 'All versions' })).toBeVisible();
+    await inView('Preview', 'link');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
+  });
+});
+
 test('empty states say what to do instead of showing a blank panel', async ({ page, request }) => {
   // At least one event exists, so Live events shows the filter text, not "No events yet".
   const { batch } = await stepViewedBatch(request);

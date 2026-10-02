@@ -6,6 +6,9 @@
 // directly: scrolling must not re-render the table. A scroller with hidden columns is a
 // named, focusable region, so keyboard users can scroll it too (WCAG 2.1.1, axe
 // `scrollable-region-focusable`); a table that fits stays out of the tab order.
+// `stack` is for tables whose key column (a status, an action) must not hide behind the
+// scroll on a phone: in a narrow panel each row becomes a block of "label: value" lines,
+// the labels coming from each cell's `label`. `wrap` lets a text cell break lines.
 import {
   useEffect,
   useRef,
@@ -50,10 +53,18 @@ function useOverflowEdges(label: string) {
   return { frameRef, ref };
 }
 
-export function Table({ label, children }: { label: string; children: ReactNode }) {
+export function Table({
+  label,
+  stack = false,
+  children,
+}: {
+  label: string;
+  stack?: boolean;
+  children: ReactNode;
+}) {
   const { frameRef, ref } = useOverflowEdges(label);
   return (
-    <div ref={frameRef} className={styles.frame}>
+    <div ref={frameRef} className={stack ? `${styles.frame} ${styles.stack}` : styles.frame}>
       <div ref={ref} className={styles.tbl}>
         <table aria-label={label}>{children}</table>
       </div>
@@ -61,8 +72,8 @@ export function Table({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-const cls = (numeric: boolean, className: string | undefined) =>
-  [numeric && styles.n, className].filter(Boolean).join(' ') || undefined;
+const cls = (numeric: boolean, className: string | undefined, wrap = false) =>
+  [numeric && styles.n, wrap && styles.wrap, className].filter(Boolean).join(' ') || undefined;
 
 export function Th({
   numeric = false,
@@ -74,10 +85,17 @@ export function Th({
 
 export function Td({
   numeric = false,
+  wrap = false,
+  label,
   className,
   ...rest
-}: TdHTMLAttributes<HTMLTableCellElement> & { numeric?: boolean }) {
-  return <td className={cls(numeric, className)} {...rest} />;
+}: TdHTMLAttributes<HTMLTableCellElement> & {
+  numeric?: boolean;
+  wrap?: boolean;
+  /** Column name shown next to the value when a `stack` table stacks its rows. */
+  label?: string;
+}) {
+  return <td className={cls(numeric, className, wrap)} data-label={label} {...rest} />;
 }
 
 /** Muted tabular text inside a cell (times, ids). */

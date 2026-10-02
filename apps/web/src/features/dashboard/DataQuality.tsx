@@ -21,21 +21,21 @@ export function DataQuality({ summary }: { summary: AnalyticsSummary }) {
       </thead>
       <tbody>
         <tr>
-          <Td>Duplicate event_id (all traffic)</Td>
+          <Td wrap>Duplicate event_id (all traffic)</Td>
           <Td numeric>{formatCount(q.duplicates)}</Td>
           <Td>
             <Pill tone="outline">Ignored</Pill>
           </Td>
         </tr>
         <tr>
-          <Td>Arrived out of order</Td>
+          <Td wrap>Arrived out of order</Td>
           <Td numeric>{formatCount(q.outOfOrder)}</Td>
           <Td>
             <Pill tone="blue">Handled</Pill>
           </Td>
         </tr>
         <tr>
-          <Td>Context differs from the session</Td>
+          <Td wrap>Context differs from the session</Td>
           <Td numeric>{formatCount(q.contextMismatch)}</Td>
           <Td>
             <Pill tone="blue">Handled</Pill>
@@ -43,7 +43,7 @@ export function DataQuality({ summary }: { summary: AnalyticsSummary }) {
         </tr>
         {q.rejected.length === 0 ? (
           <tr>
-            <Td>Rejected (all traffic)</Td>
+            <Td wrap>Rejected (all traffic)</Td>
             <Td numeric>0</Td>
             <Td>
               <Pill tone="outline">None</Pill>
@@ -52,7 +52,7 @@ export function DataQuality({ summary }: { summary: AnalyticsSummary }) {
         ) : (
           q.rejected.map((r) => (
             <tr key={r.reason}>
-              <Td>Rejected: {humanize(r.reason).toLowerCase()}</Td>
+              <Td wrap>Rejected: {humanize(r.reason).toLowerCase()}</Td>
               <Td numeric>{formatCount(r.count)}</Td>
               <Td>
                 <Pill tone="coral">Rejected</Pill>
@@ -61,7 +61,7 @@ export function DataQuality({ summary }: { summary: AnalyticsSummary }) {
           ))
         )}
         <tr>
-          <Td>Matches generator ground truth (last run, any filter)</Td>
+          <Td wrap>Matches generator ground truth (last run, any filter)</Td>
           <Td numeric>–</Td>
           <Td>
             {truth === null ? (

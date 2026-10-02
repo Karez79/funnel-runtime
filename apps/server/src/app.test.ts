@@ -120,6 +120,13 @@ describe('unknown routes and static web', () => {
         headers: { authorization: adminAuth },
       });
       expect(head.statusCode).toBe(200);
+      // A missing file is a 404, not the page: after a redeploy the old bundle asks for
+      // chunks that are gone, and HTML in place of a script only hides that.
+      for (const url of ['/assets/index-gone.js', '/assets/app.css', '/favicon.ico']) {
+        const res = await t.app.inject({ method: 'GET', url });
+        expect(res.statusCode, url).toBe(404);
+        expect(res.headers['content-type'], url).toContain('application/json');
+      }
     } finally {
       rmSync(dist, { recursive: true, force: true });
     }

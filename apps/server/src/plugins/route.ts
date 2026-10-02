@@ -52,7 +52,18 @@ const absentAsUndefined = (schema: z.ZodType) =>
 export interface RouteOptions {
   /** Requests per window per client (plugins/security.ts); omitted means unlimited. */
   rateLimit?: { max: number; timeWindow: number };
+  /** Extra check before the body is parsed (after the admin guard); throws a DomainError. */
+  precheck?: (req: FastifyRequest) => void;
 }
+
+// A throw inside the executor becomes the rejection, which the error plugin turns into HTTP.
+const precheckHook =
+  (check: (req: FastifyRequest) => void) =>
+  (req: FastifyRequest): Promise<void> =>
+    new Promise((resolve) => {
+      check(req);
+      resolve();
+    });
 
 export function route<D extends RouteDef>(
   app: App,
@@ -72,8 +83,12 @@ export function route<D extends RouteDef>(
     },
     ...(def.bodyLimit === undefined ? {} : { bodyLimit: def.bodyLimit }),
     ...(options.rateLimit ? { config: { rateLimit: options.rateLimit } } : {}),
-    // onRequest runs before body parsing, so an anonymous caller gets 401, not 400.
-    ...(def.auth === 'admin' ? { onRequest: app.adminGuard } : {}),
+    // onRequest runs before body parsing, so an anonymous caller gets 401, not 400, and a
+    // caller failing the precheck gets its error, not a 400 for the body.
+    onRequest: [
+      ...(def.auth === 'admin' ? [app.adminGuard] : []),
+      ...(options.precheck ? [precheckHook(options.precheck)] : []),
+    ],
     handler: async (req, reply) => {
       // The zod validator has already parsed params/query/body against `def`, so the
       // request is narrowed to the inferred types here; this is the one place it happens.

@@ -23,6 +23,7 @@ import { Progress } from './Progress.tsx';
 import { StepBody } from './steps/StepBody.tsx';
 import { UnknownStep } from './steps/UnknownStep.tsx';
 import type { Track } from './tracking.ts';
+import { useDocumentKeydown } from '../../lib/useDocumentKeydown.ts';
 
 const CONTINUE = 'Continue';
 
@@ -80,7 +81,7 @@ export function FunnelView({ state, act, track, result, onBack }: FunnelViewProp
     firstStep.current = false;
   }, [state.currentStepId]);
 
-  const onKey = useEffectEvent((event: KeyboardEvent) => {
+  useDocumentKeydown((event: KeyboardEvent) => {
     const { target } = event;
     if (event.key === 'Escape' || (event.altKey && event.key === 'ArrowLeft')) {
       if (!canGoBack) return;
@@ -97,15 +98,6 @@ export function FunnelView({ state, act, track, result, onBack }: FunnelViewProp
     event.preventDefault();
     act({ type: 'continue' });
   });
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => {
-      onKey(event);
-    };
-    document.addEventListener('keydown', listener);
-    return () => {
-      document.removeEventListener('keydown', listener);
-    };
-  }, []);
 
   return (
     <Card variant="glass" className={styles.card} data-step={state.currentStepId}>

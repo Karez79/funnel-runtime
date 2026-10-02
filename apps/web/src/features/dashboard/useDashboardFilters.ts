@@ -3,6 +3,7 @@
 // survives a refresh. The query object is exactly the contract's analytics filters.
 import { VariantFilterSchema } from '@funnel/shared';
 import { useSearchParams } from 'react-router';
+import type { ShownVariant } from './journey.ts';
 
 export const PERIODS = [
   { value: 'all', label: 'All time', hours: null },
@@ -11,13 +12,11 @@ export const PERIODS = [
   { value: '30d', label: 'Last 30 days', hours: 24 * 30 },
 ] as const;
 
-export type Variant = 'A' | 'B' | 'all';
-
 export function useDashboardFilters() {
   const [params, setParams] = useSearchParams();
   const get = (key: string) => params.get(key) ?? undefined;
   const variantParsed = VariantFilterSchema.safeParse(params.get('variant'));
-  const variant: Variant = variantParsed.success ? variantParsed.data : 'all';
+  const variant: ShownVariant = variantParsed.success ? variantParsed.data : 'all';
   const version = get('version');
   const campaign = get('campaign');
   const source = get('source');
@@ -50,7 +49,7 @@ export function useDashboardFilters() {
     setVersion: (v: number) => {
       set({ version: String(v) });
     },
-    setVariant: (v: Variant) => {
+    setVariant: (v: ShownVariant) => {
       set({ variant: v === 'all' ? null : v });
     },
     setCampaign: (c: string | null) => {

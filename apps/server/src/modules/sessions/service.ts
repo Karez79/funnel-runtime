@@ -44,7 +44,10 @@ export function createSessionsService(
   versions: VersionsService,
   clock: Clock,
   generatorKey: string,
+  /** Where the engine reports an unknown operator (lint blocks them at publish, 4.2). */
+  warn: (message: string) => void = () => undefined,
 ) {
+  const engine = { warn };
   // Versions are immutable, so a resolved variant of a version never changes.
   const resolvedCache = new Map<string, ResolvedFunnel>();
 
@@ -235,7 +238,7 @@ export function createSessionsService(
       const row = live(id);
       const funnel = resolved(row.funnelId, row.funnelVersion, row.variant);
       const { answers } = parseState(row);
-      const completion = validateCompletion(funnel, answers);
+      const completion = validateCompletion(funnel, answers, engine);
       if (!completion.ok) {
         throw new DomainError(
           'unprocessable',
@@ -243,7 +246,7 @@ export function createSessionsService(
           { stepId: completion.stepId, code: completion.code },
         );
       }
-      const outcome = resultOf(funnel, computeResult(funnel, answers));
+      const outcome = resultOf(funnel, computeResult(funnel, answers, engine));
       if (outcome.resultId !== row.resultId) {
         repo.setResult(id, outcome.resultId, clock.now().toISOString());
       }

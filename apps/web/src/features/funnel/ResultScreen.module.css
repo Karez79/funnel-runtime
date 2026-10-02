@@ -1,17 +1,4 @@
-/* Result (reference .rkicker, .rtitle, .rsum, .week, .wk, .recs, .plan). */
-.kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--a-soft);
-  color: var(--a-ink);
-  font-weight: 500;
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: var(--r-pill);
-  margin-bottom: 14px;
-}
-
+/* Result (reference .rtitle, .rsum, .week, .wk, .recs, .plan). */
 .title {
   font-size: clamp(28px, 5vw, 34px);
   line-height: 1.1;
@@ -153,9 +140,10 @@
 }
 
 .recs li {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 12px;
+  align-items: start;
   font-size: 14.5px;
 }
 
@@ -176,38 +164,31 @@
   stroke-width: 3;
 }
 
-.plan {
+/* Closed: the week labels take no height; the CTA opens them above their items. */
+.planWeek {
+  grid-column: 2;
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.45s var(--ease-out);
+  opacity: 0;
+  transition:
+    grid-template-rows 0.45s var(--ease-out),
+    opacity 0.3s;
 }
 
-.plan > div {
+.planWeek > strong {
   overflow: hidden;
-}
-
-.plan[data-open='true'] {
-  grid-template-rows: 1fr;
-}
-
-.planList {
-  margin: 20px 0 0;
-  padding: 16px 16px 16px 20px;
-  background: var(--panel);
-  border-radius: var(--r-card);
-  display: grid;
-  gap: 10px;
-  font-size: 14.5px;
-  list-style: none;
-}
-
-.planList li {
-  display: grid;
-  gap: 2px;
-}
-
-.planList strong {
   font-weight: 600;
   font-size: 12px;
-  color: var(--ink-2);
+  color: var(--a-ink);
+}
+
+.recs[data-open='true'] .planWeek {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planWeek {
+    transition: none;
+  }
 }

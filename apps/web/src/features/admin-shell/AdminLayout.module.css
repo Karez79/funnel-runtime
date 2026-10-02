@@ -193,13 +193,28 @@
     padding: 12px 14px;
   }
 
+  /* All four tabs fit from 360px: tighter pills spread over the row, no half-hidden
+     "Open funnel" at the edge (the row still scrolls if a font renders wider). */
   .tabs {
     order: 3;
     width: 100%;
     margin: 0;
+    gap: 2px;
+    justify-content: space-between;
+  }
+
+  .tabs a {
+    padding: 8px 10px;
   }
 
   .right {
     margin-left: auto;
+  }
+}
+
+@media (width <= 400px) {
+  .tabs a {
+    padding: 8px;
+    font-size: 12.5px;
   }
 }

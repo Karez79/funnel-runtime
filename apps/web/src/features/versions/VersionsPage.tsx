@@ -30,8 +30,8 @@ function stayingText(active: VersionSummary | undefined, target: number): string
   const from = String(active.version);
   const start = `New sessions will start on version ${String(target)}.`;
   if (active.activeSessions === 0)
-    return `${start} No sessions are in progress on version ${from}.`;
-  return `${start} The ${formatSessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`;
+    return `${start} No session on version ${from} is still unfinished.`;
+  return `${start} The ${formatSessions(active.activeSessions)} not yet finished on version ${from} will finish on version ${from}.`;
 }
 
 export function VersionsPage() {

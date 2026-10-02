@@ -389,6 +389,8 @@ describe('generator ground truth', () => {
       const noKey = await upload(a, body, true, false);
       expect(noKey.statusCode).toBe(403);
       expect(noKey.json()).toMatchObject({ error: { code: 'forbidden' } });
+      // The key is checked before the body: without it a broken file is still a 403.
+      expect((await upload(a, { checks: 'broken' }, true, false)).statusCode).toBe(403);
       const wrong = await a.app.inject({
         method: 'PUT',
         url: '/api/admin/ground-truth',

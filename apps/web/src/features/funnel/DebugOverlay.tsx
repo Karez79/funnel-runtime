@@ -2,10 +2,11 @@
 // this session and what the client derived from it, plus the event outbox length, and
 // can throw the session away. It never shows answer values.
 import type { SessionResponse } from '@funnel/shared';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../../ui/Button.tsx';
 import styles from './DebugOverlay.module.css';
 import type { EventSink } from './tracking.ts';
+import { useDocumentKeydown } from '../../lib/useDocumentKeydown.ts';
 
 const POLL_MS = 1000;
 
@@ -31,7 +32,7 @@ export function DebugOverlay({
   );
   const [outbox, setOutbox] = useState(() => sink.pending());
 
-  const onKey = useEffectEvent((event: KeyboardEvent) => {
+  useDocumentKeydown((event: KeyboardEvent) => {
     if (!event.shiftKey || event.key.toLowerCase() !== 'd' || event.ctrlKey || event.metaKey) {
       return;
     }
@@ -40,15 +41,6 @@ export function DebugOverlay({
     }
     setOpen((was) => !was);
   });
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => {
-      onKey(event);
-    };
-    document.addEventListener('keydown', listener);
-    return () => {
-      document.removeEventListener('keydown', listener);
-    };
-  }, []);
 
   useEffect(() => {
     if (!open) return;

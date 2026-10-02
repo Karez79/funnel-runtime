@@ -72,8 +72,11 @@
   color: var(--ink-2);
 }
 
+/* Wraps under the button instead of widening the table past the panel. */
 .rowActions {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
   align-items: center;
 }
