@@ -12,6 +12,7 @@ import {
   answerKey,
   answerKind,
   computeResult,
+  EXPAND_RECOMMENDATION,
   isInteractive,
   nextStep,
   progress,
@@ -294,10 +295,17 @@ async function finish(ctx: Context, visitor: Visitor, stepId: string): Promise<v
   visitor.resultId = expected;
   await track(ctx, visitor, 'result_viewed', stepId, { result_id: expected });
   if (chance(plan.rng, BEHAVIOUR.cta[visitor.variant])) {
-    await track(ctx, visitor, 'cta_clicked', stepId, {
-      result_id: expected,
-      action: data.result.cta.action,
-    });
+    const { action } = data.result.cta;
+    await track(ctx, visitor, 'cta_clicked', stepId, { result_id: expected, action });
+    // As the result screen does: this CTA opens the plan, and the event goes out only
+    // where the session's catalog lists it (v3 on), so older versions are unchanged.
+    if (action === EXPAND_RECOMMENDATION.action) {
+      await track(ctx, visitor, 'recommendation_expanded', stepId, {
+        result_id: expected,
+        action,
+        source: EXPAND_RECOMMENDATION.source,
+      });
+    }
   }
   visitor.outcome = 'result';
 }
