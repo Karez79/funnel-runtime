@@ -109,13 +109,18 @@ export async function buildApp(
   const publish = (entries: LiveEntryDraft[]) => {
     live.publish(entries);
   };
-  eventsRoutes(
-    app,
-    createEventsService(createEventsRepo(db), versions, clock, publish, env.generatorKey),
-    {
-      rateLimit: { max: env.rateLimits.events, timeWindow: MINUTE_MS },
-    },
+  const eventsService = createEventsService(
+    createEventsRepo(db),
+    versions,
+    clock,
+    publish,
+    env.generatorKey,
   );
+  // A fresh process starts the Live feed from the tables, not from nothing (11.1).
+  if (live.recent().length === 0) live.publish(eventsService.liveBacklog(LIVE_STREAM.backlog));
+  eventsRoutes(app, eventsService, {
+    rateLimit: { max: env.rateLimits.events, timeWindow: MINUTE_MS },
+  });
   liveRoutes(app, live, sseStreams(app, LIVE_HEARTBEAT_MS));
 
   const stopRetention = createRetentionService(createRetentionRepo(db), clock, app.log).start();

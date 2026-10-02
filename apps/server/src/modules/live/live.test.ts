@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { contract, LiveEntrySchema, type LiveEntry, type LiveEntryDraft } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { sseStreams } from '../../plugins/sse.ts';
-import { adminAuth, createTestApp, type TestApp } from '../../test/harness.ts';
+import { buildApp, createSharedServices } from '../../app.ts';
+import { adminAuth, createTestApp, TEST_ENV, testClock, type TestApp } from '../../test/harness.ts';
 import { createLiveBus } from './bus.ts';
 
 let t: TestApp | undefined;
@@ -179,6 +180,64 @@ describe('GET /api/live', () => {
     expect(t.services.live.subscribers()).toBe(1);
     controller.abort();
     await eventually(() => t?.services.live.subscribers() === 0);
+  });
+
+  it('starts with the last stored and rejected events after a restart, oldest first', async () => {
+    t = await createTestApp();
+    const created = await t.app.inject({
+      method: 'POST',
+      url: '/api/sessions',
+      payload: { funnelId: 'workstyle-planner' },
+    });
+    const { session } = contract.createSession.response.parse(created.json());
+    const event = (stepId: string, seq: number) => ({
+      event_id: uuidv7(),
+      session_id: session.id,
+      name: 'step_viewed',
+      client_timestamp: '2026-10-01T12:00:01.000Z',
+      client_seq: seq,
+      funnel_id: 'workstyle-planner',
+      funnel_version: session.funnelVersion,
+      experiment_id: session.experimentId,
+      variant: session.variant,
+      step_id: stepId,
+      properties: {},
+    });
+    const first = event('intro', 1);
+    const second = event('team_size', 2);
+    const bad = { ...event('intro', 3), name: 'nope' };
+    for (const events of [[first], [second, bad]]) {
+      await t.app.inject({ method: 'POST', url: '/api/events/batch', payload: { events } });
+    }
+    // A new process on the same database: the in-memory feed starts from the tables.
+    const shared = createSharedServices(t.handle.db, testClock());
+    const restarted = await buildApp(TEST_ENV, t.handle.db, shared);
+    try {
+      const backlog = shared.live.recent();
+      expect(backlog.map((e) => [e.eventId, e.status])).toEqual([
+        [first.event_id, 'accepted'],
+        [second.event_id, 'accepted'],
+        [bad.event_id, 'rejected'],
+      ]);
+      expect(backlog[1]).toMatchObject({
+        sessionId: session.id,
+        name: 'step_viewed',
+        stepId: 'team_size',
+        version: session.funnelVersion,
+        variant: session.variant,
+        reason: null,
+      });
+      expect(backlog[2]).toMatchObject({
+        sessionId: session.id,
+        name: 'nope',
+        stepId: 'intro',
+        version: session.funnelVersion,
+        variant: session.variant,
+        reason: 'unknown_event',
+      });
+    } finally {
+      await restarted.close();
+    }
   });
 
   it('gives every result of a batch its own entry, even for the same event', async () => {
