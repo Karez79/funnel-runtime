@@ -23,10 +23,12 @@
     "seed": "pnpm --filter @funnel/server seed",
     "dev": "concurrently -k -n server,web -c blue,magenta \"pnpm --filter @funnel/server dev\" \"pnpm --filter @funnel/web dev\"",
     "e2e": "pnpm --filter @funnel/web build && playwright test",
-    "review:stats": "node scripts/review-stats.ts"
+    "review:stats": "node scripts/review-stats.ts",
+    "generate": "node --env-file-if-exists=.env scripts/generate-traffic.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@funnel/shared": "workspace:*",
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.3",
@@ -44,6 +46,7 @@
     "stylelint-declaration-strict-value": "^1.12.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
+    "uuid": "^14.0.2",
     "vitest": "^5.0.3",
     "zod": "^4.6.5"
   }

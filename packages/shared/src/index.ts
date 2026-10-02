@@ -100,7 +100,7 @@ export {
 } from './api/domain.ts';
 
 export { aggregate, IN_PROGRESS_WINDOW_MS } from './analytics/aggregate.ts';
-export { compareSummaries, GroundTruthSchema } from './analytics/groundTruth.ts';
+export { compareSummaries, coversSessions, GroundTruthSchema } from './analytics/groundTruth.ts';
 export type { GroundTruth } from './analytics/groundTruth.ts';
 export type {
   AggregateInput,
