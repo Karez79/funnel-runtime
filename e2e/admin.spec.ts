@@ -32,6 +32,32 @@ async function pinnedVersion(request: APIRequestContext, id: string) {
   return SessionBody.parse(await res.json()).session.funnelVersion;
 }
 
+/** A session with one `step_viewed` batch, not sent yet. */
+async function stepViewedBatch(request: APIRequestContext) {
+  const session = await newSession(request);
+  const full = SessionFull.parse(
+    await (await request.get(`/api/sessions/${session.id}`)).json(),
+  ).session;
+  const batch = {
+    events: [
+      {
+        event_id: randomUUID(),
+        session_id: full.id,
+        name: 'step_viewed',
+        client_timestamp: new Date().toISOString(),
+        client_seq: 1,
+        funnel_id: FUNNEL,
+        funnel_version: full.funnelVersion,
+        experiment_id: full.experimentId,
+        variant: full.variant,
+        step_id: 'intro',
+        properties: {},
+      },
+    ],
+  };
+  return { full, batch };
+}
+
 test('publishing v2 moves new sessions only, and rolling back returns to v1', async ({
   page,
   request,
@@ -63,6 +89,8 @@ test('publishing v2 moves new sessions only, and rolling back returns to v1', as
   expect((await newSession(request)).funnelVersion).toBe(1);
   expect(await pinnedVersion(request, onV2.id)).toBe(2);
   await expect(page.getByRole('list').getByText('Rolled back to version 1')).toBeVisible();
+  // v2 is published now, so nothing is left to review.
+  await expect(page.getByText(/^No drafts\. Upload a config/)).toBeVisible();
 });
 
 test('the dashboard shows the active version and its numbers', async ({ page }) => {
@@ -91,27 +119,7 @@ test('the command palette opens with Control+K and navigates', async ({ page }) 
 test('Live events shows a resent batch as ignored duplicates', async ({ page, request }) => {
   await page.goto('/admin/live');
   await expect(page.getByText(/^Streaming/)).toBeVisible();
-  const session = await newSession(request);
-  const full = SessionFull.parse(
-    await (await request.get(`/api/sessions/${session.id}`)).json(),
-  ).session;
-  const batch = {
-    events: [
-      {
-        event_id: randomUUID(),
-        session_id: full.id,
-        name: 'step_viewed',
-        client_timestamp: new Date().toISOString(),
-        client_seq: 1,
-        funnel_id: FUNNEL,
-        funnel_version: full.funnelVersion,
-        experiment_id: full.experimentId,
-        variant: full.variant,
-        step_id: 'intro',
-        properties: {},
-      },
-    ],
-  };
+  const { full, batch } = await stepViewedBatch(request);
   // The same batch twice, as after a timeout: stored once, then ignored.
   for (const status of ['accepted', 'duplicate']) {
     const res = await request.post('/api/events/batch', { data: batch });
@@ -126,6 +134,21 @@ test('Live events shows a resent batch as ignored duplicates', async ({ page, re
   await page.goto(`/admin/live?status=duplicate&session=${full.id}`);
   await expect(page.getByRole('cell', { name: 'Ignored duplicate', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeHidden();
+});
+
+test('empty states say what to do instead of showing a blank panel', async ({ page, request }) => {
+  // At least one event exists, so Live events shows the filter text, not "No events yet".
+  const { batch } = await stepViewedBatch(request);
+  expect((await request.post('/api/events/batch', { data: batch })).ok()).toBe(true);
+
+  await page.goto('/admin?campaign=no-such-campaign');
+  await expect(page.getByText(/^No sessions for these filters yet\./)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open the funnel' })).toBeVisible();
+
+  await page.goto(`/admin/live?session=${randomUUID()}`);
+  await expect(page.getByText(/^Streaming/)).toBeVisible();
+  // The filter (a random id) hides every event.
+  await expect(page.getByText('No events match these filters.')).toBeVisible();
 });
 
 test.describe('admin error states', () => {

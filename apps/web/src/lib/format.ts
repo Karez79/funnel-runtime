@@ -18,6 +18,10 @@ export const formatDateTime = (iso: string) => dateTime.format(new Date(iso));
 export const formatTime = (iso: string) => time.format(new Date(iso));
 export const formatCount = (n: number) => integer.format(n);
 
+/** "1 session", "1,204 sessions". */
+export const formatSessions = (n: number) =>
+  `${formatCount(n)} ${n === 1 ? 'session' : 'sessions'}`;
+
 /** A 0..1 share as a percentage; a dash when there is no denominator. */
 export function formatPercent(rate: number | null, digits = 0): string {
   return rate === null ? '–' : `${(rate * 100).toFixed(digits)}%`;

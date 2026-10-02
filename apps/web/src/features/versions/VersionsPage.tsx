@@ -4,9 +4,10 @@
 // sessions stay where they are. Nothing changes the active version without a dialog.
 import type { VersionSummary } from '@funnel/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { errorDetails } from '../../lib/api.ts';
+import { formatSessions } from '../../lib/format.ts';
 import { apiQuery } from '../../lib/query.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
@@ -23,16 +24,14 @@ import { VersionsTable } from './VersionsTable.tsx';
 /** A rollback always targets the journal's previous version at the time it is shown. */
 type Pending = { kind: 'publish' | 'activate'; version: number } | { kind: 'rollback' };
 
-const sessions = (n: number) => `${String(n)} ${n === 1 ? 'session' : 'sessions'}`;
-
 /** What happens to sessions in progress: the sentence of every confirmation (6.1). */
 function stayingText(active: VersionSummary | undefined, target: number): string {
   if (!active) return `New sessions will start on version ${String(target)}.`;
   const from = String(active.version);
-  return (
-    `New sessions will start on version ${String(target)}. ` +
-    `The ${sessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`
-  );
+  const start = `New sessions will start on version ${String(target)}.`;
+  if (active.activeSessions === 0)
+    return `${start} No sessions are in progress on version ${from}.`;
+  return `${start} The ${formatSessions(active.activeSessions)} in progress on version ${from} will finish on version ${from}.`;
 }
 
 export function VersionsPage() {
@@ -40,9 +39,14 @@ export function VersionsPage() {
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  // The confirmation states how many sessions stay; refetch so the count is current.
+  const ask = (next: Pending) => {
+    setPending(next);
+    void list.refetch();
+  };
   const actions = useVersionActions({
     onRollbackRequest: () => {
-      setPending({ kind: 'rollback' });
+      ask({ kind: 'rollback' });
     },
     onPublished: () => {
       setSelected(null);
@@ -65,6 +69,12 @@ export function VersionsPage() {
     : params.has('rollback')
       ? { kind: 'rollback' }
       : null;
+  // A palette command opens the confirmation without `ask`: refetch for a current count.
+  const urlKey = fromUrl === null ? null : `${fromUrl.kind}:${String(publishParam)}`;
+  const { refetch } = list;
+  useEffect(() => {
+    if (urlKey !== null) void refetch();
+  }, [urlKey, refetch]);
   const reviewed =
     selected ?? (publishable ? publishParam : null) ?? drafts.at(-1)?.version ?? null;
   const candidate = list.data ? (pending ?? fromUrl) : null;
@@ -151,10 +161,10 @@ export function VersionsPage() {
               reviewed={reviewed}
               onReview={setSelected}
               onRollback={() => {
-                setPending({ kind: 'rollback' });
+                ask({ kind: 'rollback' });
               }}
               onActivate={(version) => {
-                setPending({ kind: 'activate', version });
+                ask({ kind: 'activate', version });
               }}
             />
           )}
@@ -169,7 +179,7 @@ export function VersionsPage() {
           draft={versions.find((v) => v.version === reviewed)?.state === 'draft'}
           staying={reviewed === null ? '' : stayingText(active, reviewed)}
           onPublish={(version) => {
-            setPending({ kind: 'publish', version });
+            ask({ kind: 'publish', version });
           }}
         />
       </div>
