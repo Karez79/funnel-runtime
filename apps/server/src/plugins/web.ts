@@ -34,8 +34,9 @@ export async function webPlugin(app: App, webDist: string | undefined): Promise<
     if (!hasWeb || !isPage || req.url.startsWith('/api/')) {
       return reply.code(404).send(errorBody('not_found', 'Not found'));
     }
-    // Admin pages ask for Basic Auth themselves (a no-op guard when ADMIN_AUTH=off): the browser prompts once on the page and
-    // then sends the credentials with every admin API call from it.
+    // Admin pages ask for Basic Auth themselves: the browser prompts once on the page and
+    // then sends the credentials with every admin API call from it. With ADMIN_AUTH=off
+    // the guard lets every request through.
     if (isAdminPage(req.url)) {
       await app.adminGuard(req, reply);
       if (reply.sent) return reply;

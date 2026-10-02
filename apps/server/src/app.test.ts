@@ -185,6 +185,13 @@ describe('ADMIN_AUTH=off', () => {
         headers: { authorization: 'Basic d3Jvbmc6d3Jvbmc=' },
       });
       expect(withCreds.statusCode).toBe(200);
+      // The generator key is not a login: synthetic traffic still needs it.
+      const synthetic = await t.app.inject({
+        method: 'POST',
+        url: '/api/sessions',
+        payload: { funnelId: 'workstyle-planner', utm: {}, trafficType: 'synthetic' },
+      });
+      expect(synthetic.statusCode).toBe(403);
     } finally {
       rmSync(dist, { recursive: true, force: true });
     }

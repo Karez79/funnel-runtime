@@ -23,6 +23,7 @@ import {
 } from '@funnel/shared';
 import { z } from 'zod';
 import type { Clock } from '../../clock.ts';
+import { sameSecret } from '../../secrets.ts';
 import type { VersionsService } from '../versions/service.ts';
 import type { AnalyticsRepo } from './repo.ts';
 
@@ -56,6 +57,7 @@ export function createAnalyticsService(
   repo: AnalyticsRepo,
   versions: VersionsService,
   clock: Clock,
+  generatorKey: string,
 ) {
   // Versions are immutable, so a resolved variant never changes.
   const resolved = new Map<string, ResolvedFunnel>();
@@ -165,7 +167,14 @@ export function createAnalyticsService(
       return { ...compute(query), groundTruthMatches: matchesStored() };
     },
 
-    uploadGroundTruth(truth: GroundTruth) {
+    /**
+     * Only the generator may replace its ground truth: the admin guard alone is not enough
+     * when ADMIN_AUTH=off opens the admin, and the "Matches" line must not be flippable.
+     */
+    uploadGroundTruth(truth: GroundTruth, key: string | undefined) {
+      if (!sameSecret(key ?? '', generatorKey)) {
+        throw new DomainError('forbidden', 'Uploading ground truth requires the generator key');
+      }
       repo.saveGroundTruth(JSON.stringify(truth), clock.now().toISOString());
       const differences = compareWith(truth);
       return {

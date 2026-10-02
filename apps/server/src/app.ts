@@ -100,7 +100,10 @@ export async function buildApp(
     createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
-  analyticsRoutes(app, createAnalyticsService(createAnalyticsRepo(db), versions, clock));
+  analyticsRoutes(
+    app,
+    createAnalyticsService(createAnalyticsRepo(db), versions, clock, env.generatorKey),
+  );
   const publish = (entries: LiveEntryDraft[]) => {
     live.publish(entries);
   };
