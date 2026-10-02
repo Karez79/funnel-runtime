@@ -85,6 +85,10 @@ const BEHAVIOUR = {
   copyNext: 0.075,
 } as const;
 
+/** The CTA action that opens the 30-day plan and what the web client sends with it. */
+const EXPAND_ACTION = 'expand_recommendation';
+const EXPAND_SOURCE = 'result_cta';
+
 export interface Plan {
   readonly index: number;
   readonly rng: Rng;
@@ -294,10 +298,17 @@ async function finish(ctx: Context, visitor: Visitor, stepId: string): Promise<v
   visitor.resultId = expected;
   await track(ctx, visitor, 'result_viewed', stepId, { result_id: expected });
   if (chance(plan.rng, BEHAVIOUR.cta[visitor.variant])) {
-    await track(ctx, visitor, 'cta_clicked', stepId, {
-      result_id: expected,
-      action: data.result.cta.action,
-    });
+    const { action } = data.result.cta;
+    await track(ctx, visitor, 'cta_clicked', stepId, { result_id: expected, action });
+    // As the result screen does: this CTA opens the plan, and the event goes out only
+    // where the session's catalog lists it (v3 on), so older versions are unchanged.
+    if (action === EXPAND_ACTION) {
+      await track(ctx, visitor, 'recommendation_expanded', stepId, {
+        result_id: expected,
+        action,
+        source: EXPAND_SOURCE,
+      });
+    }
   }
   visitor.outcome = 'result';
 }
