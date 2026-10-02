@@ -20,7 +20,7 @@
   <img src="docs/images/funnel-walkthrough.webp" width="300" alt="Прохождение воронки: ответ, Continue, результат">
 </p>
 
-Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора; нужен `ffmpeg` с кодеком `libwebp_anim`); остальные скриншоты — в [`docs/images/`](docs/images/). Diff на скриншоте Versions — демонстрационный черновик, собранный из v2, а не настоящий v3.
+Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора; нужен `ffmpeg` с кодеком `libwebp_anim`); остальные скриншоты — в [`docs/images/`](docs/images/). На скриншоте Versions — diff черновика `configs/funnel-v3.json` против активной v2 перед публикацией.
 
 ## Проверить за 5 минут
 
