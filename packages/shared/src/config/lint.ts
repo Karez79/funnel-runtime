@@ -49,7 +49,7 @@ const LINT_WARNING_CODES = [
   'operator_type',
   'config_change',
 ] as const;
-export type LintWarningCode = (typeof LINT_WARNING_CODES)[number];
+type LintWarningCode = (typeof LINT_WARNING_CODES)[number];
 
 /** Also the wire shape returned by upload and diff (6.1). */
 export const LintReportSchema = z.object({

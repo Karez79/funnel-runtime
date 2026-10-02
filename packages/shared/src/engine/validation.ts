@@ -20,7 +20,7 @@ export const VALIDATION_CODES = [
   'invalidOption',
   'invalidType',
 ] as const;
-export type ValidationCode = (typeof VALIDATION_CODES)[number];
+type ValidationCode = (typeof VALIDATION_CODES)[number];
 
 export type ValidationResult =
   | { readonly ok: true }

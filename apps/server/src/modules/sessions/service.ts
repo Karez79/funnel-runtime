@@ -75,6 +75,7 @@ export function createSessionsService(
         state: parseState(row),
         stateRev: row.stateRev,
         resultId: row.resultId,
+        createdAt: row.createdAt,
         expiresAt: row.expiresAt,
       },
       funnel: resolved(row.funnelId, row.funnelVersion, row.variant),

@@ -145,3 +145,14 @@ export const rejectedEvents = sqliteTable('rejected_events', {
   rawJson: text('raw_json').notNull(),
   receivedAt: text('received_at').notNull(),
 });
+
+/**
+ * Ground truth uploads of the traffic generator (CLAUDE.md 9.1), append-only; the newest
+ * row drives "Matches generator ground truth". Stored on the server because the prod
+ * dashboard cannot read a file from the machine that ran the generator.
+ */
+export const groundTruth = sqliteTable('ground_truth', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  createdAt: text('created_at').notNull(),
+  json: text('json').notNull(),
+});
