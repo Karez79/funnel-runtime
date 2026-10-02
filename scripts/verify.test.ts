@@ -7,7 +7,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { contract, DomainError, type GroundTruth } from '@funnel/shared';
 import { v7 as uuidv7 } from 'uuid';
 import { systemClock } from '../apps/server/src/clock.ts';
-import { createTestApp, TEST_ENV, type TestApp } from '../apps/server/src/test/harness.ts';
+import {
+  createTestApp,
+  TEST_ADMIN,
+  TEST_ENV,
+  type TestApp,
+} from '../apps/server/src/test/harness.ts';
 import { generateTraffic } from './lib/generator.ts';
 import { secretHint } from './lib/env.ts';
 import { createClient } from './lib/http.ts';
@@ -21,7 +26,7 @@ afterEach(async () => {
 
 const secrets = {
   generatorKey: TEST_ENV.generatorKey,
-  admin: { user: TEST_ENV.adminUser, password: TEST_ENV.adminPassword },
+  admin: TEST_ADMIN,
 };
 
 /** What a visitor on the public URL does: no generator key, a beacon re-sent, a broken event. */

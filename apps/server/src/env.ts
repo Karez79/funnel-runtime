@@ -19,6 +19,9 @@ const EnvSchema = z
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
+    // `basic` (default) protects the admin with ADMIN_USER/ADMIN_PASSWORD; `off` opens it
+    // to everyone, an explicit opt-in for the review deployment (docs/DECISIONS.md).
+    ADMIN_AUTH: z.enum(['basic', 'off']).default('basic'),
     ADMIN_USER: z.string().min(1).optional(),
     ADMIN_PASSWORD: z.string().min(1).optional(),
     GENERATOR_KEY: z.string().min(1).optional(),
@@ -49,8 +52,14 @@ const EnvSchema = z
       databasePath: raw.DATABASE_PATH,
       webDist: raw.WEB_DIST,
       logLevel: raw.LOG_LEVEL,
-      adminUser: secret('ADMIN_USER'),
-      adminPassword: secret('ADMIN_PASSWORD'),
+      adminAuth:
+        raw.ADMIN_AUTH === 'off'
+          ? ({ mode: 'off' } as const)
+          : ({
+              mode: 'basic',
+              user: secret('ADMIN_USER'),
+              password: secret('ADMIN_PASSWORD'),
+            } as const),
       generatorKey: secret('GENERATOR_KEY'),
       rateLimits: { sessions: raw.RATE_LIMIT_SESSIONS, events: raw.RATE_LIMIT_EVENTS },
       clientIpHeader:

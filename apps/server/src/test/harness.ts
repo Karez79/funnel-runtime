@@ -10,9 +10,11 @@ import { readConfig, seedIfEmpty } from '../db/seed.ts';
 import type { Clock } from '../clock.ts';
 import type { App } from '../plugins/route.ts';
 
+/** Basic Auth credentials of the test app (ADMIN_AUTH=basic, the default). */
+export const TEST_ADMIN = { user: 'admin', password: 'secret' } as const;
+
 export const TEST_ENV: AppEnv = {
-  adminUser: 'admin',
-  adminPassword: 'secret',
+  adminAuth: { mode: 'basic', ...TEST_ADMIN },
   generatorKey: 'generator-secret',
   // High enough that only the rate-limit tests themselves ever hit it.
   rateLimits: { sessions: 1000, events: 1000 },
@@ -75,7 +77,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 /** The generator header with the test GENERATOR_KEY. */
 export const generatorHeaders = { 'x-generator-key': 'generator-secret' };
 
-export const adminAuth = `Basic ${Buffer.from('admin:secret').toString('base64')}`;
+export const adminAuth = `Basic ${Buffer.from(`${TEST_ADMIN.user}:${TEST_ADMIN.password}`).toString('base64')}`;
 
 const JsonObject = z.record(z.string(), z.unknown());
 

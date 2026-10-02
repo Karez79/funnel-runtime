@@ -6,7 +6,7 @@
 
 [Открыть воронку](https://app-production-183d.up.railway.app/) · [Админка](https://app-production-183d.up.railway.app/admin) · [Репозиторий](https://github.com/Karez79/funnel-runtime)
 
-Демо-доступ к админке (Basic Auth): `admin` / `demo-875b44c4`
+Админка на демо-стенде открыта без пароля, чтобы проверяющим не нужен был логин (`ADMIN_AUTH=off`). Для реального использования её закрывает Basic Auth: `ADMIN_AUTH=basic` плюс `ADMIN_USER` и `ADMIN_PASSWORD`.
 
 ![Дашборд: KPI, Funnel journey, качество данных, A/B](docs/images/dashboard.png)
 
@@ -178,7 +178,7 @@ sequenceDiagram
 pnpm dev                                    # локально: v1 активна, v2 черновик
 pnpm demo:iteration2                        # базовая версия — активная (здесь v1)
 
-export GENERATOR_KEY=… ADMIN_USER=admin ADMIN_PASSWORD=…
+export GENERATOR_KEY=…                      # ADMIN_USER/ADMIN_PASSWORD — только если админка закрыта (ADMIN_AUTH=basic)
 pnpm demo:iteration2 --base-url https://app-production-183d.up.railway.app
 ```
 
@@ -196,22 +196,22 @@ pnpm test                     # unit и интеграционные тесты 
 pnpm e2e                      # Playwright smoke против собранного приложения
 ```
 
-Сервер при старте сам применяет миграции и сидит базу, если версий нет, поэтому `pnpm seed` (то же действие без запуска сервера) на пустой базе необязателен; на базе с версиями он ничего не меняет. Локальные секреты по умолчанию: админка `admin` / `admin`, ключ генератора `dev-generator-key`.
+Сервер при старте сам применяет миграции и сидит базу, если версий нет, поэтому `pnpm seed` (то же действие без запуска сервера) на пустой базе необязателен; на базе с версиями он ничего не меняет. Локальные секреты по умолчанию: админка `admin` / `admin` (локально Basic Auth включён, `ADMIN_AUTH=basic` по умолчанию; `ADMIN_AUTH=off` открывает её), ключ генератора `dev-generator-key`.
 
 ### Генератор против публичного URL
 
 ```sh
-export GENERATOR_KEY=… ADMIN_USER=admin ADMIN_PASSWORD=…
+export GENERATOR_KEY=…                      # ADMIN_USER/ADMIN_PASSWORD — только если админка закрыта (ADMIN_AUTH=basic)
 pnpm generate --base-url https://app-production-183d.up.railway.app --sessions 150 --seed 42 --publish-next
 pnpm verify --base-url https://app-production-183d.up.railway.app
 ```
 
-Переменные экспортируются один раз для обеих команд. `GENERATOR_KEY` нужен для синтетических сессий, учётные данные админа — для публикации следующего черновика, предпросмотра конфигов, загрузки ground truth на сервер и для `verify`, который читает `/api/analytics/summary`. Если сервер отклонил ключ или пароль, команда пишет одну строку с именем переменной, которую нужно экспортировать. Ключ генератора хранится в переменных Railway и в репозиторий не коммитится.
+Переменные экспортируются один раз для обеих команд. `GENERATOR_KEY` нужен для синтетических сессий и для загрузки ground truth на сервер (в любом режиме админки). Учётные данные админа нужны, только если на сервере `ADMIN_AUTH=basic`: для публикации следующего черновика, предпросмотра конфигов, загрузки ground truth на сервер и для `verify`, который читает `/api/analytics/summary`. Открытый сервер (`ADMIN_AUTH=off`) их просто игнорирует. Если сервер отклонил ключ или пароль, команда пишет одну строку с именем переменной, которую нужно экспортировать. Ключ генератора хранится в переменных Railway и в репозиторий не коммитится.
 
 <details>
 <summary>Переменные окружения</summary>
 
-Читаются только в `apps/server/src/env.ts` (zod). В production сервер не стартует без `ADMIN_USER`, `ADMIN_PASSWORD` и `GENERATOR_KEY`. Шаблон — `.env.example`.
+Читаются только в `apps/server/src/env.ts` (zod). В production сервер не стартует без `GENERATOR_KEY`, а при `ADMIN_AUTH=basic` — ещё без `ADMIN_USER` и `ADMIN_PASSWORD`. Шаблон — `.env.example`.
 
 | Переменная                                 | По умолчанию                                      | Назначение                                                               |
 | ------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -219,6 +219,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | `HOST`                                     | `0.0.0.0`                                         | адрес прослушивания                                                      |
 | `DATABASE_PATH`                            | `./data/funnel.db` (на Railway `/data/funnel.db`) | файл SQLite; на Railway лежит на volume `/data`                          |
 | `WEB_DIST`                                 | `../web/dist`                                     | собранный фронтенд, который раздаёт тот же процесс                       |
+| `ADMIN_AUTH`                               | `basic` (на демо-стенде `off`)                    | `basic` — Basic Auth на админке; `off` — админка открыта без пароля      |
 | `ADMIN_USER`, `ADMIN_PASSWORD`             | dev: `admin` / `admin`                            | Basic Auth для `/admin`, `/api/admin/*`, `/api/analytics/*`, `/api/live` |
 | `GENERATOR_KEY`                            | dev: `dev-generator-key`                          | заголовок `X-Generator-Key` для `trafficType: 'synthetic'`               |
 | `RATE_LIMIT_SESSIONS`                      | `30`                                              | `POST /api/sessions` в минуту на IP (генератор с ключом освобождён)      |
@@ -228,7 +229,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | `LOG_LEVEL`                                | `info`                                            | уровень pino                                                             |
 | `NODE_ENV`                                 | `development`                                     | `production` требует настоящих секретов                                  |
 
-Генератор и `verify` читают `GENERATOR_KEY`, `ADMIN_USER`, `ADMIN_PASSWORD` из своего окружения.
+Генератор и `verify` читают `GENERATOR_KEY`, `ADMIN_USER`, `ADMIN_PASSWORD` из своего окружения; учётные данные админа открытому серверу не нужны и им игнорируются.
 
 </details>
 
@@ -312,7 +313,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 
 ## Ограничения и допущения
 
-Коротко: агрегатор считает в памяти, SQLite с одним писателем и один инстанс, Basic Auth вместо полноценной авторизации, override только при создании сессии, сессии на откатанной версии доживают на ней, время клиента не доверенное, порог in progress — 30 минут, сверка с генератором считает только трафик с его ключом (`traffic=generator`), чтобы посетители во время прогона на проде её не ломали. Полный список с причинами — [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+Коротко: агрегатор считает в памяти, SQLite с одним писателем и один инстанс, админка демо-стенда открыта без пароля (`ADMIN_AUTH=off`), а закрытая — это Basic Auth вместо полноценной авторизации, override только при создании сессии, сессии на откатанной версии доживают на ней, время клиента не доверенное, порог in progress — 30 минут, сверка с генератором считает только трафик с его ключом (`traffic=generator`), чтобы посетители во время прогона на проде её не ломали. Полный список с причинами — [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 <details>
 <summary>Структура репозитория</summary>

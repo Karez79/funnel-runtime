@@ -355,11 +355,14 @@ describe('analytics API', () => {
 });
 
 describe('generator ground truth', () => {
-  async function upload(a: TestApp, body: unknown, auth = true) {
+  async function upload(a: TestApp, body: unknown, auth = true, key = true) {
     return a.app.inject({
       method: 'PUT',
       url: '/api/admin/ground-truth',
-      headers: auth ? { authorization: adminAuth } : {},
+      headers: {
+        ...(auth ? { authorization: adminAuth } : {}),
+        ...(key ? generatorHeaders : {}),
+      },
       payload: body as Record<string, unknown>,
     });
   }
@@ -375,6 +378,30 @@ describe('generator ground truth', () => {
     const a = await start();
     expect((await upload(a, truth([]), false)).statusCode).toBe(401);
     expect((await upload(a, truth([]))).statusCode).toBe(400);
+  });
+
+  it('requires the generator key on top of the admin guard, also with ADMIN_AUTH=off', async () => {
+    for (const env of [{}, { adminAuth: { mode: 'off' } as const }]) {
+      const a = await start({ env });
+      await newSession(a);
+      const expected = await okSummary(a, '?version=1');
+      const body = truth([{ name: 'v1', query: { version: '1' }, expected }]);
+      const noKey = await upload(a, body, true, false);
+      expect(noKey.statusCode).toBe(403);
+      expect(noKey.json()).toMatchObject({ error: { code: 'forbidden' } });
+      const wrong = await a.app.inject({
+        method: 'PUT',
+        url: '/api/admin/ground-truth',
+        headers: { authorization: adminAuth, 'x-generator-key': 'wrong' },
+        payload: body,
+      });
+      expect(wrong.statusCode).toBe(403);
+      // Nothing was stored: the dashboard line still says "not run".
+      expect((await okSummary(a)).groundTruthMatches).toBeNull();
+      expect((await upload(a, body)).statusCode).toBe(200);
+      await a.close();
+      t = undefined;
+    }
   });
 
   it('answers and shows whether the stored checks match the server numbers', async () => {

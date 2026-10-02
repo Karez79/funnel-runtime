@@ -3,6 +3,7 @@ import { systemClock } from '../apps/server/src/clock.ts';
 import {
   configJson,
   createTestApp,
+  TEST_ADMIN,
   TEST_ENV,
   type TestApp,
 } from '../apps/server/src/test/harness.ts';
@@ -24,7 +25,7 @@ async function server() {
 
 const secrets = {
   generatorKey: TEST_ENV.generatorKey,
-  admin: { user: TEST_ENV.adminUser, password: TEST_ENV.adminPassword },
+  admin: TEST_ADMIN,
 };
 
 describe('pnpm generate', () => {
