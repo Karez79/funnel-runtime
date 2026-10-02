@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["ffmpeg"],
   "workspaces": {
     ".": {
       "entry": [".claude/hooks/*.mjs", "e2e/**/*.spec.ts", "scripts/*.ts"],
