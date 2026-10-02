@@ -23,6 +23,10 @@
   --a-ink: color-mix(in oklch, var(--a) 70%, black);
   --b-ink: color-mix(in oklch, var(--b) 75%, black);
 
+  /* Half-donut tracks of the A/B panel (reference: mixed with white, which keeps the hue). */
+  --a-track: color-mix(in oklch, var(--a) 28%, white);
+  --b-track: color-mix(in oklch, var(--b) 24%, white);
+
   /* Text on dark (ink) surfaces. */
   --on-ink: oklch(1 0 0);
   --focus-ring: color-mix(in oklch, var(--a) 70%, transparent);

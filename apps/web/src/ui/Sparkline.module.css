@@ -1,0 +1,23 @@
+.spark {
+  width: 96px;
+  height: 34px;
+  flex: none;
+}
+
+.stopTop {
+  stop-color: var(--a);
+  stop-opacity: 0.3;
+}
+
+.stopBottom {
+  stop-color: var(--a);
+  stop-opacity: 0;
+}
+
+.line {
+  fill: none;
+  stroke: var(--a);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

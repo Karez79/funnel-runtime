@@ -36,6 +36,12 @@ p {
   text-wrap: pretty;
 }
 
+/* No weights of 700+ anywhere (CLAUDE.md 10); the UA default for <b> is bold. */
+b,
+strong {
+  font-weight: 600;
+}
+
 button {
   font-family: inherit;
   font-size: inherit;

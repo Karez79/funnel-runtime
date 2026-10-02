@@ -89,8 +89,45 @@ describe('unknown routes and static web', () => {
       const res = await t.app.inject({ method: 'GET', url: '/s/team_size' });
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('<title>funnel</title>');
-      const head = await t.app.inject({ method: 'HEAD', url: '/admin/versions' });
+      const head = await t.app.inject({
+        method: 'HEAD',
+        url: '/admin/versions',
+        headers: { authorization: adminAuth },
+      });
       expect(head.statusCode).toBe(200);
+    } finally {
+      rmSync(dist, { recursive: true, force: true });
+    }
+  });
+
+  it('asks for admin credentials before serving an admin page', async () => {
+    const dist = mkdtempSync(join(tmpdir(), 'funnel-web-'));
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>funnel</title>');
+    try {
+      t = await createTestApp({ env: { webDist: dist } });
+      for (const url of [
+        '/admin',
+        '/admin/live?session=1',
+        '/admin/versions',
+        '/Admin',
+        '//admin',
+        '/%61dmin',
+      ]) {
+        const res = await t.app.inject({ method: 'GET', url });
+        expect(res.statusCode).toBe(401);
+        expect(res.headers['www-authenticate']).toContain('Basic');
+      }
+      // A malformed escape never reaches the page: Fastify rejects the URL first.
+      const malformed = await t.app.inject({ method: 'GET', url: '/admin/%E0%A4%A' });
+      expect(malformed.statusCode).toBe(400);
+      const page = await t.app.inject({
+        method: 'GET',
+        url: '/admin',
+        headers: { authorization: adminAuth },
+      });
+      expect(page.statusCode).toBe(200);
+      // Not an admin page: the funnel stays public.
+      expect((await t.app.inject({ method: 'GET', url: '/administer' })).statusCode).toBe(200);
     } finally {
       rmSync(dist, { recursive: true, force: true });
     }

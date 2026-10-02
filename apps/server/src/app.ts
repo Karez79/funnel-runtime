@@ -1,12 +1,15 @@
 // Composition root: wires repos -> services -> routes. The only module that sees all
 // layers at once, so routes never reach the database directly (CLAUDE.md 3.1).
-import { LIVE_STREAM, type LiveEntry } from '@funnel/shared';
+import { LIVE_STREAM, type LiveEntryDraft } from '@funnel/shared';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { systemClock, type Clock } from './clock.ts';
 import type { Db } from './db/client.ts';
 import type { Env } from './env.ts';
+import { createAnalyticsRepo } from './modules/analytics/repo.ts';
+import { analyticsRoutes } from './modules/analytics/routes.ts';
+import { createAnalyticsService } from './modules/analytics/service.ts';
 import { createHealthRepo } from './modules/health/repo.ts';
 import { healthRoutes } from './modules/health/routes.ts';
 import { createHealthService } from './modules/health/service.ts';
@@ -60,7 +63,8 @@ export interface SharedServices {
 export function createSharedServices(db: Db, clock: Clock = systemClock): SharedServices {
   return {
     versions: createVersionsService(createVersionsRepo(db), clock),
-    live: createLiveBus(LIVE_STREAM.backlog),
+    // The same clock as `receivedAt`, so seq and receive time never disagree in tests.
+    live: createLiveBus(LIVE_STREAM.backlog, () => clock.now().getTime()),
   };
 }
 
@@ -94,7 +98,8 @@ export async function buildApp(
     createSessionsService(createSessionsRepo(db), versions, clock, env.generatorKey),
     { rateLimit: { max: env.rateLimits.sessions, timeWindow: MINUTE_MS } },
   );
-  const publish = (entries: LiveEntry[]) => {
+  analyticsRoutes(app, createAnalyticsService(createAnalyticsRepo(db), versions, clock));
+  const publish = (entries: LiveEntryDraft[]) => {
     live.publish(entries);
   };
   eventsRoutes(app, createEventsService(createEventsRepo(db), versions, clock, publish), {

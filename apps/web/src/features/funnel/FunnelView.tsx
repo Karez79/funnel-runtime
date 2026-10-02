@@ -8,6 +8,7 @@ import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
 import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import { IconButton } from '../../ui/IconButton.tsx';
+import { Kbd } from '../../ui/Kbd.tsx';
 import {
   currentStep,
   hasValue,
@@ -42,11 +43,10 @@ function KeyHint({ step }: { step: ReturnType<typeof currentStep> }) {
     <span className={styles.hint}>
       {choices > 0 && (
         <>
-          <kbd className={styles.k}>1</kbd>–<kbd className={styles.k}>{choices}</kbd> to
-          choose,{' '}
+          <Kbd>1</Kbd>–<Kbd>{choices}</Kbd> to choose,{' '}
         </>
       )}
-      <kbd className={styles.k}>Enter</kbd> to continue
+      <Kbd>Enter</Kbd> to continue
     </span>
   );
 }

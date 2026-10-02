@@ -1,0 +1,285 @@
+/* Journey map: white column cards, curved connectors in SVG, black result tile. */
+.journey {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(230px, 1fr);
+  gap: 44px;
+  overflow-x: auto;
+  padding: 4px 4px 6px;
+  scrollbar-width: thin;
+}
+
+.links {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.links path {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+
+.links path.hot {
+  stroke: var(--b);
+  stroke-dasharray: 3 3;
+  opacity: 1;
+}
+
+.links path.arrow {
+  stroke: var(--ink);
+  opacity: 1;
+  stroke-width: 1.3;
+}
+
+.links circle {
+  fill: var(--card);
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+
+.links circle.hot {
+  stroke: var(--b);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  container-type: inline-size;
+  position: relative;
+  z-index: 1;
+}
+
+.journey > .col:last-child {
+  min-width: 236px;
+}
+
+.colbox {
+  background: var(--card);
+  border-radius: var(--r-glass-sm);
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.cap {
+  text-align: center;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 12px;
+}
+
+.node {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px 9px 9px;
+  border-radius: var(--r-option);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.node:hover,
+.node[aria-expanded='true'] {
+  background: var(--soft);
+}
+
+.node:focus-visible {
+  outline: 3px solid var(--focus-ring);
+}
+
+.cond {
+  outline: 1px dashed color-mix(in oklch, var(--b) 55%, var(--line));
+  outline-offset: -1px;
+}
+
+.nodeText {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.nodeText small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hot .nodeText {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.nodeText small.loss {
+  color: var(--b-ink);
+  font-weight: 500;
+}
+
+.ok {
+  color: var(--ink-3);
+  display: grid;
+}
+
+.ok svg {
+  width: 16px;
+  height: 16px;
+}
+
+.cbtn {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  background: var(--card);
+}
+
+.cbtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.more {
+  color: var(--ink-2);
+  font-weight: 600;
+  letter-spacing: 1px;
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.tag {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--b-ink);
+  background: var(--b-soft);
+  border-radius: var(--r-pill);
+  padding: 1px 7px;
+  margin: 3px 0 0 6px;
+}
+
+.nodeText .tag {
+  margin-left: 0;
+  display: table;
+}
+
+@container (width <= 200px) {
+  .ok {
+    display: none;
+  }
+}
+
+.results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tile {
+  border-radius: var(--r-option);
+  padding: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  line-height: 1.3;
+  min-height: 64px;
+}
+
+.tile b {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.main {
+  background: var(--ink);
+  color: color-mix(in oklch, var(--on-ink) 75%, var(--ink));
+  box-shadow: var(--shadow);
+}
+
+.main b {
+  color: var(--on-ink);
+}
+
+/* popover content */
+.popTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.popQuestion {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin: 0 0 12px;
+}
+
+.popGrid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.popRow {
+  display: contents;
+}
+
+.popRow dt {
+  color: var(--ink-2);
+}
+
+.popRow dd {
+  margin: 0;
+  text-align: right;
+}
+
+.popRow .popHead {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.popA {
+  color: var(--a-ink);
+}
+
+.popB {
+  color: var(--b-ink);
+}
+
+.popNote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.vA {
+  color: var(--a-ink);
+}
+
+.vB {
+  color: var(--b-ink);
+}

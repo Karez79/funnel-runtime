@@ -16,7 +16,7 @@ import {
   isServerOnly,
   type BatchResponseSchema,
   type ClientEvent,
-  type LiveEntry,
+  type LiveEntryDraft,
   type EventProperties,
   type REJECT_REASONS,
 } from '@funnel/shared';
@@ -105,7 +105,7 @@ export function createEventsService(
   repo: EventsRepo,
   versions: VersionsService,
   clock: Clock,
-  publish: (entries: LiveEntry[]) => void,
+  publish: (entries: LiveEntryDraft[]) => void,
 ) {
   return {
     ingest(envelope: { batch_id?: string | undefined; events: unknown[] }): BatchResponse {
