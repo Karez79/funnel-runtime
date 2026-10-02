@@ -27,6 +27,13 @@ const EVENT_ORIGINS = ['client', 'server'] as const;
 const oneOf = (name: string, column: SQLiteColumn, values: readonly string[]) =>
   check(name, sql`${column} IN ${sql.raw(`(${values.map((v) => `'${v}'`).join(',')})`)}`);
 
+/**
+ * True when the row was written for a request carrying a valid GENERATOR_KEY: the
+ * generator's ground-truth checks count only its own rows (analytics `traffic=generator`),
+ * so real visitors on the public URL during a run cannot change the expected numbers.
+ */
+const generated = () => integer('generated', { mode: 'boolean' }).notNull().default(false);
+
 export const funnelVersions = sqliteTable(
   'funnel_versions',
   {
@@ -75,6 +82,7 @@ export const sessions = sqliteTable(
     variant: text('variant', { enum: VARIANTS }).notNull(),
     variantSource: text('variant_source', { enum: VARIANT_SOURCES }).notNull(),
     trafficType: text('traffic_type', { enum: TRAFFIC_TYPES }).notNull().default('live'),
+    generated: generated(),
     utmSource: text('utm_source'),
     utmMedium: text('utm_medium'),
     utmCampaign: text('utm_campaign'),
@@ -135,6 +143,7 @@ export const ingestLog = sqliteTable('ingest_log', {
   accepted: integer('accepted').notNull(),
   duplicates: integer('duplicates').notNull(),
   rejected: integer('rejected').notNull(),
+  generated: generated(),
 });
 
 export const rejectedEvents = sqliteTable('rejected_events', {
@@ -144,6 +153,7 @@ export const rejectedEvents = sqliteTable('rejected_events', {
   reason: text('reason').notNull(),
   rawJson: text('raw_json').notNull(),
   receivedAt: text('received_at').notNull(),
+  generated: generated(),
 });
 
 /**

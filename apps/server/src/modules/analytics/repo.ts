@@ -33,7 +33,12 @@ export interface Period {
   to?: string | undefined;
 }
 
-export interface SessionScope extends Period {
+/** Ingest rows of one period; `generatedOnly`: only batches sent with the generator key. */
+export interface IngestScope extends Period {
+  generatedOnly: boolean;
+}
+
+export interface SessionScope extends IngestScope {
   funnelId: string;
   includeQa: boolean;
   campaign?: string | undefined;
@@ -50,6 +55,7 @@ function sessionWhere(scope: SessionScope): SQL | undefined {
   return and(
     eq(sessions.funnelId, scope.funnelId),
     scope.includeQa ? undefined : ne(sessions.trafficType, 'qa'),
+    scope.generatedOnly ? eq(sessions.generated, true) : undefined,
     scope.campaign === undefined ? undefined : eq(sessions.utmCampaign, scope.campaign),
     within(sessions.createdAt, scope),
   );
@@ -92,20 +98,30 @@ export function createAnalyticsRepo(db: Db) {
         .all();
     },
 
-    duplicates(period: Period): number {
+    duplicates(scope: IngestScope): number {
       const row = db
         .select({ n: sum(ingestLog.duplicates) })
         .from(ingestLog)
-        .where(within(ingestLog.receivedAt, period))
+        .where(
+          and(
+            within(ingestLog.receivedAt, scope),
+            scope.generatedOnly ? eq(ingestLog.generated, true) : undefined,
+          ),
+        )
         .get();
       return Number(row?.n ?? 0);
     },
 
-    rejectedByReason(period: Period) {
+    rejectedByReason(scope: IngestScope) {
       return db
         .select({ reason: rejectedEvents.reason, count: count() })
         .from(rejectedEvents)
-        .where(within(rejectedEvents.receivedAt, period))
+        .where(
+          and(
+            within(rejectedEvents.receivedAt, scope),
+            scope.generatedOnly ? eq(rejectedEvents.generated, true) : undefined,
+          ),
+        )
         .groupBy(rejectedEvents.reason)
         .orderBy(asc(rejectedEvents.reason))
         .all();

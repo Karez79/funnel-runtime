@@ -37,6 +37,7 @@ erDiagram
     text variant "A | B"
     text variant_source "hash | override"
     text traffic_type "live | qa | synthetic"
+    integer generated "0 | 1"
     text utm_source
     text utm_medium
     text utm_campaign
@@ -75,6 +76,7 @@ erDiagram
     integer accepted
     integer duplicates
     integer rejected
+    integer generated "0 | 1"
   }
   rejected_events {
     integer id PK
@@ -83,6 +85,7 @@ erDiagram
     text reason
     text raw_json
     text received_at
+    integer generated "0 | 1"
   }
   ground_truth {
     integer id PK
@@ -116,17 +119,18 @@ erDiagram
 
 ### `sessions` — сессии
 
-| Колонка                                      | Зачем                                                                                                                            |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                         | uuid v7, создаёт сервер                                                                                                          |
-| `funnel_id`, `funnel_version`                | версия, активная в момент создания, **закреплена навсегда**; внешний ключ на `funnel_versions`                                   |
-| `experiment_id`, `variant`, `variant_source` | вариант назначается один раз: `hash` — `fnv1a32(sessionId + ':' + experimentId) % 100` по весам, `override` — из `?variant=`     |
-| `traffic_type`                               | `live` по умолчанию; `qa` для override (скрыт в дашборде по умолчанию); `synthetic` для генератора (только с `X-Generator-Key`)  |
-| `utm_*`                                      | фиксируются один раз при создании; пустые значения хранятся как `NULL`                                                           |
-| `state_json`                                 | `{ answers, history, currentStepId }` — операционные данные для восстановления сессии, не аналитика                              |
-| `state_rev`                                  | оптимистическая блокировка: `PUT state` с устаревшим `baseRev` получает 409; проверка повторена в `UPDATE … WHERE state_rev = ?` |
-| `result_id`                                  | результат, вычисленный сервером в `POST /complete`; первый вычисленный остаётся                                                  |
-| `created_at`, `updated_at`, `expires_at`     | `expires_at = created_at + session.ttlHours` закреплённой версии                                                                 |
+| Колонка                                      | Зачем                                                                                                                                                                                                                                    |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                         | uuid v7, создаёт сервер                                                                                                                                                                                                                  |
+| `funnel_id`, `funnel_version`                | версия, активная в момент создания, **закреплена навсегда**; внешний ключ на `funnel_versions`                                                                                                                                           |
+| `experiment_id`, `variant`, `variant_source` | вариант назначается один раз: `hash` — `fnv1a32(sessionId + ':' + experimentId) % 100` по весам, `override` — из `?variant=`                                                                                                             |
+| `traffic_type`                               | `live` по умолчанию; `qa` для override (скрыт в дашборде по умолчанию); `synthetic` для генератора (только с `X-Generator-Key`)                                                                                                          |
+| `generated`                                  | 1, если сессию создал генератор с верным `X-Generator-Key` (в том числе его QA-сессии с override); по нему проверки генератора считают только свой трафик (`traffic=generator`, см. [`ANALYTICS.md`](ANALYTICS.md#сверка-с-генератором)) |
+| `utm_*`                                      | фиксируются один раз при создании; пустые значения хранятся как `NULL`                                                                                                                                                                   |
+| `state_json`                                 | `{ answers, history, currentStepId }` — операционные данные для восстановления сессии, не аналитика                                                                                                                                      |
+| `state_rev`                                  | оптимистическая блокировка: `PUT state` с устаревшим `baseRev` получает 409; проверка повторена в `UPDATE … WHERE state_rev = ?`                                                                                                         |
+| `result_id`                                  | результат, вычисленный сервером в `POST /complete`; первый вычисленный остаётся                                                                                                                                                          |
+| `created_at`, `updated_at`, `expires_at`     | `expires_at = created_at + session.ttlHours` закреплённой версии                                                                                                                                                                         |
 
 Индекс `sessions_version_idx (funnel_id, funnel_version, variant)` — для счётчиков сессий по версиям и аналитики.
 
@@ -147,15 +151,13 @@ erDiagram
 
 ### `ingest_log` — итог каждой пачки
 
-Одна строка на `POST /api/events/batch`: `accepted`, `duplicates`, `rejected`. Из неё панель Data quality берёт число проигнорированных дублей.
+Одна строка на `POST /api/events/batch`: `accepted`, `duplicates`, `rejected`. Из неё панель Data quality берёт число проигнорированных дублей. `generated = 1`, если пачку прислал генератор с верным `X-Generator-Key` (неверный ключ — не ошибка, пачка просто не его).
 
 ### `rejected_events` — отклонённые события
 
-`reason` — одна из причин `REJECT_REASONS`. `raw_json` — только известные поля события, `properties` заменён списком ключей (значение могло быть сырым ответом), обрезано до 4 КБ по границе символа UTF-8.
+`reason` — одна из причин `REJECT_REASONS`. `generated` — как у `ingest_log` его пачки. `raw_json` — только известные поля события, `properties` заменён списком ключей (значение могло быть сырым ответом), обрезано до 4 КБ по границе символа UTF-8.
 
 ### `ground_truth` — ground truth генератора
-
-Добавляется в задаче 6.1 параллельно с этим документом.
 
 | Колонка      | Зачем                                                                                                            |
 | ------------ | ---------------------------------------------------------------------------------------------------------------- |

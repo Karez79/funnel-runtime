@@ -124,6 +124,8 @@ export function createSessionsService(
       variantSource: override ? 'override' : 'hash',
       // An override is QA traffic even from the generator: QA is hidden by default (11.2).
       trafficType: override ? 'qa' : synthetic ? 'synthetic' : 'live',
+      // The key was checked above; the generator's QA overrides are its rows too.
+      generated: synthetic,
       ...utm,
       utmContent: utmValue(input.utm.content),
       utmTerm: utmValue(input.utm.term),

@@ -87,16 +87,20 @@ export function createAnalyticsService(
       active: v.active,
       funnels: { A: resolve(funnelId, v.version, 'A'), B: resolve(funnelId, v.version, 'B') },
     }));
-    const period = { from: utc(filters.from), to: utc(filters.to) };
+    const ingestScope = {
+      from: utc(filters.from),
+      to: utc(filters.to),
+      generatedOnly: filters.traffic === 'generator',
+    };
     const scope = {
       funnelId,
       includeQa: filters.includeQa,
       campaign: filters.campaign,
-      ...period,
+      ...ingestScope,
     };
     const ingest: IngestQuality = {
-      duplicates: repo.duplicates(period),
-      rejected: repo.rejectedByReason(period).flatMap(({ reason, count }) => {
+      duplicates: repo.duplicates(ingestScope),
+      rejected: repo.rejectedByReason(ingestScope).flatMap(({ reason, count }) => {
         const known = Reason.safeParse(reason);
         return known.success ? [{ reason: known.data, count }] : [];
       }),

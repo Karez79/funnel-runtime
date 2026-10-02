@@ -102,9 +102,13 @@ export async function buildApp(
   const publish = (entries: LiveEntryDraft[]) => {
     live.publish(entries);
   };
-  eventsRoutes(app, createEventsService(createEventsRepo(db), versions, clock, publish), {
-    rateLimit: { max: env.rateLimits.events, timeWindow: MINUTE_MS },
-  });
+  eventsRoutes(
+    app,
+    createEventsService(createEventsRepo(db), versions, clock, publish, env.generatorKey),
+    {
+      rateLimit: { max: env.rateLimits.events, timeWindow: MINUTE_MS },
+    },
+  );
   liveRoutes(app, live, sseStreams(app, LIVE_HEARTBEAT_MS));
 
   const stopRetention = createRetentionService(createRetentionRepo(db), clock, app.log).start();
