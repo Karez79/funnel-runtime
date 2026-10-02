@@ -175,7 +175,7 @@ export async function generateTraffic(options: GenerateOptions) {
   log(`Finishing ${String(paused.length)} paused sessions on their pinned version…`);
   await pool(paused, concurrency, async (visitor) => {
     await resumeVisitor(ctx, visitor);
-    await walk(ctx, visitor, false);
+    await walk(ctx, visitor, { mayDrop: false });
   });
   await delivery.drain();
   await delivery.sendBroken(brokenItems(visitors));
