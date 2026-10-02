@@ -48,6 +48,8 @@ function LiveFunnel({ loaded, onReload }: { loaded: LoadedSession; onReload: () 
   const [start] = useState(() => startingState(session, readMirror(DEFAULT_FUNNEL_ID)));
   const [sink] = useState(() => createEventSink(loaded.response));
   const track = createTracker(sink, funnel.eventCatalog);
+  // The queue lives as long as this session runs; stopping it beacons what is unsent.
+  useEffect(() => sink.open(), [sink]);
 
   // Each entry remembers the step it was entered from, so the card Back knows whether the
   // previous browser entry is the step it goes back to (and not, say, the admin).
