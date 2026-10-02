@@ -20,7 +20,7 @@
   <img src="docs/images/funnel-walkthrough.webp" width="300" alt="Прохождение воронки: ответ, Continue, результат">
 </p>
 
-Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора); остальные скриншоты — в [`docs/images/`](docs/images/).
+Все изображения создаёт `pnpm screenshots` (Playwright на чистой базе после прогона генератора; нужен `ffmpeg` с кодеком `libwebp_anim`); остальные скриншоты — в [`docs/images/`](docs/images/). Diff на скриншоте Versions — демонстрационный черновик, собранный из v2, а не настоящий v3.
 
 ## Проверить за 5 минут
 
@@ -225,7 +225,7 @@ pnpm verify --base-url https://app-production-183d.up.railway.app
 | `pnpm generate`        | генератор синтетического трафика                                |
 | `pnpm verify`          | сверка аналитики с ground truth                                 |
 | `pnpm demo:iteration2` | сценарий второй итерации (Фаза 7)                               |
-| `pnpm screenshots`     | скриншоты и анимация для README (Фаза 8)                        |
+| `pnpm screenshots`     | скриншоты и анимация для README (нужен `ffmpeg`)                |
 
 </details>
 

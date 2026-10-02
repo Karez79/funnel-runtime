@@ -7,7 +7,7 @@
 // Reduced motion keeps the stills stable; the animation keeps motion on, since showing
 // the step transitions is its point. The server and the temp DB are removed on any exit.
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -286,11 +286,18 @@ async function animation(browser: Browser, baseUrl: string, workDir: string): Pr
 }
 
 async function main(): Promise<void> {
-  if (!existsSync(join(WEB_DIST, 'index.html'))) {
-    write('No web build found, running pnpm build…');
-    const build = spawnSync('pnpm', ['build'], { cwd: ROOT, stdio: 'inherit' });
-    if (build.status !== 0) throw new Error('pnpm build failed');
+  // Checked first: a missing encoder must not fail the run after the PNGs are overwritten.
+  const encoders = spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+  if (encoders.status !== 0 || !encoders.stdout.includes('libwebp_anim')) {
+    throw new Error('pnpm screenshots needs ffmpeg with the libwebp_anim encoder on PATH');
   }
+  // Always rebuilt (a few seconds): a stale dist would quietly screenshot an old UI.
+  write('Building the web app…');
+  const build = spawnSync('pnpm', ['--filter', '@funnel/web', 'build'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+  if (build.status !== 0) throw new Error('web build failed');
   mkdirSync(OUT, { recursive: true });
   const workDir = mkdtempSync(join(tmpdir(), 'funnel-shots-'));
   const port = await freePort();
