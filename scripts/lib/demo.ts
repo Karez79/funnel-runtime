@@ -185,9 +185,11 @@ export async function runIterationDemo(options: DemoOptions): Promise<DemoCheck[
     // 3. Publish it, or activate it again when an earlier run already published it.
     const republish = upload.version.state === 'published';
     const body = { note: NOTE };
+    // Set before the call: if the server activates the version but the answer is lost,
+    // the error path still checks and undoes it (it rolls back only if it is active).
+    activatedTarget = true;
     if (republish) await call('activateVersion', { params: { v: target }, body });
     else await call('publishVersion', { params: { v: target }, body });
-    activatedTarget = true;
     const now = (await call('activeVersion')).data.version.version;
     check(
       `${v(target)} ${republish ? 'activated again (published on an earlier run)' : 'published'} without a redeploy`,

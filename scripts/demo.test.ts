@@ -124,30 +124,35 @@ describe('pnpm demo:iteration2', () => {
     expect((await call('activeVersion')).data.version.version).toBe(2);
   });
 
-  it('does not roll back twice when the answer to its rollback is lost', async () => {
-    const { baseUrl, call } = await prodLike();
+  /** The request reaches the server, but the script never sees the answer. */
+  function loseAnswerOnce(path: string) {
     const realFetch = globalThis.fetch;
     let lost = false;
-    // The rollback reaches the server, but the script never sees the answer.
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const res = await realFetch(input, init);
       const url = input instanceof Request ? input.url : input.toString();
-      if (!lost && url.endsWith('/api/admin/rollback')) {
+      if (!lost && url.endsWith(path)) {
         lost = true;
         throw new TypeError('fetch failed');
       }
       return res;
     });
+  }
+
+  it.each([
+    // The publish went through: the error path must undo it, once.
+    ['/api/admin/versions/3/publish', 'rolled back'],
+    // The rollback went through: the error path must not roll back a second time.
+    ['/api/admin/rollback', 'already off v3: v2 is active'],
+  ])('leaves v2 active when the answer to %s is lost', async (path, undo) => {
+    const { baseUrl, call } = await prodLike();
+    loseAnswerOnce(path);
     const checks = await runIterationDemo({ baseUrl, ...secrets });
     vi.restoreAllMocks();
     expect(failures(checks).map((c) => [c.label, c.detail])).toEqual([
       ['The demo ran to the end', 'fetch failed'],
     ]);
-    expect(checks.at(-1)).toEqual({
-      label: 'v3 is not left active',
-      ok: true,
-      detail: 'already off v3: v2 is active',
-    });
+    expect(checks.at(-1)).toEqual({ label: 'v3 is not left active', ok: true, detail: undo });
     expect((await call('activeVersion')).data.version.version).toBe(2);
   });
 
