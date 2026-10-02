@@ -127,3 +127,22 @@ test('Live events shows a resent batch as ignored duplicates', async ({ page, re
   await expect(page.getByRole('cell', { name: 'Ignored duplicate', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Stored', exact: true })).toBeHidden();
 });
+
+test.describe('admin error states', () => {
+  // The removed chunks are 404s on purpose; the browser logs them.
+  test.use({ allowedConsoleErrors: [/status of 404/] });
+
+  test('an unknown admin path and a chunk gone after a redeploy show a way back', async ({
+    page,
+  }) => {
+    await page.goto('/admin/nope');
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to dashboard' }).click();
+    await expect(page).toHaveURL(/\/admin\/?$/);
+    // A redeploy removes the old page chunks, the JS and its CSS.
+    await page.route(/VersionsPage-[^/]*\.(js|css)$/, (route) => route.fulfill({ status: 404 }));
+    await page.getByRole('link', { name: 'Versions' }).first().click();
+    await expect(page.getByRole('heading', { name: 'A new version is available' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible();
+  });
+});

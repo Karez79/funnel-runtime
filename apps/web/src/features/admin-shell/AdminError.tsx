@@ -8,8 +8,12 @@ import { Button } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import styles from './AdminError.module.css';
 
-/** Messages browsers use when a dynamic import() cannot fetch its module. */
-const CHUNK_FAILED = /dynamically imported module|module script failed|loading chunk/i;
+/**
+ * A lazy chunk could not be fetched: the browsers' import() messages, and Vite's preload
+ * helper, which fails first when the page's CSS chunk is gone too (a real redeploy).
+ */
+const CHUNK_FAILED =
+  /dynamically imported module|module script failed|loading chunk|unable to preload/i;
 
 function describe(notFound: boolean, error: unknown): { title: string; text: string } {
   if (notFound) {
@@ -35,16 +39,29 @@ export function AdminError({ notFound = false }: { notFound?: boolean }) {
         <h1>{title}</h1>
         <p>{text}</p>
         <div className={styles.actions}>
-          <Button
-            onClick={() => {
-              window.location.reload();
-            }}
-          >
-            Reload
-          </Button>
-          <a className={styles.link} href="/admin">
-            Back to dashboard
-          </a>
+          {notFound ? (
+            // Reloading a missing page only shows it again: the dashboard is the one action.
+            <Button
+              onClick={() => {
+                window.location.assign('/admin');
+              }}
+            >
+              Back to dashboard
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={() => {
+                  window.location.reload();
+                }}
+              >
+                Reload
+              </Button>
+              <a className={styles.link} href="/admin">
+                Back to dashboard
+              </a>
+            </>
+          )}
         </div>
       </Card>
     </div>
