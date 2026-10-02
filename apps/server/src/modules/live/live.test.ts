@@ -222,14 +222,18 @@ describe('GET /api/live', () => {
 });
 
 describe('sse plugin', () => {
-  it('ends a stream whose unsent buffer grows past the cap', async () => {
+  it('destroys a stream whose unsent buffer grows past the cap', async () => {
     const app = Fastify().withTypeProvider<ZodTypeProvider>();
     const start = sseStreams(app, 60_000);
     let ended = false;
+    let destroyedOnClose: boolean | undefined;
     app.get('/flood', (_req, reply) => {
       const stream = start(reply);
       stream.onClose(() => {
         ended = true;
+        // Read at once: the kernel may drain the buffer later on its own, which would
+        // hide a plain `end()` that leaves the socket open behind a queued FIN.
+        destroyedOnClose = reply.raw.destroyed;
       });
       const chunk = 'x'.repeat(64 * 1024);
       for (let i = 0; i < 200 && !ended; i++) stream.send(chunk);
@@ -243,6 +247,9 @@ describe('sse plugin', () => {
     socket.write('GET /flood HTTP/1.1\r\nHost: localhost\r\n\r\n');
     try {
       await eventually(() => ended);
+      // `end()` would only queue a FIN behind the 1 MB already buffered and keep the
+      // socket (and buffer) until the peer leaves; the slow client must be cut off now.
+      expect(destroyedOnClose).toBe(true);
     } finally {
       socket.destroy();
       await app.close();
