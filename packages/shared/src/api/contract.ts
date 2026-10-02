@@ -76,6 +76,8 @@ const SessionSchema = z.object({
   state: SessionStateSchema,
   stateRev: z.number().int().nonnegative(),
   resultId: z.string().nullable(),
+  /** Server time of creation; the generator's ground truth window starts here (9.1). */
+  createdAt: Timestamp,
   expiresAt: Timestamp,
 });
 

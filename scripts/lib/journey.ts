@@ -108,7 +108,7 @@ export interface Visitor {
   readonly experimentId: string;
   readonly variant: VariantKey;
   readonly funnelId: string;
-  /** Server time of creation, from the answer's Date header. */
+  /** Server time of creation (the session response's `createdAt`). */
   readonly createdAt: string;
   funnel: ResolvedFunnel;
   state: SessionState;
@@ -254,7 +254,7 @@ export async function startVisitor(ctx: Context, plan: Plan): Promise<Visitor> {
     experimentId: session.experimentId,
     variant: session.variant,
     funnelId: funnel.meta.funnelId,
-    createdAt: date.toISOString(),
+    createdAt: session.createdAt,
     funnel,
     state: session.state,
     rev: session.stateRev,

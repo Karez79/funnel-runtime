@@ -49,6 +49,7 @@ describe('response schemas encode real values', () => {
         },
         stateRev: 0,
         resultId: null,
+        createdAt: '2026-10-01T10:00:00.000Z',
         expiresAt: '2026-10-04T10:00:00.000Z',
       };
       expect(encodes(contract.getSession.response, { session, funnel })).toBe(true);
