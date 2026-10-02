@@ -259,7 +259,7 @@ describe('POST /api/sessions', () => {
   });
 
   it('is rate limited per client, except for the generator', async () => {
-    const a = await app({ env: { rateLimits: { sessions: 2 } } });
+    const a = await app({ env: { rateLimits: { sessions: 2, events: 1000 } } });
     expect((await create(a)).statusCode).toBe(201);
     expect((await create(a)).statusCode).toBe(201);
     const limited = await create(a);
@@ -275,7 +275,9 @@ describe('POST /api/sessions', () => {
   });
 
   it('keys the limit by the edge client-IP header when configured', async () => {
-    const a = await app({ env: { rateLimits: { sessions: 1 }, clientIpHeader: 'x-real-ip' } });
+    const a = await app({
+      env: { rateLimits: { sessions: 1, events: 1000 }, clientIpHeader: 'x-real-ip' },
+    });
     const from = (ip: string, xff = '198.51.100.1') =>
       create(a, {}, { 'x-real-ip': ip, 'x-forwarded-for': xff });
     expect((await from('192.0.2.1')).statusCode).toBe(201);
